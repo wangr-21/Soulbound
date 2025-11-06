@@ -1,0 +1,4 @@
+repository "Soulbound@tj_wangr21@cloud.cn"
+  path "/"
+    br "/main"
+    co "/main"
