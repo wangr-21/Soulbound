@@ -1,72 +1,71 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 using UnityEngine.AI;
 
 public class P6_Purifier : MonoBehaviour
 {
-    [Header("=== P6×¨ÊôÉèÖÃ ===")]
-    public Transform[] P6_patrolPoints;  // P6×¨ÊôÑ²Âßµã£¨ÓëP3¹¦ÄÜÒ»ÖÂ£©
-    [SerializeField] private float waitTimeAtPoint = 1.5f;  // ÓëP3ÏàÍ¬µÄÍ£ÁôÊ±¼ä
-    [SerializeField] private float pointArrivalDistance = 0.5f;  // ÓëP3ÏàÍ¬µÄµ½´ïÅĞ¶¨¾àÀë
+    [Header("=== P6ä¸“å±è®¾ç½® ===")]
+    public Transform[] P6_patrolPoints;
+    [SerializeField] private float waitTimeAtPoint = 1.5f;
+    [SerializeField] private float pointArrivalDistance = 0.5f;
 
     [Header("=== AI Components ===")]
     private NavMeshAgent agent;
     private Transform player;
 
-    [Header("=== Vision Settings (ÓëP3Ò»ÖÂ) ===")]
-    [SerializeField] private float visionRadius = 4f;  // ÓëP3ÏàÍ¬µÄÊÓÒ°°ë¾¶
-    [SerializeField] private float visionAngle = 120f;  // ÓëP3ÏàÍ¬µÄÊÓÒ°½Ç¶È
-    [SerializeField] private LayerMask obstacleMask;  // ÏàÍ¬µÄÕÏ°­Îï¼ì²â²ã
+    [Header("=== Vision Settings ===")]
+    [SerializeField] private float visionRadius = 8f;  // é»˜è®¤è®¾ç½®ä¸ºè¾ƒå¤§çš„å€¼
+    [SerializeField] private float visionAngle = 120f;
+    [SerializeField] private LayerMask obstacleMask;
+    [SerializeField] private float escapeDistance = 12f;  // æ¯”è§†é‡åŠå¾„å¤§
 
     [Header("=== Alert Reactions ===")]
-    [SerializeField] private Color normalColor = new Color(0.3f, 0.7f, 1f);  // Ç³À¶£¨ÓëP3µÄÀ¶É«Çø·ÖÊµÀı£©
-    [SerializeField] private Color alertColor = new Color(1f, 0.3f, 1f);   // Ç³Æ·ºì£¨ÓëP3µÄÆ·ºìÇø·ÖÊµÀı£©
-    [SerializeField] private float rotateSpeed = 5f;  // ÓëP3ÏàÍ¬µÄ×ªÏòËÙ¶È
+    [SerializeField] private Color normalColor = new Color(0.3f, 0.7f, 1f);
+    [SerializeField] private Color alertColor = new Color(1f, 0.3f, 1f);
+    [SerializeField] private float rotateSpeed = 5f;
 
     private Renderer purifierRenderer;
     private int currentPatrolIndex = 0;
     private float waitCounter = 0f;
     private bool isPlayerInSight = false;
+    private bool wasPlayerInSight = false;
 
     private enum PatrolState { Moving, Waiting }
     private PatrolState currentPatrolState = PatrolState.Moving;
 
     void Start()
     {
-        // ³õÊ¼»¯µ¼º½×é¼ş£¨ÓëP3Âß¼­Ò»ÖÂ£©
         agent = GetComponent<NavMeshAgent>();
         if (agent == null)
         {
-            Debug.LogError("P6 ÕÒ²»µ½NavMeshAgent×é¼ş£¡");
+            Debug.LogError("P6 æ‰¾ä¸åˆ°NavMeshAgentç»„ä»¶ï¼");
             return;
         }
 
-        // ²éÕÒÍæ¼Ò£¨ÓëP3Âß¼­Ò»ÖÂ£©
         GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
         if (playerObj != null)
         {
             player = playerObj.transform;
+            Debug.Log("P6: æ‰¾åˆ°ç©å®¶å¯¹è±¡");
         }
         else
         {
-            Debug.LogWarning("P6 Î´ÕÒµ½±êÇ©ÎªPlayerµÄÎïÌå£¡");
+            Debug.LogWarning("P6 æœªæ‰¾åˆ°æ ‡ç­¾ä¸ºPlayerçš„ç‰©ä½“ï¼");
         }
 
-        // ³õÊ¼»¯äÖÈ¾Æ÷£¨ÓëP3Âß¼­Ò»ÖÂ£©
         purifierRenderer = GetComponent<Renderer>();
         if (purifierRenderer != null)
         {
             purifierRenderer.material.color = normalColor;
         }
 
-        // ¿ªÊ¼Ñ²Âß£¨ÓëP3Âß¼­Ò»ÖÂ£©
         if (P6_patrolPoints != null && P6_patrolPoints.Length > 0)
         {
             SetNextPatrolTarget();
-            Debug.Log("P6 ½Å±¾Æô¶¯£¨ÓëP3µÈ¼Û£©£¬¿ªÊ¼Ñ²Âß");
+            Debug.Log($"P6 è„šæœ¬å¯åŠ¨ï¼Œå¼€å§‹å·¡é€»ã€‚è§†é‡åŠå¾„: {visionRadius}, é€ƒè„±è·ç¦»: {escapeDistance}");
         }
         else
         {
-            Debug.LogWarning("P6 Î´ÉèÖÃÑ²Âßµã£¡");
+            Debug.LogWarning("P6 æœªè®¾ç½®å·¡é€»ç‚¹ï¼");
         }
     }
 
@@ -74,8 +73,32 @@ public class P6_Purifier : MonoBehaviour
     {
         if (agent == null || !agent.enabled) return;
 
-        // ÊÓÒ°¼ì²â£¨ÓëP3ÍêÈ«Ò»ÖÂµÄÂß¼­£º¾àÀë+½Ç¶È+ÕÏ°­Îï£©
+        // ä¿å­˜ä¸Šä¸€å¸§çš„çŠ¶æ€
+        wasPlayerInSight = isPlayerInSight;
+
+        // è§†é‡æ£€æµ‹
         CheckPlayerInSight();
+
+        // å®æ—¶æ˜¾ç¤ºè·ç¦»ä¿¡æ¯
+        if (player != null)
+        {
+            float currentDistance = Vector3.Distance(transform.position, player.position);
+            // åœ¨Gameçª—å£ä¸­æŸ¥çœ‹è¿™ä¸ªä¿¡æ¯
+            if (currentDistance < visionRadius + 2f) // åªåœ¨æ¥è¿‘æ—¶æ˜¾ç¤ºï¼Œé¿å…æ—¥å¿—è¿‡å¤š
+            {
+                Debug.Log($"P6-è·ç¦»: {currentDistance:F1}, è§†é‡: {visionRadius}, é€ƒè„±: {escapeDistance}, æ£€æµ‹: {isPlayerInSight}");
+            }
+        }
+
+        // çŠ¶æ€å˜åŒ–æ—¶è¾“å‡ºæ—¥å¿—
+        if (isPlayerInSight && !wasPlayerInSight)
+        {
+            Debug.Log("P6: æ£€æµ‹åˆ°ç©å®¶ï¼åœæ­¢å·¡é€»");
+        }
+        else if (!isPlayerInSight && wasPlayerInSight)
+        {
+            Debug.Log("P6: ç©å®¶æ¶ˆå¤±ï¼Œæ¢å¤å·¡é€»");
+        }
 
         if (!isPlayerInSight)
         {
@@ -85,11 +108,12 @@ public class P6_Purifier : MonoBehaviour
         else
         {
             HandlePlayerDetected();
+            CheckPlayerEscape();
         }
     }
 
     /// <summary>
-    /// ÓëP3ÍêÈ«Ò»ÖÂµÄÊÓÒ°¼ì²âÂß¼­
+    /// è§†é‡æ£€æµ‹é€»è¾‘ - ä¿®å¤ç‰ˆ
     /// </summary>
     private void CheckPlayerInSight()
     {
@@ -101,12 +125,15 @@ public class P6_Purifier : MonoBehaviour
 
         Vector3 toPlayer = player.position - transform.position;
         float distance = toPlayer.magnitude;
+
+        // 1. è·ç¦»æ£€æµ‹ - åªä½¿ç”¨visionRadiusï¼Œä¸å—escapeDistanceé™åˆ¶
         if (distance > visionRadius)
         {
             isPlayerInSight = false;
             return;
         }
 
+        // 2. è§’åº¦æ£€æµ‹
         float angle = Vector3.Angle(transform.forward, toPlayer.normalized);
         if (angle > visionAngle / 2)
         {
@@ -114,30 +141,75 @@ public class P6_Purifier : MonoBehaviour
             return;
         }
 
-        if (Physics.Raycast(transform.position, toPlayer.normalized, distance, obstacleMask))
+        // 3. éšœç¢ç‰©é®æŒ¡æ£€æµ‹ - æé«˜å°„çº¿èµ·ç‚¹
+        Vector3 rayStart = transform.position + Vector3.up * 1.2f;
+        Vector3 playerCenter = player.position + Vector3.up * 1.0f;
+        Vector3 direction = (playerCenter - rayStart).normalized;
+
+        // åœ¨Sceneè§†å›¾ä¸­æ˜¾ç¤ºæ£€æµ‹çº¿
+        Debug.DrawRay(rayStart, direction * Mathf.Min(distance, visionRadius),
+                     isPlayerInSight ? Color.red : Color.yellow, 0.1f);
+
+        if (Physics.Raycast(rayStart, direction, out RaycastHit hit, distance, obstacleMask))
         {
-            isPlayerInSight = false;
-            return;
+            // å¦‚æœå‡»ä¸­çš„ä¸æ˜¯ç©å®¶ï¼Œè¯´æ˜æœ‰éšœç¢ç‰©é®æŒ¡
+            if (!hit.collider.CompareTag("Player"))
+            {
+                isPlayerInSight = false;
+                return;
+            }
         }
 
+        // æ‰€æœ‰æ¡ä»¶æ»¡è¶³
+        if (!wasPlayerInSight) // åªåœ¨çŠ¶æ€å˜åŒ–æ—¶è¾“å‡ºï¼Œé¿å…æ—¥å¿—è¿‡å¤š
+        {
+            Debug.Log($"P6: æˆåŠŸæ£€æµ‹åˆ°ç©å®¶ï¼è·ç¦»: {distance:F1}, è§’åº¦: {angle:F1}");
+        }
         isPlayerInSight = true;
     }
 
     /// <summary>
-    /// ÓëP3ÍêÈ«Ò»ÖÂµÄÍæ¼Ò¼ì²â´¦Àí£¨×ªÏò+±äÉ«£©
+    /// æ£€æŸ¥ç©å®¶æ˜¯å¦é€ƒè„±åˆ°è¶³å¤Ÿè¿œçš„è·ç¦»
+    /// </summary>
+    private void CheckPlayerEscape()
+    {
+        if (player == null) return;
+
+        float distanceToPlayer = Vector3.Distance(transform.position, player.position);
+        if (distanceToPlayer > escapeDistance)
+        {
+            Debug.Log($"P6: ç©å®¶é€ƒè„±åˆ°å®‰å…¨è·ç¦» ({distanceToPlayer:F1} > {escapeDistance})ï¼Œæ¢å¤å·¡é€»");
+            isPlayerInSight = false;
+            agent.isStopped = false;
+        }
+    }
+
+    /// <summary>
+    /// ç©å®¶è¢«æ£€æµ‹åˆ°çš„å¤„ç†é€»è¾‘
     /// </summary>
     private void HandlePlayerDetected()
     {
-        agent.isStopped = true;
+        // ç«‹å³åœæ­¢ç§»åŠ¨
+        if (!agent.isStopped)
+        {
+            agent.isStopped = true;
+            agent.velocity = Vector3.zero;
+            Debug.Log("P6: å·²åœæ­¢å¯¼èˆªä»£ç†");
+        }
 
+        // è½¬å‘ç©å®¶
         if (player != null)
         {
             Vector3 targetLookDir = (player.position - transform.position).normalized;
             targetLookDir.y = 0;
-            Quaternion targetRotation = Quaternion.LookRotation(targetLookDir);
-            transform.rotation = Quaternion.Lerp(transform.rotation, targetRotation, rotateSpeed * Time.deltaTime);
+            if (targetLookDir != Vector3.zero)
+            {
+                Quaternion targetRotation = Quaternion.LookRotation(targetLookDir);
+                transform.rotation = Quaternion.Lerp(transform.rotation, targetRotation, rotateSpeed * Time.deltaTime);
+            }
         }
 
+        // åˆ‡æ¢è­¦æˆ’è‰²
         if (purifierRenderer != null)
         {
             purifierRenderer.material.color = alertColor;
@@ -145,7 +217,7 @@ public class P6_Purifier : MonoBehaviour
     }
 
     /// <summary>
-    /// ÓëP3Ò»ÖÂµÄ¾¯½ä×´Ì¬ÖØÖÃ
+    /// é‡ç½®è­¦æˆ’çŠ¶æ€
     /// </summary>
     private void ResetAlertState()
     {
@@ -156,11 +228,15 @@ public class P6_Purifier : MonoBehaviour
     }
 
     /// <summary>
-    /// ÓëP3Ò»ÖÂµÄÑ²ÂßĞĞÎª
+    /// å·¡é€»è¡Œä¸ºé€»è¾‘
     /// </summary>
     private void PatrolBehavior()
     {
-        agent.isStopped = false;
+        // åªæœ‰åœ¨ç¡®å®æ²¡æœ‰æ£€æµ‹åˆ°ç©å®¶æ—¶æ‰æ¢å¤ç§»åŠ¨
+        if (!isPlayerInSight && agent.isStopped)
+        {
+            agent.isStopped = false;
+        }
 
         switch (currentPatrolState)
         {
@@ -173,9 +249,6 @@ public class P6_Purifier : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// ÓëP3Ò»ÖÂµÄÒÆ¶¯×´Ì¬´¦Àí
-    /// </summary>
     private void HandleMovingState()
     {
         if (P6_patrolPoints.Length == 0) return;
@@ -185,12 +258,10 @@ public class P6_Purifier : MonoBehaviour
             currentPatrolState = PatrolState.Waiting;
             waitCounter = waitTimeAtPoint;
             agent.isStopped = true;
+            Debug.Log($"P6: åˆ°è¾¾å·¡é€»ç‚¹ {currentPatrolIndex}ï¼Œç­‰å¾… {waitTimeAtPoint}ç§’");
         }
     }
 
-    /// <summary>
-    /// ÓëP3Ò»ÖÂµÄµÈ´ı×´Ì¬´¦Àí
-    /// </summary>
     private void HandleWaitingState()
     {
         waitCounter -= Time.deltaTime;
@@ -204,35 +275,95 @@ public class P6_Purifier : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// ÓëP3Ò»ÖÂµÄÑ²ÂßµãÉèÖÃ
-    /// </summary>
     private void SetNextPatrolTarget()
     {
         if (P6_patrolPoints.Length > 0 && P6_patrolPoints[currentPatrolIndex] != null && agent != null)
         {
             agent.SetDestination(P6_patrolPoints[currentPatrolIndex].position);
-            Debug.Log($"P6 ÒÆ¶¯µ½Ñ²Âßµã {currentPatrolIndex}£¨ÓëP3µÈ¼Û£©");
         }
     }
 
-    /// <summary>
-    /// ÓëP3Ò»ÖÂµÄµ÷ÊÔGizmos£¨½öÑÕÉ«Î¢µ÷ÒÔÇø·ÖÊµÀı£©
-    /// </summary>
     private void OnDrawGizmosSelected()
     {
-        Gizmos.color = new Color(0.6f, 0.9f, 1f);  // Ç³ÇàÉ«£¨ÓëP3µÄÇàÉ«Çø·Ö£©
+        // è§†é‡åŠå¾„ - ç»¿è‰²
+        Gizmos.color = Color.green;
         Gizmos.DrawWireSphere(transform.position, visionRadius);
 
-        Vector3 fovLine1 = Quaternion.Euler(0, visionAngle / 2, 0) * transform.forward * visionRadius;
-        Vector3 fovLine2 = Quaternion.Euler(0, -visionAngle / 2, 0) * transform.forward * visionRadius;
-        Gizmos.DrawLine(transform.position, transform.position + fovLine1);
-        Gizmos.DrawLine(transform.position, transform.position + fovLine2);
+        // é€ƒè„±è·ç¦» - é»„è‰²
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawWireSphere(transform.position, escapeDistance);
 
-        if (isPlayerInSight && player != null)
+        // è§†é‡è§’åº¦é”¥å½¢åŒºåŸŸ - åŠé€æ˜ç»¿è‰²
+        Gizmos.color = new Color(0.2f, 0.8f, 0.2f, 0.3f);
+        Vector3 forward = transform.forward * visionRadius;
+        Vector3 leftBoundary = Quaternion.Euler(0, -visionAngle / 2, 0) * forward;
+        Vector3 rightBoundary = Quaternion.Euler(0, visionAngle / 2, 0) * forward;
+
+        // ç»˜åˆ¶è§†é‡é”¥å½¢
+        Gizmos.DrawLine(transform.position, transform.position + leftBoundary);
+        Gizmos.DrawLine(transform.position, transform.position + rightBoundary);
+        Gizmos.DrawLine(transform.position + leftBoundary, transform.position + rightBoundary);
+
+        // æ˜¾ç¤ºå°„çº¿èµ·ç‚¹ï¼ˆè°ƒè¯•ç”¨ï¼‰
+        Vector3 rayStart = transform.position + Vector3.up * 1.2f;
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawWireSphere(rayStart, 0.1f);
+
+        // æ˜¾ç¤ºæ£€æµ‹çº¿
+        if (player != null)
         {
-            Gizmos.color = new Color(1f, 0.6f, 1f);  // Ç³Æ·ºìÊÓÏß
-            Gizmos.DrawLine(transform.position, player.position);
+            Vector3 playerCenter = player.position + Vector3.up * 1.0f;
+            if (isPlayerInSight)
+            {
+                Gizmos.color = Color.red;
+                Gizmos.DrawLine(rayStart, playerCenter);
+            }
+            else
+            {
+                Gizmos.color = Color.white;
+                Gizmos.DrawLine(rayStart, playerCenter);
+            }
+
+            // æ˜¾ç¤ºå½“å‰è·ç¦»æ–‡æœ¬ï¼ˆéœ€è¦Unity 2019.3+ï¼‰
+#if UNITY_EDITOR
+            float distance = Vector3.Distance(transform.position, player.position);
+            string distanceText = $"è·ç¦»: {distance:F1}\nè§†é‡: {visionRadius}\næ£€æµ‹: {isPlayerInSight}";
+            UnityEditor.Handles.Label(transform.position + Vector3.up * 2f, distanceText);
+#endif
         }
+    }
+
+    // æ·»åŠ ä¸€ä¸ªç®€å•çš„è°ƒè¯•æ–¹æ³•ï¼Œå¯ä»¥åœ¨Inspectorä¸­è°ƒç”¨
+    [ContextMenu("å¼ºåˆ¶æ£€æµ‹ç©å®¶")]
+    private void ForceDetectPlayer()
+    {
+        Debug.Log("=== å¼ºåˆ¶æ£€æµ‹ç©å®¶ ===");
+        if (player == null)
+        {
+            Debug.LogError("ç©å®¶å¯¹è±¡ä¸ºç©ºï¼");
+            return;
+        }
+
+        float distance = Vector3.Distance(transform.position, player.position);
+        float angle = Vector3.Angle(transform.forward, (player.position - transform.position).normalized);
+
+        Debug.Log($"ç©å®¶è·ç¦»: {distance:F2}");
+        Debug.Log($"ç©å®¶è§’åº¦: {angle:F2} (æœ€å¤§å…è®¸: {visionAngle / 2})");
+        Debug.Log($"è§†é‡åŠå¾„: {visionRadius}");
+        Debug.Log($"é€ƒè„±è·ç¦»: {escapeDistance}");
+
+        CheckPlayerInSight();
+        Debug.Log($"æœ€ç»ˆæ£€æµ‹ç»“æœ: {isPlayerInSight}");
+    }
+
+    [ContextMenu("æ˜¾ç¤ºå½“å‰è®¾ç½®")]
+    private void ShowCurrentSettings()
+    {
+        Debug.Log("=== P6å½“å‰è®¾ç½® ===");
+        Debug.Log($"è§†é‡åŠå¾„: {visionRadius}");
+        Debug.Log($"è§†é‡è§’åº¦: {visionAngle}");
+        Debug.Log($"é€ƒè„±è·ç¦»: {escapeDistance}");
+        Debug.Log($"å·¡é€»ç‚¹æ•°é‡: {P6_patrolPoints?.Length ?? 0}");
+        Debug.Log($"éšœç¢ç‰©å±‚çº§: {obstacleMask.value}");
     }
 }

@@ -4,35 +4,36 @@ using UnityEngine.AI;
 public class P1_Purifier : MonoBehaviour
 {
     [Header("=== P1专属设置 ===")]
-    public Transform[] P1_patrolPoints;  // P1专属巡逻点
-    [SerializeField] private float waitTimeAtPoint = 1.8f;  // 停留时间（介于P1和P3之间）
-    [SerializeField] private float pointArrivalDistance = 0.4f;  // 到达判定距离（介于P1和P3之间）
+    public Transform[] P1_patrolPoints;
+    [SerializeField] private float waitTimeAtPoint = 1.5f;
+    [SerializeField] private float pointArrivalDistance = 0.5f;
 
     [Header("=== AI Components ===")]
     private NavMeshAgent agent;
     private Transform player;
 
-    [Header("=== Vision Settings (P1特性) ===")]
-    [SerializeField] private float visionRadius = 3.5f;  // 视野半径（比P1远，比P3近）
-    [SerializeField] private float visionAngle = 105f;  // 视野角度（比P1宽，比P3窄）
-    [SerializeField] private LayerMask obstacleMask;  // 障碍物检测层（统一增强特性）
+    [Header("=== Vision Settings ===")]
+    [SerializeField] private float visionRadius = 8f;  // 默认设置为较大的值
+    [SerializeField] private float visionAngle = 120f;
+    [SerializeField] private LayerMask obstacleMask;
+    [SerializeField] private float escapeDistance = 12f;  // 比视野半径大
 
     [Header("=== Alert Reactions ===")]
-    [SerializeField] private Color normalColor = Color.green;  // P2默认绿色（独特标识）
-    [SerializeField] private Color alertColor = Color.yellow;  // 警戒色为黄色（区分P1/P3）
-    [SerializeField] private float rotateSpeed = 4.5f;  // 转向速度（介于P1和P3之间）
+    [SerializeField] private Color normalColor = new Color(0.3f, 0.7f, 1f);
+    [SerializeField] private Color alertColor = new Color(1f, 0.3f, 1f);
+    [SerializeField] private float rotateSpeed = 5f;
 
     private Renderer purifierRenderer;
     private int currentPatrolIndex = 0;
     private float waitCounter = 0f;
     private bool isPlayerInSight = false;
+    private bool wasPlayerInSight = false;
 
     private enum PatrolState { Moving, Waiting }
     private PatrolState currentPatrolState = PatrolState.Moving;
 
     void Start()
     {
-        // 初始化导航组件
         agent = GetComponent<NavMeshAgent>();
         if (agent == null)
         {
@@ -40,29 +41,27 @@ public class P1_Purifier : MonoBehaviour
             return;
         }
 
-        // 查找玩家
         GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
         if (playerObj != null)
         {
             player = playerObj.transform;
+            Debug.Log("P1: 找到玩家对象");
         }
         else
         {
             Debug.LogWarning("P1 未找到标签为Player的物体！");
         }
 
-        // 初始化渲染器
         purifierRenderer = GetComponent<Renderer>();
         if (purifierRenderer != null)
         {
             purifierRenderer.material.color = normalColor;
         }
 
-        // 开始巡逻
         if (P1_patrolPoints != null && P1_patrolPoints.Length > 0)
         {
             SetNextPatrolTarget();
-            Debug.Log("P1 增强版脚本启动，开始巡逻");
+            Debug.Log($"P1 脚本启动，开始巡逻。视野半径: {visionRadius}, 逃脱距离: {escapeDistance}");
         }
         else
         {
@@ -74,24 +73,47 @@ public class P1_Purifier : MonoBehaviour
     {
         if (agent == null || !agent.enabled) return;
 
-        // 增强版视野检测（距离+角度+障碍物遮挡）
+        // 保存上一帧的状态
+        wasPlayerInSight = isPlayerInSight;
+
+        // 视野检测
         CheckPlayerInSight();
+
+        // 实时显示距离信息
+        if (player != null)
+        {
+            float currentDistance = Vector3.Distance(transform.position, player.position);
+            // 在Game窗口中查看这个信息
+            if (currentDistance < visionRadius + 2f) // 只在接近时显示，避免日志过多
+            {
+                Debug.Log($"P1-距离: {currentDistance:F1}, 视野: {visionRadius}, 逃脱: {escapeDistance}, 检测: {isPlayerInSight}");
+            }
+        }
+
+        // 状态变化时输出日志
+        if (isPlayerInSight && !wasPlayerInSight)
+        {
+            Debug.Log("P1:检测到玩家！停止巡逻");
+        }
+        else if (!isPlayerInSight && wasPlayerInSight)
+        {
+            Debug.Log("P1:玩家消失，恢复巡逻");
+        }
 
         if (!isPlayerInSight)
         {
-            // 未检测到玩家时执行巡逻，并重置警戒状态
             PatrolBehavior();
             ResetAlertState();
         }
         else
         {
-            // 检测到玩家时的处理（转向行为）
             HandlePlayerDetected();
+            CheckPlayerEscape();
         }
     }
 
     /// <summary>
-    /// 增强版视野检测：距离+角度+无遮挡
+    /// 视野检测逻辑 - 修复版
     /// </summary>
     private void CheckPlayerInSight()
     {
@@ -101,9 +123,10 @@ public class P1_Purifier : MonoBehaviour
             return;
         }
 
-        // 1. 距离检测
         Vector3 toPlayer = player.position - transform.position;
         float distance = toPlayer.magnitude;
+
+        // 1. 距离检测 - 只使用visionRadius，不受escapeDistance限制
         if (distance > visionRadius)
         {
             isPlayerInSight = false;
@@ -118,31 +141,72 @@ public class P1_Purifier : MonoBehaviour
             return;
         }
 
-        // 3. 障碍物遮挡检测
-        if (Physics.Raycast(transform.position, toPlayer.normalized, distance, obstacleMask))
+        // 3. 障碍物遮挡检测 - 提高射线起点
+        Vector3 rayStart = transform.position + Vector3.up * 1.2f;
+        Vector3 playerCenter = player.position + Vector3.up * 1.0f;
+        Vector3 direction = (playerCenter - rayStart).normalized;
+
+        // 在Scene视图中显示检测线
+        Debug.DrawRay(rayStart, direction * Mathf.Min(distance, visionRadius),
+                     isPlayerInSight ? Color.red : Color.yellow, 0.1f);
+
+        if (Physics.Raycast(rayStart, direction, out RaycastHit hit, distance, obstacleMask))
         {
-            isPlayerInSight = false;
-            return;
+            // 如果击中的不是玩家，说明有障碍物遮挡
+            if (!hit.collider.CompareTag("Player"))
+            {
+                isPlayerInSight = false;
+                return;
+            }
         }
 
         // 所有条件满足
+        if (!wasPlayerInSight) // 只在状态变化时输出，避免日志过多
+        {
+            Debug.Log($"P1: 成功检测到玩家！距离: {distance:F1}, 角度: {angle:F1}");
+        }
         isPlayerInSight = true;
     }
 
     /// <summary>
-    /// 玩家被检测到的处理逻辑（转向+变色）
+    /// 检查玩家是否逃脱到足够远的距离
+    /// </summary>
+    private void CheckPlayerEscape()
+    {
+        if (player == null) return;
+
+        float distanceToPlayer = Vector3.Distance(transform.position, player.position);
+        if (distanceToPlayer > escapeDistance)
+        {
+            Debug.Log($"P1: 玩家逃脱到安全距离 ({distanceToPlayer:F1} > {escapeDistance})，恢复巡逻");
+            isPlayerInSight = false;
+            agent.isStopped = false;
+        }
+    }
+
+    /// <summary>
+    /// 玩家被检测到的处理逻辑
     /// </summary>
     private void HandlePlayerDetected()
     {
-        agent.isStopped = true;
+        // 立即停止移动
+        if (!agent.isStopped)
+        {
+            agent.isStopped = true;
+            agent.velocity = Vector3.zero;
+            Debug.Log("P1: 已停止导航代理");
+        }
 
-        // 平滑转向玩家（忽略Y轴旋转）
+        // 转向玩家
         if (player != null)
         {
             Vector3 targetLookDir = (player.position - transform.position).normalized;
-            targetLookDir.y = 0;  // 保持水平转向
-            Quaternion targetRotation = Quaternion.LookRotation(targetLookDir);
-            transform.rotation = Quaternion.Lerp(transform.rotation, targetRotation, rotateSpeed * Time.deltaTime);
+            targetLookDir.y = 0;
+            if (targetLookDir != Vector3.zero)
+            {
+                Quaternion targetRotation = Quaternion.LookRotation(targetLookDir);
+                transform.rotation = Quaternion.Lerp(transform.rotation, targetRotation, rotateSpeed * Time.deltaTime);
+            }
         }
 
         // 切换警戒色
@@ -153,7 +217,7 @@ public class P1_Purifier : MonoBehaviour
     }
 
     /// <summary>
-    /// 重置警戒状态（恢复默认颜色）
+    /// 重置警戒状态
     /// </summary>
     private void ResetAlertState()
     {
@@ -168,7 +232,11 @@ public class P1_Purifier : MonoBehaviour
     /// </summary>
     private void PatrolBehavior()
     {
-        agent.isStopped = false;
+        // 只有在确实没有检测到玩家时才恢复移动
+        if (!isPlayerInSight && agent.isStopped)
+        {
+            agent.isStopped = false;
+        }
 
         switch (currentPatrolState)
         {
@@ -181,9 +249,6 @@ public class P1_Purifier : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// 移动状态处理（到达目标点后切换等待）
-    /// </summary>
     private void HandleMovingState()
     {
         if (P1_patrolPoints.Length == 0) return;
@@ -193,12 +258,10 @@ public class P1_Purifier : MonoBehaviour
             currentPatrolState = PatrolState.Waiting;
             waitCounter = waitTimeAtPoint;
             agent.isStopped = true;
+            Debug.Log($"P1: 到达巡逻点 {currentPatrolIndex}，等待 {waitTimeAtPoint}秒");
         }
     }
 
-    /// <summary>
-    /// 等待状态处理（等待结束后切换下一个巡逻点）
-    /// </summary>
     private void HandleWaitingState()
     {
         waitCounter -= Time.deltaTime;
@@ -212,38 +275,95 @@ public class P1_Purifier : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// 设置下一个巡逻目标
-    /// </summary>
     private void SetNextPatrolTarget()
     {
         if (P1_patrolPoints.Length > 0 && P1_patrolPoints[currentPatrolIndex] != null && agent != null)
         {
             agent.SetDestination(P1_patrolPoints[currentPatrolIndex].position);
-            Debug.Log($"P1 移动到巡逻点 {currentPatrolIndex}");
         }
     }
 
-    /// <summary>
-    /// 调试Gizmos（Scene视图可视化视野）
-    /// </summary>
     private void OnDrawGizmosSelected()
     {
-        // 视野半径（绿色标识P2）
+        // 视野半径 - 绿色
         Gizmos.color = Color.green;
         Gizmos.DrawWireSphere(transform.position, visionRadius);
 
-        // 视野角度边界线
-        Vector3 fovLine1 = Quaternion.Euler(0, visionAngle / 2, 0) * transform.forward * visionRadius;
-        Vector3 fovLine2 = Quaternion.Euler(0, -visionAngle / 2, 0) * transform.forward * visionRadius;
-        Gizmos.DrawLine(transform.position, transform.position + fovLine1);
-        Gizmos.DrawLine(transform.position, transform.position + fovLine2);
+        // 逃脱距离 - 黄色
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawWireSphere(transform.position, escapeDistance);
 
-        // 检测到玩家时绘制视线
-        if (isPlayerInSight && player != null)
+        // 视野角度锥形区域 - 半透明绿色
+        Gizmos.color = new Color(0.2f, 0.8f, 0.2f, 0.3f);
+        Vector3 forward = transform.forward * visionRadius;
+        Vector3 leftBoundary = Quaternion.Euler(0, -visionAngle / 2, 0) * forward;
+        Vector3 rightBoundary = Quaternion.Euler(0, visionAngle / 2, 0) * forward;
+
+        // 绘制视野锥形
+        Gizmos.DrawLine(transform.position, transform.position + leftBoundary);
+        Gizmos.DrawLine(transform.position, transform.position + rightBoundary);
+        Gizmos.DrawLine(transform.position + leftBoundary, transform.position + rightBoundary);
+
+        // 显示射线起点（调试用）
+        Vector3 rayStart = transform.position + Vector3.up * 1.2f;
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawWireSphere(rayStart, 0.1f);
+
+        // 显示检测线
+        if (player != null)
         {
-            Gizmos.color = Color.yellow;
-            Gizmos.DrawLine(transform.position, player.position);
+            Vector3 playerCenter = player.position + Vector3.up * 1.0f;
+            if (isPlayerInSight)
+            {
+                Gizmos.color = Color.red;
+                Gizmos.DrawLine(rayStart, playerCenter);
+            }
+            else
+            {
+                Gizmos.color = Color.white;
+                Gizmos.DrawLine(rayStart, playerCenter);
+            }
+
+            // 显示当前距离文本（需要Unity 2019.3+）
+#if UNITY_EDITOR
+            float distance = Vector3.Distance(transform.position, player.position);
+            string distanceText = $"距离: {distance:F1}\n视野: {visionRadius}\n检测: {isPlayerInSight}";
+            UnityEditor.Handles.Label(transform.position + Vector3.up * 2f, distanceText);
+#endif
         }
+    }
+
+    // 添加一个简单的调试方法，可以在Inspector中调用
+    [ContextMenu("强制检测玩家")]
+    private void ForceDetectPlayer()
+    {
+        Debug.Log("=== 强制检测玩家 ===");
+        if (player == null)
+        {
+            Debug.LogError("玩家对象为空！");
+            return;
+        }
+
+        float distance = Vector3.Distance(transform.position, player.position);
+        float angle = Vector3.Angle(transform.forward, (player.position - transform.position).normalized);
+
+        Debug.Log($"玩家距离: {distance:F2}");
+        Debug.Log($"玩家角度: {angle:F2} (最大允许: {visionAngle / 2})");
+        Debug.Log($"视野半径: {visionRadius}");
+        Debug.Log($"逃脱距离: {escapeDistance}");
+
+        CheckPlayerInSight();
+        Debug.Log($"最终检测结果: {isPlayerInSight}");
+    }
+
+    [ContextMenu("显示当前设置")]
+    private void ShowCurrentSettings()
+    {
+        Debug.Log("=== P1当前设置 ===");
+        Debug.Log($"视野半径: {visionRadius}");
+        Debug.Log($"视野角度: {visionAngle}");
+        Debug.Log($"逃脱距离: {escapeDistance}");
+        Debug.Log($"巡逻点数量: {P1_patrolPoints?.Length ?? 0}");
+        Debug.Log($"障碍物层级: {obstacleMask.value}");
     }
 }
