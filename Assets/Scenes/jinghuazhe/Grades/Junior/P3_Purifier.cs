@@ -12,35 +12,75 @@ public class P3_Purifier : MonoBehaviour
     private NavMeshAgent agent;
     private Transform player;
 
-    [Header("=== Vision Settings ===")]
-    [SerializeField] private float visionRadius = 8f;  // 默认设置为较大的值
-    [SerializeField] private float visionAngle = 120f;
-    [SerializeField] private LayerMask obstacleMask;
-    [SerializeField] private float escapeDistance = 12f;  // 比视野半径大
+    [Header("=== Movement Settings ===")]
+    [SerializeField] private float normalWalkSpeed = 2f;
+    [SerializeField] private float fastWalkSpeed = 6f;
 
-    [Header("=== Alert Reactions ===")]
-    [SerializeField] private Color normalColor = new Color(0.3f, 0.7f, 1f);
-    [SerializeField] private Color alertColor = new Color(1f, 0.3f, 1f);
-    [SerializeField] private float rotateSpeed = 5f;
+    [Header("=== Animation Settings ===")]
+    [SerializeField] private Animator animator;
+    private string walkParameterName = "IsWalking";
 
-    private Renderer purifierRenderer;
+    [Header("=== Particle Effects ===")]
+    [SerializeField] private ParticleSystem alertParticleSystem;
+
     private int currentPatrolIndex = 0;
     private float waitCounter = 0f;
     private bool isPlayerInSight = false;
-    private bool wasPlayerInSight = false;
+    private bool isAlertParticlePlaying = false;
+    private bool isInitialized = false;
+    private Vector3 lastPosition;
+    private Quaternion lastRotation;
 
     private enum PatrolState { Moving, Waiting }
     private PatrolState currentPatrolState = PatrolState.Moving;
 
     void Start()
     {
+        InitializePurifier();
+        lastPosition = transform.position;
+        lastRotation = transform.rotation;
+    }
+
+    private void InitializePurifier()
+    {
+        Debug.Log("=== P3初始化开始 ===");
+
+        // 获取组件
         agent = GetComponent<NavMeshAgent>();
+        animator = GetComponent<Animator>();
+
         if (agent == null)
         {
-            Debug.LogError("P3 找不到NavMeshAgent组件！");
+            Debug.LogError("P3: 找不到NavMeshAgent组件！");
             return;
         }
 
+        // 重置NavMeshAgent设置
+        agent.speed = normalWalkSpeed;
+        agent.angularSpeed = 120f; // 降低旋转速度避免打转
+        agent.acceleration = 8f;
+        agent.stoppingDistance = pointArrivalDistance;
+        agent.autoBraking = true;
+        agent.obstacleAvoidanceType = ObstacleAvoidanceType.HighQualityObstacleAvoidance;
+
+        // 查找玩家
+        FindPlayer();
+
+        // 初始化粒子系统
+        InitializeParticleSystem();
+
+        // 检查动画参数
+        FindCorrectAnimationParameter();
+
+        // 开始巡逻
+        InitializePatrol();
+
+        isInitialized = true;
+        Debug.Log("=== P3初始化完成 ===");
+    }
+
+    private void FindPlayer()
+    {
         GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
         if (playerObj != null)
         {
@@ -49,72 +89,129 @@ public class P3_Purifier : MonoBehaviour
         }
         else
         {
-            Debug.LogWarning("P3 未找到标签为Player的物体！");
+            Debug.LogWarning("P3: 未找到玩家对象");
+        }
+    }
+
+    private void InitializeParticleSystem()
+    {
+        if (alertParticleSystem != null)
+        {
+            alertParticleSystem.Stop();
+            isAlertParticlePlaying = false;
+        }
+    }
+
+    private void FindCorrectAnimationParameter()
+    {
+        if (animator == null)
+        {
+            Debug.LogWarning("P3: 没有Animator组件");
+            return;
         }
 
-        purifierRenderer = GetComponent<Renderer>();
-        if (purifierRenderer != null)
+        // 尝试常见的行走参数名
+        string[] possibleNames = { "Walk", "isWalking", "Walking", "Move", "IsMoving" };
+        foreach (string name in possibleNames)
         {
-            purifierRenderer.material.color = normalColor;
+            foreach (var param in animator.parameters)
+            {
+                if (param.name == name && param.type == AnimatorControllerParameterType.Bool)
+                {
+                    walkParameterName = name;
+                    Debug.Log($"P3: 使用动画参数 '{walkParameterName}'");
+                    return;
+                }
+            }
         }
 
-        if (P3_patrolPoints != null && P3_patrolPoints.Length > 0)
+        // 如果没有找到，使用第一个布尔参数
+        foreach (var param in animator.parameters)
         {
-            SetNextPatrolTarget();
-            Debug.Log($"P3 脚本启动，开始巡逻。视野半径: {visionRadius}, 逃脱距离: {escapeDistance}");
+            if (param.type == AnimatorControllerParameterType.Bool)
+            {
+                walkParameterName = param.name;
+                Debug.LogWarning($"P3: 使用找到的备用参数 '{walkParameterName}'");
+                return;
+            }
+        }
+
+        Debug.LogWarning("P3: 没有找到可用的行走动画参数");
+    }
+
+    private void InitializePatrol()
+    {
+        // 检查是否在NavMesh上
+        if (!agent.isOnNavMesh)
+        {
+            Debug.LogError("P3: 代理不在NavMesh上！需要重新放置对象或重新烘焙NavMesh");
+            return;
+        }
+
+        if (P3_patrolPoints == null || P3_patrolPoints.Length == 0)
+        {
+            Debug.LogError("P3: 巡逻点数组为空！");
+            return;
+        }
+
+        // 验证巡逻点
+        for (int i = 0; i < P3_patrolPoints.Length; i++)
+        {
+            if (P3_patrolPoints[i] == null)
+            {
+                Debug.LogError($"P3: 巡逻点 {i} 为null！");
+                return;
+            }
+        }
+
+        currentPatrolIndex = 0;
+        currentPatrolState = PatrolState.Moving;
+
+        if (SetPatrolTargetEnhanced(currentPatrolIndex))
+        {
+            Debug.Log($"P3: 开始巡逻，共有 {P3_patrolPoints.Length} 个巡逻点");
         }
         else
         {
-            Debug.LogWarning("P3 未设置巡逻点！");
+            Debug.LogError("P3: 无法设置初始巡逻目标！");
         }
     }
 
     void Update()
     {
-        if (agent == null || !agent.enabled) return;
-
-        // 保存上一帧的状态
-        wasPlayerInSight = isPlayerInSight;
+        if (!isInitialized || agent == null) return;
 
         // 视野检测
+        bool previousSight = isPlayerInSight;
         CheckPlayerInSight();
 
-        // 实时显示距离信息
-        if (player != null)
+        // 处理状态变化
+        if (isPlayerInSight && !previousSight)
         {
-            float currentDistance = Vector3.Distance(transform.position, player.position);
-            // 在Game窗口中查看这个信息
-            if (currentDistance < visionRadius + 2f) // 只在接近时显示，避免日志过多
-            {
-                Debug.Log($"P3-距离: {currentDistance:F1}, 视野: {visionRadius}, 逃脱: {escapeDistance}, 检测: {isPlayerInSight}");
-            }
+            OnPlayerDetected();
+        }
+        else if (!isPlayerInSight && previousSight)
+        {
+            OnPlayerLost();
         }
 
-        // 状态变化时输出日志
-        if (isPlayerInSight && !wasPlayerInSight)
+        // 执行行为
+        if (isPlayerInSight)
         {
-            Debug.Log("P3: 检测到玩家！停止巡逻");
-        }
-        else if (!isPlayerInSight && wasPlayerInSight)
-        {
-            Debug.Log("P3: 玩家消失，恢复巡逻");
-        }
-
-        if (!isPlayerInSight)
-        {
-            PatrolBehavior();
-            ResetAlertState();
+            ChasePlayer();
         }
         else
         {
-            HandlePlayerDetected();
-            CheckPlayerEscape();
+            Patrol();
         }
+
+        // 更新动画
+        UpdateAnimation();
+
+        // 调试信息
+        DebugDisplay();
     }
 
-    /// <summary>
-    /// 视野检测逻辑 - 修复版
-    /// </summary>
     private void CheckPlayerInSight()
     {
         if (player == null)
@@ -123,36 +220,27 @@ public class P3_Purifier : MonoBehaviour
             return;
         }
 
-        Vector3 toPlayer = player.position - transform.position;
-        float distance = toPlayer.magnitude;
+        Vector3 directionToPlayer = player.position - transform.position;
+        float distanceToPlayer = directionToPlayer.magnitude;
 
-        // 1. 距离检测 - 只使用visionRadius，不受escapeDistance限制
-        if (distance > visionRadius)
+        // 距离检查
+        if (distanceToPlayer > 8f) // 固定视野半径
         {
             isPlayerInSight = false;
             return;
         }
 
-        // 2. 角度检测
-        float angle = Vector3.Angle(transform.forward, toPlayer.normalized);
-        if (angle > visionAngle / 2)
+        // 角度检查
+        float angleToPlayer = Vector3.Angle(transform.forward, directionToPlayer);
+        if (angleToPlayer > 60f) // 固定视野角度
         {
             isPlayerInSight = false;
             return;
         }
 
-        // 3. 障碍物遮挡检测 - 提高射线起点
-        Vector3 rayStart = transform.position + Vector3.up * 1.2f;
-        Vector3 playerCenter = player.position + Vector3.up * 1.0f;
-        Vector3 direction = (playerCenter - rayStart).normalized;
-
-        // 在Scene视图中显示检测线
-        Debug.DrawRay(rayStart, direction * Mathf.Min(distance, visionRadius),
-                     isPlayerInSight ? Color.red : Color.yellow, 0.1f);
-
-        if (Physics.Raycast(rayStart, direction, out RaycastHit hit, distance, obstacleMask))
+        // 障碍物检查
+        if (Physics.Raycast(transform.position + Vector3.up, directionToPlayer, out RaycastHit hit, distanceToPlayer))
         {
-            // 如果击中的不是玩家，说明有障碍物遮挡
             if (!hit.collider.CompareTag("Player"))
             {
                 isPlayerInSight = false;
@@ -160,88 +248,56 @@ public class P3_Purifier : MonoBehaviour
             }
         }
 
-        // 所有条件满足
-        if (!wasPlayerInSight) // 只在状态变化时输出，避免日志过多
-        {
-            Debug.Log($"P3: 成功检测到玩家！距离: {distance:F1}, 角度: {angle:F1}");
-        }
         isPlayerInSight = true;
     }
 
-    /// <summary>
-    /// 检查玩家是否逃脱到足够远的距离
-    /// </summary>
-    private void CheckPlayerEscape()
+    private void OnPlayerDetected()
     {
-        if (player == null) return;
+        Debug.Log("P3: 发现玩家！进入追逐状态");
+        agent.speed = fastWalkSpeed;
 
-        float distanceToPlayer = Vector3.Distance(transform.position, player.position);
-        if (distanceToPlayer > escapeDistance)
+        if (alertParticleSystem != null && !isAlertParticlePlaying)
         {
-            Debug.Log($"P3: 玩家逃脱到安全距离 ({distanceToPlayer:F1} > {escapeDistance})，恢复巡逻");
-            isPlayerInSight = false;
-            agent.isStopped = false;
+            alertParticleSystem.Play();
+            isAlertParticlePlaying = true;
         }
     }
 
-    /// <summary>
-    /// 玩家被检测到的处理逻辑
-    /// </summary>
-    private void HandlePlayerDetected()
+    private void OnPlayerLost()
     {
-        // 立即停止移动
-        if (!agent.isStopped)
+        Debug.Log("P3: 玩家消失，恢复巡逻");
+        agent.speed = normalWalkSpeed;
+
+        if (alertParticleSystem != null && isAlertParticlePlaying)
         {
-            agent.isStopped = true;
-            agent.velocity = Vector3.zero;
-            Debug.Log("P3: 已停止导航代理");
+            alertParticleSystem.Stop();
+            isAlertParticlePlaying = false;
         }
 
-        // 转向玩家
+        // 恢复巡逻
+        ReturnToPatrol();
+    }
+
+    private void ChasePlayer()
+    {
         if (player != null)
         {
-            Vector3 targetLookDir = (player.position - transform.position).normalized;
-            targetLookDir.y = 0;
-            if (targetLookDir != Vector3.zero)
+            agent.SetDestination(player.position);
+
+            // 检查逃脱距离
+            if (Vector3.Distance(transform.position, player.position) > 12f) // 固定逃脱距离
             {
-                Quaternion targetRotation = Quaternion.LookRotation(targetLookDir);
-                transform.rotation = Quaternion.Lerp(transform.rotation, targetRotation, rotateSpeed * Time.deltaTime);
+                isPlayerInSight = false;
             }
         }
-
-        // 切换警戒色
-        if (purifierRenderer != null)
-        {
-            purifierRenderer.material.color = alertColor;
-        }
     }
 
-    /// <summary>
-    /// 重置警戒状态
-    /// </summary>
-    private void ResetAlertState()
+    private void Patrol()
     {
-        if (purifierRenderer != null && purifierRenderer.material.color != normalColor)
-        {
-            purifierRenderer.material.color = normalColor;
-        }
-    }
-
-    /// <summary>
-    /// 巡逻行为逻辑
-    /// </summary>
-    private void PatrolBehavior()
-    {
-        // 只有在确实没有检测到玩家时才恢复移动
-        if (!isPlayerInSight && agent.isStopped)
-        {
-            agent.isStopped = false;
-        }
-
         switch (currentPatrolState)
         {
             case PatrolState.Moving:
-                HandleMovingState();
+                HandleMovingStateEnhanced();
                 break;
             case PatrolState.Waiting:
                 HandleWaitingState();
@@ -249,16 +305,48 @@ public class P3_Purifier : MonoBehaviour
         }
     }
 
-    private void HandleMovingState()
+    /// <summary>
+    /// 强化的移动状态处理
+    /// </summary>
+    private void HandleMovingStateEnhanced()
     {
         if (P3_patrolPoints.Length == 0) return;
 
-        if (!agent.pathPending && agent.remainingDistance <= pointArrivalDistance)
+        // 检查是否没有路径或路径无效
+        if (!agent.hasPath || agent.pathStatus == NavMeshPathStatus.PathInvalid)
         {
+            Debug.LogWarning("P3: 路径无效，重新计算路径");
+            if (!SetPatrolTargetEnhanced(currentPatrolIndex))
+            {
+                // 如果当前点不可达，尝试下一个点
+                currentPatrolIndex = (currentPatrolIndex + 1) % P3_patrolPoints.Length;
+                SetPatrolTargetEnhanced(currentPatrolIndex);
+            }
+            return;
+        }
+
+        // 检查是否卡住
+        if (agent.remainingDistance > pointArrivalDistance &&
+            agent.velocity.magnitude < 0.1f &&
+            !agent.pathPending)
+        {
+            Debug.LogWarning($"P3: 可能卡住，重新路径计算。剩余距离: {agent.remainingDistance}");
+
+            // 重新计算路径
+            agent.ResetPath();
+            SetPatrolTargetEnhanced(currentPatrolIndex);
+            return;
+        }
+
+        // 修复旋转问题
+        FixRotationIssue();
+
+        // 原始的距离检查逻辑
+        if (agent.remainingDistance <= pointArrivalDistance && !agent.pathPending)
+        {
+            Debug.Log($"P3: 到达巡逻点 {currentPatrolIndex}，开始等待");
             currentPatrolState = PatrolState.Waiting;
             waitCounter = waitTimeAtPoint;
-            agent.isStopped = true;
-            Debug.Log($"P3: 到达巡逻点 {currentPatrolIndex}，等待 {waitTimeAtPoint}秒");
         }
     }
 
@@ -268,102 +356,271 @@ public class P3_Purifier : MonoBehaviour
 
         if (waitCounter <= 0f)
         {
-            currentPatrolState = PatrolState.Moving;
+            // 移动到下一个点
             currentPatrolIndex = (currentPatrolIndex + 1) % P3_patrolPoints.Length;
-            SetNextPatrolTarget();
-            agent.isStopped = false;
-        }
-    }
+            currentPatrolState = PatrolState.Moving;
 
-    private void SetNextPatrolTarget()
-    {
-        if (P3_patrolPoints.Length > 0 && P3_patrolPoints[currentPatrolIndex] != null && agent != null)
-        {
-            agent.SetDestination(P3_patrolPoints[currentPatrolIndex].position);
-        }
-    }
-
-    private void OnDrawGizmosSelected()
-    {
-        // 视野半径 - 绿色
-        Gizmos.color = Color.green;
-        Gizmos.DrawWireSphere(transform.position, visionRadius);
-
-        // 逃脱距离 - 黄色
-        Gizmos.color = Color.yellow;
-        Gizmos.DrawWireSphere(transform.position, escapeDistance);
-
-        // 视野角度锥形区域 - 半透明绿色
-        Gizmos.color = new Color(0.2f, 0.8f, 0.2f, 0.3f);
-        Vector3 forward = transform.forward * visionRadius;
-        Vector3 leftBoundary = Quaternion.Euler(0, -visionAngle / 2, 0) * forward;
-        Vector3 rightBoundary = Quaternion.Euler(0, visionAngle / 2, 0) * forward;
-
-        // 绘制视野锥形
-        Gizmos.DrawLine(transform.position, transform.position + leftBoundary);
-        Gizmos.DrawLine(transform.position, transform.position + rightBoundary);
-        Gizmos.DrawLine(transform.position + leftBoundary, transform.position + rightBoundary);
-
-        // 显示射线起点（调试用）
-        Vector3 rayStart = transform.position + Vector3.up * 1.2f;
-        Gizmos.color = Color.yellow;
-        Gizmos.DrawWireSphere(rayStart, 0.1f);
-
-        // 显示检测线
-        if (player != null)
-        {
-            Vector3 playerCenter = player.position + Vector3.up * 1.0f;
-            if (isPlayerInSight)
+            if (SetPatrolTargetEnhanced(currentPatrolIndex))
             {
-                Gizmos.color = Color.red;
-                Gizmos.DrawLine(rayStart, playerCenter);
+                Debug.Log($"P3: 等待结束，前往巡逻点 {currentPatrolIndex}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 强化的巡逻目标设置方法
+    /// </summary>
+    private bool SetPatrolTargetEnhanced(int index)
+    {
+        if (!IsPatrolValid(index)) return false;
+
+        Vector3 targetPosition = P3_patrolPoints[index].position;
+
+        // 检查目标点是否在NavMesh上
+        if (NavMesh.SamplePosition(targetPosition, out NavMeshHit hit, 2.0f, NavMesh.AllAreas))
+        {
+            targetPosition = hit.position;
+            Debug.Log($"P3: 找到有效NavMesh位置 {targetPosition}");
+        }
+        else
+        {
+            Debug.LogError($"P3: 巡逻点 {index} 不在NavMesh上！位置: {targetPosition}");
+            return false;
+        }
+
+        // 使用CalculatePath检查路径是否可达
+        NavMeshPath path = new NavMeshPath();
+        if (agent.CalculatePath(targetPosition, path))
+        {
+            if (path.status == NavMeshPathStatus.PathComplete)
+            {
+                agent.SetDestination(targetPosition);
+                Debug.Log($"P3: 成功设置巡逻目标 {index} - {targetPosition}");
+                return true;
             }
             else
             {
-                Gizmos.color = Color.white;
-                Gizmos.DrawLine(rayStart, playerCenter);
+                Debug.LogWarning($"P3: 路径不可达 (状态: {path.status})，尝试寻找最近可达点");
+
+                // 尝试寻找最近的可达点
+                if (NavMesh.FindClosestEdge(targetPosition, out NavMeshHit edgeHit, NavMesh.AllAreas))
+                {
+                    agent.SetDestination(edgeHit.position);
+                    Debug.Log($"P3: 使用最近可达点 {edgeHit.position}");
+                    return true;
+                }
             }
-
-            // 显示当前距离文本（需要Unity 2019.3+）
-#if UNITY_EDITOR
-            float distance = Vector3.Distance(transform.position, player.position);
-            string distanceText = $"距离: {distance:F1}\n视野: {visionRadius}\n检测: {isPlayerInSight}";
-            UnityEditor.Handles.Label(transform.position + Vector3.up * 2f, distanceText);
-#endif
         }
+
+        Debug.LogError($"P3: 无法计算到巡逻点 {index} 的路径");
+        return false;
     }
 
-    // 添加一个简单的调试方法，可以在Inspector中调用
-    [ContextMenu("强制检测玩家")]
-    private void ForceDetectPlayer()
+    private bool IsPatrolValid(int index)
     {
-        Debug.Log("=== 强制检测玩家 ===");
-        if (player == null)
+        if (P3_patrolPoints == null || P3_patrolPoints.Length == 0)
         {
-            Debug.LogError("玩家对象为空！");
-            return;
+            Debug.LogError("P3: 巡逻点数组为空");
+            return false;
         }
 
-        float distance = Vector3.Distance(transform.position, player.position);
-        float angle = Vector3.Angle(transform.forward, (player.position - transform.position).normalized);
+        if (index < 0 || index >= P3_patrolPoints.Length)
+        {
+            Debug.LogError($"P3: 巡逻点索引 {index} 超出范围");
+            return false;
+        }
 
-        Debug.Log($"玩家距离: {distance:F2}");
-        Debug.Log($"玩家角度: {angle:F2} (最大允许: {visionAngle / 2})");
-        Debug.Log($"视野半径: {visionRadius}");
-        Debug.Log($"逃脱距离: {escapeDistance}");
+        if (P3_patrolPoints[index] == null)
+        {
+            Debug.LogError($"P3: 巡逻点 {index} 为null");
+            return false;
+        }
 
-        CheckPlayerInSight();
-        Debug.Log($"最终检测结果: {isPlayerInSight}");
+        if (agent == null)
+        {
+            Debug.LogError("P3: NavMeshAgent 为null");
+            return false;
+        }
+
+        return true;
     }
 
-    [ContextMenu("显示当前设置")]
-    private void ShowCurrentSettings()
+    /// <summary>
+    /// 修复旋转问题 - 修复版本
+    /// </summary>
+    private void FixRotationIssue()
     {
-        Debug.Log("=== P3当前设置 ===");
-        Debug.Log($"视野半径: {visionRadius}");
-        Debug.Log($"视野角度: {visionAngle}");
-        Debug.Log($"逃脱距离: {escapeDistance}");
-        Debug.Log($"巡逻点数量: {P3_patrolPoints?.Length ?? 0}");
-        Debug.Log($"障碍物层级: {obstacleMask.value}");
+        // 如果代理在移动但位置没有变化，可能是旋转问题
+        if (agent.hasPath && agent.remainingDistance > pointArrivalDistance)
+        {
+            // 计算旋转角度变化
+            float rotationChange = Quaternion.Angle(transform.rotation, lastRotation);
+
+            // 检查是否在旋转但没有移动
+            if (agent.velocity.magnitude < 0.1f && rotationChange > 5f)
+            {
+                Debug.LogWarning("P3: 检测到可能卡在旋转上，尝试修复");
+
+                // 临时禁用自动旋转，手动控制朝向
+                agent.updateRotation = false;
+
+                Vector3 direction = (agent.steeringTarget - transform.position).normalized;
+                if (direction != Vector3.zero)
+                {
+                    Quaternion targetRotation = Quaternion.LookRotation(direction);
+                    transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation,
+                        Time.deltaTime * 2f); // 使用固定速度而不是angularSpeed
+                }
+            }
+            else
+            {
+                // 恢复正常旋转控制
+                agent.updateRotation = true;
+            }
+        }
+
+        // 更新上一帧的位置和旋转
+        lastPosition = transform.position;
+        lastRotation = transform.rotation;
+    }
+
+    private void ReturnToPatrol()
+    {
+        if (currentPatrolState == PatrolState.Moving)
+        {
+            SetPatrolTargetEnhanced(currentPatrolIndex);
+        }
+    }
+
+    private void UpdateAnimation()
+    {
+        if (animator == null) return;
+
+        bool shouldWalk = (currentPatrolState == PatrolState.Moving && agent.remainingDistance > pointArrivalDistance) ||
+                         (isPlayerInSight && agent.remainingDistance > pointArrivalDistance);
+
+        animator.SetBool(walkParameterName, shouldWalk);
+    }
+
+    private void DebugDisplay()
+    {
+        if (Time.frameCount % 120 == 0) // 每2秒输出一次
+        {
+            string state = isPlayerInSight ? "追逐" : "巡逻";
+            string moveState = currentPatrolState.ToString();
+            string pathInfo = agent.hasPath ? $"路径正常" : "无路径";
+
+            Debug.Log($"P3状态: {state} | 移动: {moveState} | 目标点: {currentPatrolIndex} | {pathInfo} | 剩余距离: {agent.remainingDistance:F1}");
+        }
+    }
+
+    private void OnDrawGizmos()
+    {
+        if (!isInitialized) return;
+
+        // 绘制当前路径
+        if (agent != null && agent.hasPath)
+        {
+            Gizmos.color = isPlayerInSight ? Color.red : Color.blue;
+            for (int i = 0; i < agent.path.corners.Length - 1; i++)
+            {
+                Gizmos.DrawLine(agent.path.corners[i], agent.path.corners[i + 1]);
+            }
+        }
+
+        // 绘制当前目标点
+        if (P3_patrolPoints != null && currentPatrolIndex < P3_patrolPoints.Length && P3_patrolPoints[currentPatrolIndex] != null)
+        {
+            Gizmos.color = Color.yellow;
+            Gizmos.DrawWireSphere(P3_patrolPoints[currentPatrolIndex].position, 0.5f);
+        }
+    }
+
+    [ContextMenu("强制重新巡逻")]
+    private void ForceRestartPatrol()
+    {
+        Debug.Log("=== 强制重新开始巡逻 ===");
+        currentPatrolIndex = 0;
+        currentPatrolState = PatrolState.Moving;
+        SetPatrolTargetEnhanced(currentPatrolIndex);
+    }
+
+    [ContextMenu("显示NavMesh信息")]
+    private void ShowNavMeshInfo()
+    {
+        Debug.Log("=== NavMesh信息 ===");
+        Debug.Log($"Agent位置: {transform.position}");
+        Debug.Log($"在NavMesh上: {NavMesh.SamplePosition(transform.position, out NavMeshHit hit, 1f, NavMesh.AllAreas)}");
+        Debug.Log($"可导航: {agent.isOnNavMesh}");
+        Debug.Log($"有路径: {agent.hasPath}");
+        Debug.Log($"路径状态: {agent.pathStatus}");
+
+        if (P3_patrolPoints != null)
+        {
+            for (int i = 0; i < P3_patrolPoints.Length; i++)
+            {
+                if (P3_patrolPoints[i] != null)
+                {
+                    bool onNavMesh = NavMesh.SamplePosition(P3_patrolPoints[i].position, out hit, 1f, NavMesh.AllAreas);
+                    Debug.Log($"巡逻点 {i}: {P3_patrolPoints[i].position} - 在NavMesh上: {onNavMesh}");
+                }
+            }
+        }
+    }
+
+    [ContextMenu("诊断巡逻问题")]
+    private void DiagnosePatrolIssue()
+    {
+        Debug.Log("=== P3巡逻问题诊断 ===");
+        Debug.Log($"代理在NavMesh上: {agent.isOnNavMesh}");
+        Debug.Log($"代理有路径: {agent.hasPath}");
+        Debug.Log($"路径状态: {agent.pathStatus}");
+        Debug.Log($"代理速度: {agent.velocity.magnitude}");
+        Debug.Log($"剩余距离: {agent.remainingDistance}");
+        Debug.Log($"是否路径计算中: {agent.pathPending}");
+
+        if (P3_patrolPoints != null && currentPatrolIndex < P3_patrolPoints.Length)
+        {
+            Vector3 targetPos = P3_patrolPoints[currentPatrolIndex].position;
+            Debug.Log($"当前目标点: {targetPos}");
+
+            // 检查目标点是否在NavMesh上
+            bool onNavMesh = NavMesh.SamplePosition(targetPos, out NavMeshHit hit, 2.0f, NavMesh.AllAreas);
+            Debug.Log($"目标点在NavMesh上: {onNavMesh}");
+
+            if (onNavMesh)
+            {
+                // 检查路径是否可达
+                NavMeshPath testPath = new NavMeshPath();
+                if (agent.CalculatePath(targetPos, testPath))
+                {
+                    Debug.Log($"路径计算状态: {testPath.status}");
+                }
+            }
+        }
+    }
+
+    [ContextMenu("重新初始化导航代理")]
+    private void ReinitializeAgent()
+    {
+        Debug.Log("=== 重新初始化导航代理 ===");
+
+        if (agent != null)
+        {
+            agent.enabled = false;
+            agent.enabled = true;
+
+            // 重新设置参数
+            agent.speed = normalWalkSpeed;
+            agent.angularSpeed = 120f;
+            agent.acceleration = 8f;
+            agent.stoppingDistance = pointArrivalDistance;
+            agent.autoBraking = true;
+            agent.obstacleAvoidanceType = ObstacleAvoidanceType.HighQualityObstacleAvoidance;
+            agent.updateRotation = true;
+
+            // 重新开始巡逻
+            ForceRestartPatrol();
+        }
     }
 }

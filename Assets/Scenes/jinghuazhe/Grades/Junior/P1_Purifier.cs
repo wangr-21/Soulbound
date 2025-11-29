@@ -18,7 +18,7 @@ public class P1_Purifier : MonoBehaviour
 
     [Header("=== Animation Settings ===")]
     [SerializeField] private Animator animator;
-    private string walkParameterName = "Walk";
+    private string walkParameterName = "IsWalking";
 
     [Header("=== Particle Effects ===")]
     [SerializeField] private ParticleSystem alertParticleSystem;
