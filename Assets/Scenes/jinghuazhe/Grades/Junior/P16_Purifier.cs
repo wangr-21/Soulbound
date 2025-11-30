@@ -1,10 +1,10 @@
 using UnityEngine;
 using UnityEngine.AI;
 
-public class P11_Purifier : MonoBehaviour
+public class P16_Purifier : MonoBehaviour
 {
-    [Header("=== P11专属设置 ===")]
-    public Transform[] P11_patrolPoints;
+    [Header("=== P16专属设置 ===")]
+    public Transform[] P16_patrolPoints;
     [SerializeField] private float waitTimeAtPoint = 1.5f;
     [SerializeField] private float pointArrivalDistance = 0.5f;
 
@@ -43,7 +43,7 @@ public class P11_Purifier : MonoBehaviour
 
     private void InitializePurifier()
     {
-        Debug.Log("=== P11初始化开始 ===");
+        Debug.Log("=== P16初始化开始 ===");
 
         // 获取组件
         agent = GetComponent<NavMeshAgent>();
@@ -51,7 +51,7 @@ public class P11_Purifier : MonoBehaviour
 
         if (agent == null)
         {
-            Debug.LogError("P11: 找不到NavMeshAgent组件！");
+            Debug.LogError("P16: 找不到NavMeshAgent组件！");
             return;
         }
 
@@ -76,7 +76,7 @@ public class P11_Purifier : MonoBehaviour
         InitializePatrol();
 
         isInitialized = true;
-        Debug.Log("=== P11初始化完成 ===");
+        Debug.Log("=== P16初始化完成 ===");
     }
 
     private void FindPlayer()
@@ -85,11 +85,11 @@ public class P11_Purifier : MonoBehaviour
         if (playerObj != null)
         {
             player = playerObj.transform;
-            Debug.Log("P11: 找到玩家对象");
+            Debug.Log("P16: 找到玩家对象");
         }
         else
         {
-            Debug.LogWarning("P11: 未找到玩家对象");
+            Debug.LogWarning("P16: 未找到玩家对象");
         }
     }
 
@@ -106,7 +106,7 @@ public class P11_Purifier : MonoBehaviour
     {
         if (animator == null)
         {
-            Debug.LogWarning("P11: 没有Animator组件");
+            Debug.LogWarning("P16: 没有Animator组件");
             return;
         }
 
@@ -119,7 +119,7 @@ public class P11_Purifier : MonoBehaviour
                 if (param.name == name && param.type == AnimatorControllerParameterType.Bool)
                 {
                     walkParameterName = name;
-                    Debug.Log($"P11: 使用动画参数 '{walkParameterName}'");
+                    Debug.Log($"P16: 使用动画参数 '{walkParameterName}'");
                     return;
                 }
             }
@@ -131,12 +131,12 @@ public class P11_Purifier : MonoBehaviour
             if (param.type == AnimatorControllerParameterType.Bool)
             {
                 walkParameterName = param.name;
-                Debug.LogWarning($"P11: 使用找到的备用参数 '{walkParameterName}'");
+                Debug.LogWarning($"P16: 使用找到的备用参数 '{walkParameterName}'");
                 return;
             }
         }
 
-        Debug.LogWarning("P11: 没有找到可用的行走动画参数");
+        Debug.LogWarning("P16: 没有找到可用的行走动画参数");
     }
 
     private void InitializePatrol()
@@ -144,22 +144,22 @@ public class P11_Purifier : MonoBehaviour
         // 检查是否在NavMesh上
         if (!agent.isOnNavMesh)
         {
-            Debug.LogError("P11: 代理不在NavMesh上！需要重新放置对象或重新烘焙NavMesh");
+            Debug.LogError("P16: 代理不在NavMesh上！需要重新放置对象或重新烘焙NavMesh");
             return;
         }
 
-        if (P11_patrolPoints == null || P11_patrolPoints.Length == 0)
+        if (P16_patrolPoints == null || P16_patrolPoints.Length == 0)
         {
-            Debug.LogError("P11: 巡逻点数组为空！");
+            Debug.LogError("P16: 巡逻点数组为空！");
             return;
         }
 
         // 验证巡逻点
-        for (int i = 0; i < P11_patrolPoints.Length; i++)
+        for (int i = 0; i < P16_patrolPoints.Length; i++)
         {
-            if (P11_patrolPoints[i] == null)
+            if (P16_patrolPoints[i] == null)
             {
-                Debug.LogError($"P11: 巡逻点 {i} 为null！");
+                Debug.LogError($"P16: 巡逻点 {i} 为null！");
                 return;
             }
         }
@@ -169,11 +169,11 @@ public class P11_Purifier : MonoBehaviour
 
         if (SetPatrolTargetEnhanced(currentPatrolIndex))
         {
-            Debug.Log($"P11: 开始巡逻，共有 {P11_patrolPoints.Length} 个巡逻点");
+            Debug.Log($"P16: 开始巡逻，共有 {P16_patrolPoints.Length} 个巡逻点");
         }
         else
         {
-            Debug.LogError("P11: 无法设置初始巡逻目标！");
+            Debug.LogError("P16: 无法设置初始巡逻目标！");
         }
     }
 
@@ -253,7 +253,7 @@ public class P11_Purifier : MonoBehaviour
 
     private void OnPlayerDetected()
     {
-        Debug.Log("P11: 发现玩家！进入追逐状态");
+        Debug.Log("P16: 发现玩家！进入追逐状态");
         agent.speed = fastWalkSpeed;
 
         if (alertParticleSystem != null && !isAlertParticlePlaying)
@@ -265,7 +265,7 @@ public class P11_Purifier : MonoBehaviour
 
     private void OnPlayerLost()
     {
-        Debug.Log("P11: 玩家消失，恢复巡逻");
+        Debug.Log("P16: 玩家消失，恢复巡逻");
         agent.speed = normalWalkSpeed;
 
         if (alertParticleSystem != null && isAlertParticlePlaying)
@@ -310,16 +310,16 @@ public class P11_Purifier : MonoBehaviour
     /// </summary>
     private void HandleMovingStateEnhanced()
     {
-        if (P11_patrolPoints.Length == 0) return;
+        if (P16_patrolPoints.Length == 0) return;
 
         // 检查是否没有路径或路径无效
         if (!agent.hasPath || agent.pathStatus == NavMeshPathStatus.PathInvalid)
         {
-            Debug.LogWarning("P11: 路径无效，重新计算路径");
+            Debug.LogWarning("P16: 路径无效，重新计算路径");
             if (!SetPatrolTargetEnhanced(currentPatrolIndex))
             {
                 // 如果当前点不可达，尝试下一个点
-                currentPatrolIndex = (currentPatrolIndex + 1) % P11_patrolPoints.Length;
+                currentPatrolIndex = (currentPatrolIndex + 1) % P16_patrolPoints.Length;
                 SetPatrolTargetEnhanced(currentPatrolIndex);
             }
             return;
@@ -330,7 +330,7 @@ public class P11_Purifier : MonoBehaviour
             agent.velocity.magnitude < 0.1f &&
             !agent.pathPending)
         {
-            Debug.LogWarning($"P11: 可能卡住，重新路径计算。剩余距离: {agent.remainingDistance}");
+            Debug.LogWarning($"P16: 可能卡住，重新路径计算。剩余距离: {agent.remainingDistance}");
 
             // 重新计算路径
             agent.ResetPath();
@@ -344,7 +344,7 @@ public class P11_Purifier : MonoBehaviour
         // 原始的距离检查逻辑
         if (agent.remainingDistance <= pointArrivalDistance && !agent.pathPending)
         {
-            Debug.Log($"P11: 到达巡逻点 {currentPatrolIndex}，开始等待");
+            Debug.Log($"P16: 到达巡逻点 {currentPatrolIndex}，开始等待");
             currentPatrolState = PatrolState.Waiting;
             waitCounter = waitTimeAtPoint;
         }
@@ -357,12 +357,12 @@ public class P11_Purifier : MonoBehaviour
         if (waitCounter <= 0f)
         {
             // 移动到下一个点
-            currentPatrolIndex = (currentPatrolIndex + 1) % P11_patrolPoints.Length;
+            currentPatrolIndex = (currentPatrolIndex + 1) % P16_patrolPoints.Length;
             currentPatrolState = PatrolState.Moving;
 
             if (SetPatrolTargetEnhanced(currentPatrolIndex))
             {
-                Debug.Log($"P11: 等待结束，前往巡逻点 {currentPatrolIndex}");
+                Debug.Log($"P16: 等待结束，前往巡逻点 {currentPatrolIndex}");
             }
         }
     }
@@ -374,17 +374,17 @@ public class P11_Purifier : MonoBehaviour
     {
         if (!IsPatrolValid(index)) return false;
 
-        Vector3 targetPosition = P11_patrolPoints[index].position;
+        Vector3 targetPosition = P16_patrolPoints[index].position;
 
         // 检查目标点是否在NavMesh上
         if (NavMesh.SamplePosition(targetPosition, out NavMeshHit hit, 2.0f, NavMesh.AllAreas))
         {
             targetPosition = hit.position;
-            Debug.Log($"P11: 找到有效NavMesh位置 {targetPosition}");
+            Debug.Log($"P16: 找到有效NavMesh位置 {targetPosition}");
         }
         else
         {
-            Debug.LogError($"P11: 巡逻点 {index} 不在NavMesh上！位置: {targetPosition}");
+            Debug.LogError($"P16: 巡逻点 {index} 不在NavMesh上！位置: {targetPosition}");
             return false;
         }
 
@@ -395,50 +395,50 @@ public class P11_Purifier : MonoBehaviour
             if (path.status == NavMeshPathStatus.PathComplete)
             {
                 agent.SetDestination(targetPosition);
-                Debug.Log($"P11: 成功设置巡逻目标 {index} - {targetPosition}");
+                Debug.Log($"P16: 成功设置巡逻目标 {index} - {targetPosition}");
                 return true;
             }
             else
             {
-                Debug.LogWarning($"P11: 路径不可达 (状态: {path.status})，尝试寻找最近可达点");
+                Debug.LogWarning($"P16: 路径不可达 (状态: {path.status})，尝试寻找最近可达点");
 
                 // 尝试寻找最近的可达点
                 if (NavMesh.FindClosestEdge(targetPosition, out NavMeshHit edgeHit, NavMesh.AllAreas))
                 {
                     agent.SetDestination(edgeHit.position);
-                    Debug.Log($"P11: 使用最近可达点 {edgeHit.position}");
+                    Debug.Log($"P16: 使用最近可达点 {edgeHit.position}");
                     return true;
                 }
             }
         }
 
-        Debug.LogError($"P11: 无法计算到巡逻点 {index} 的路径");
+        Debug.LogError($"P16: 无法计算到巡逻点 {index} 的路径");
         return false;
     }
 
     private bool IsPatrolValid(int index)
     {
-        if (P11_patrolPoints == null || P11_patrolPoints.Length == 0)
+        if (P16_patrolPoints == null || P16_patrolPoints.Length == 0)
         {
-            Debug.LogError("P11: 巡逻点数组为空");
+            Debug.LogError("P16: 巡逻点数组为空");
             return false;
         }
 
-        if (index < 0 || index >= P11_patrolPoints.Length)
+        if (index < 0 || index >= P16_patrolPoints.Length)
         {
-            Debug.LogError($"P11: 巡逻点索引 {index} 超出范围");
+            Debug.LogError($"P16: 巡逻点索引 {index} 超出范围");
             return false;
         }
 
-        if (P11_patrolPoints[index] == null)
+        if (P16_patrolPoints[index] == null)
         {
-            Debug.LogError($"P11: 巡逻点 {index} 为null");
+            Debug.LogError($"P16: 巡逻点 {index} 为null");
             return false;
         }
 
         if (agent == null)
         {
-            Debug.LogError("P11: NavMeshAgent 为null");
+            Debug.LogError("P16: NavMeshAgent 为null");
             return false;
         }
 
@@ -459,7 +459,7 @@ public class P11_Purifier : MonoBehaviour
             // 检查是否在旋转但没有移动
             if (agent.velocity.magnitude < 0.1f && rotationChange > 5f)
             {
-                Debug.LogWarning("P11: 检测到可能卡在旋转上，尝试修复");
+                Debug.LogWarning("P16: 检测到可能卡在旋转上，尝试修复");
 
                 // 临时禁用自动旋转，手动控制朝向
                 agent.updateRotation = false;
@@ -510,7 +510,7 @@ public class P11_Purifier : MonoBehaviour
             string moveState = currentPatrolState.ToString();
             string pathInfo = agent.hasPath ? $"路径正常" : "无路径";
 
-            Debug.Log($"P11状态: {state} | 移动: {moveState} | 目标点: {currentPatrolIndex} | {pathInfo} | 剩余距离: {agent.remainingDistance:F1}");
+            Debug.Log($"P16状态: {state} | 移动: {moveState} | 目标点: {currentPatrolIndex} | {pathInfo} | 剩余距离: {agent.remainingDistance:F1}");
         }
     }
 
@@ -529,10 +529,10 @@ public class P11_Purifier : MonoBehaviour
         }
 
         // 绘制当前目标点
-        if (P11_patrolPoints != null && currentPatrolIndex < P11_patrolPoints.Length && P11_patrolPoints[currentPatrolIndex] != null)
+        if (P16_patrolPoints != null && currentPatrolIndex < P16_patrolPoints.Length && P16_patrolPoints[currentPatrolIndex] != null)
         {
             Gizmos.color = Color.yellow;
-            Gizmos.DrawWireSphere(P11_patrolPoints[currentPatrolIndex].position, 0.5f);
+            Gizmos.DrawWireSphere(P16_patrolPoints[currentPatrolIndex].position, 0.5f);
         }
     }
 
@@ -555,14 +555,14 @@ public class P11_Purifier : MonoBehaviour
         Debug.Log($"有路径: {agent.hasPath}");
         Debug.Log($"路径状态: {agent.pathStatus}");
 
-        if (P11_patrolPoints != null)
+        if (P16_patrolPoints != null)
         {
-            for (int i = 0; i < P11_patrolPoints.Length; i++)
+            for (int i = 0; i < P16_patrolPoints.Length; i++)
             {
-                if (P11_patrolPoints[i] != null)
+                if (P16_patrolPoints[i] != null)
                 {
-                    bool onNavMesh = NavMesh.SamplePosition(P11_patrolPoints[i].position, out hit, 1f, NavMesh.AllAreas);
-                    Debug.Log($"巡逻点 {i}: {P11_patrolPoints[i].position} - 在NavMesh上: {onNavMesh}");
+                    bool onNavMesh = NavMesh.SamplePosition(P16_patrolPoints[i].position, out hit, 1f, NavMesh.AllAreas);
+                    Debug.Log($"巡逻点 {i}: {P16_patrolPoints[i].position} - 在NavMesh上: {onNavMesh}");
                 }
             }
         }
@@ -571,7 +571,7 @@ public class P11_Purifier : MonoBehaviour
     [ContextMenu("诊断巡逻问题")]
     private void DiagnosePatrolIssue()
     {
-        Debug.Log("=== P11巡逻问题诊断 ===");
+        Debug.Log("=== P16巡逻问题诊断 ===");
         Debug.Log($"代理在NavMesh上: {agent.isOnNavMesh}");
         Debug.Log($"代理有路径: {agent.hasPath}");
         Debug.Log($"路径状态: {agent.pathStatus}");
@@ -579,9 +579,9 @@ public class P11_Purifier : MonoBehaviour
         Debug.Log($"剩余距离: {agent.remainingDistance}");
         Debug.Log($"是否路径计算中: {agent.pathPending}");
 
-        if (P11_patrolPoints != null && currentPatrolIndex < P11_patrolPoints.Length)
+        if (P16_patrolPoints != null && currentPatrolIndex < P16_patrolPoints.Length)
         {
-            Vector3 targetPos = P11_patrolPoints[currentPatrolIndex].position;
+            Vector3 targetPos = P16_patrolPoints[currentPatrolIndex].position;
             Debug.Log($"当前目标点: {targetPos}");
 
             // 检查目标点是否在NavMesh上
