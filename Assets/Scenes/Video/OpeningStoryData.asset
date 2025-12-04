@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb2c269d7935dce458ac0130a2378b91, type: 3}
+  m_Name: OpeningStoryData
+  m_EditorClassIdentifier: 
+  storySegments:
+  - bgSprite: {fileID: 21300000, guid: ce2dce216681ae247bc49f18448d876e, type: 3}
+    storyText: Huh... My head hurts so much. Where is this?
+    textSpeed: 0.07
+  - bgSprite: {fileID: 21300000, guid: 4a514a280915db94895c5a882c005ca2, type: 3}
+    storyText: Is this me? Why am I like this? What on earth happened? Why can't
+      I remember anything?
+    textSpeed: 0.07
+  - bgSprite: {fileID: 21300000, guid: 12c17a05369213c4bb345a28c6cbcbc3, type: 3}
+    storyText: 'Narrator: Suddenly, it seemed that some fragmented pieces came to
+      my mind'
+    textSpeed: 0.07
+  - bgSprite: {fileID: 21300000, guid: 6c8813665426cdc4285d5179e1bf832c, type: 3}
+    storyText: Is this the king? He looks very imposing.
+    textSpeed: 0.07
+  - bgSprite: {fileID: 21300000, guid: c680c0375bcab7f4c9947fd64d3f9816, type: 3}
+    storyText: Wow, this country is so fortunate. Is this my country?
+    textSpeed: 0.07
+  - bgSprite: {fileID: 21300000, guid: 12c17a05369213c4bb345a28c6cbcbc3, type: 3}
+    storyText: 'Narrator: Suddenly, my head felt like it was about to explode because
+      some memories that were completely different from before appeared...'
+    textSpeed: 0.07
+  - bgSprite: {fileID: 21300000, guid: 510415e448e8bc84aa1e8548279815c0, type: 3}
+    storyText: What happened here? Why has this country suddenly become like this!
+    textSpeed: 0.07
+  - bgSprite: {fileID: 21300000, guid: 12c17a05369213c4bb345a28c6cbcbc3, type: 3}
+    storyText: 'A voice echoed in my mind: The clock... Soul... Why! (This voice
+      sounds a bit familiar.)'
+    textSpeed: 0.07

@@ -1,6 +1,5 @@
 using UnityEngine;
 
-// 单段剧情的数据结构（可在检视面板中编辑）
 [System.Serializable]
 public class StorySegment
 {
@@ -9,8 +8,9 @@ public class StorySegment
     public float textSpeed = 0.05f; // 打字机速度
 }
 
-// 整段剧情的配置管理器
-public class StoryData : MonoBehaviour
+// 改为继承 ScriptableObject
+[CreateAssetMenu(fileName = "NewStoryData", menuName = "Game/Story Data")]
+public class StoryData : ScriptableObject
 {
-    public StorySegment[] storySegments; 
+    public StorySegment[] storySegments;
 }

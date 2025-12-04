@@ -8,7 +8,6 @@ public class StoryController : MonoBehaviour
 {
     [Header("UI 组件引用")]
     public Image bgImage;                // 背景图片
-    public Image roleImage;              // 角色立绘（可选，无则留空）
     public TextMeshProUGUI storyText;    // 剧情文本
     public TextMeshProUGUI skipTip;      // 跳过提示
     public AudioSource bgmAudioSource;   // 背景音乐播放器
@@ -39,8 +38,6 @@ public class StoryController : MonoBehaviour
         // 初始化图片透明度（透明）
         storyText.text = "";
         bgImage.color = new Color(1, 1, 1, 0);
-        if (roleImage != null)
-            roleImage.color = new Color(1, 1, 1, 0);
 
         // 播放背景音乐（淡入效果）
         if (bgmAudioSource != null)
@@ -90,23 +87,14 @@ public class StoryController : MonoBehaviour
         // 1. 背景图片淡入
         yield return StartCoroutine(FadeImage(bgImage, currentSegment.bgSprite, true));
 
-        // 2. 角色立绘淡入（有则显示，无则隐藏）
-        if (roleImage != null)
-        {
-            if (currentSegment.roleSprite != null)
-                yield return StartCoroutine(FadeImage(roleImage, currentSegment.roleSprite, true));
-            else
-                yield return StartCoroutine(FadeImage(roleImage, null, false));
-        }
-
-        // 3. 打字机效果显示文本
+        // 2. 打字机效果显示文本
         textCoroutine = StartCoroutine(TypeText(currentSegment.storyText, currentSegment.textSpeed));
 
         // 等待文本打印完成或被跳过
         while (!isTextFinished && !isSkipping)
             yield return null;
 
-        // 4. 停留 0.5 秒，进入下一段
+        // 3. 停留 0.5 秒，进入下一段
         yield return new WaitForSeconds(0.5f);
         currentSegmentIndex++;
         StartCoroutine(PlayStorySegment(currentSegmentIndex));
