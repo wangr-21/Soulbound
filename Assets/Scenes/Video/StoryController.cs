@@ -1,4 +1,4 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using System.Collections;
@@ -6,135 +6,553 @@ using UnityEngine.SceneManagement;
 
 public class StoryController : MonoBehaviour
 {
-    [Header("UI ×é¼şÒıÓÃ")]
-    public Image bgImage;                // ±³¾°Í¼Æ¬
-    public TextMeshProUGUI storyText;    // ¾çÇéÎÄ±¾
-    public TextMeshProUGUI skipTip;      // Ìø¹ıÌáÊ¾
-    public AudioSource bgmAudioSource;   // ±³¾°ÒôÀÖ²¥·ÅÆ÷
-    public Slider loadProgressBar;       // ¼ÓÔØ½ø¶ÈÌõ£¨¿ÉÑ¡£©
-    public TextMeshProUGUI progressText; // ½ø¶È°Ù·Ö±ÈÎÄ±¾£¨¿ÉÑ¡£©
+    [Header("UI ç»„ä»¶å¼•ç”¨")]
+    public Image bgImage;                // èƒŒæ™¯å›¾ç‰‡
+    public TextMeshProUGUI storyText;    // å‰§æƒ…æ–‡æœ¬
+    public TextMeshProUGUI skipTip;      // è·³è¿‡æç¤º
+    public AudioSource bgmAudioSource;   // èƒŒæ™¯éŸ³ä¹æ’­æ”¾å™¨
 
-    [Header("¾çÇéÅäÖÃ")]
-    public StoryData storyData;          // ¾çÇéÊı¾İ
-    public float imageFadeTime = 0.5f;   // Í¼Æ¬µ­Èëµ­³öÊ±³¤£¨Ãë£©
-    public string mainSceneName = "GameMain"; // Ö÷ÓÎÏ·³¡¾°Ãû³Æ£¨±ØĞëºÍBuildÖĞÒ»ÖÂ£©
-    public float bgmFadeDuration = 1f;   // ±³¾°ÒôÀÖµ­Èëµ­³öÊ±³¤£¨Ãë£©
+    [Header("å‰§æƒ…é…ç½®")]
+    public StoryData storyData;          // å‰§æƒ…æ•°æ®
+    public float imageFadeTime = 1.0f;   // å›¾ç‰‡æ·¡å…¥æ·¡å‡ºæ—¶é•¿ï¼ˆç§’ï¼‰
+    public string mainSceneName = "GameMain"; // ä¸»æ¸¸æˆåœºæ™¯åç§°
+    public float bgmFadeDuration = 1.5f; // èƒŒæ™¯éŸ³ä¹æ·¡å…¥æ·¡å‡ºæ—¶é•¿ï¼ˆç§’ï¼‰
 
-    private int currentSegmentIndex = 0; // µ±Ç°¾çÇé¶ÎË÷Òı
-    private Coroutine textCoroutine;     // ´ò×Ö»úĞ­³Ì
-    private bool isTextFinished = false; // ÎÄ±¾ÊÇ·ñ´òÓ¡Íê³É
-    private bool isSkipping = false;     // ÊÇ·ñÕıÔÚÌø¹ı
-    private bool isLongSkipping = false; // ÊÇ·ñÕıÔÚ³¤°´Ìø¹ı
+    [Header("å­—ä½“è®¾ç½® - ä¼˜å…ˆçº§æœ€é«˜")]  // æ˜ç¡®è¯´æ˜
+    [Tooltip("å¦‚æœä¸ºtrueï¼Œä½¿ç”¨ä»£ç è®¾ç½®å­—ä½“ï¼›å¦‚æœä¸ºfalseï¼Œä½¿ç”¨Inspectorä¸­çš„è®¾ç½®")]
+    public bool useCodeFontSettings = true;  // æ–°å¢ï¼šæ§åˆ¶å¼€å…³
+
+    [Header("ä»£ç å­—ä½“è®¾ç½®ï¼ˆå½“useCodeFontSettingsä¸ºtrueæ—¶ç”Ÿæ•ˆï¼‰")]
+    public int fontSize = 100;           // å­—ä½“å¤§å°
+    public Color textColor = Color.white; // å­—ä½“é¢œè‰²
+    public TextAlignmentOptions textAlignment = TextAlignmentOptions.Center;
+
+    [Header("æ–‡å­—æ¡†è®¾ç½®")]
+    public float textBoxMarginLeft = 0.05f;   // å·¦è¾¹è·5%
+    public float textBoxMarginRight = 0.05f;  // å³è¾¹è·5%
+    public float textBoxMarginBottom = 0.1f;  // åº•è¾¹è·10%
+    public float textBoxHeightPercent = 0.35f; // é«˜åº¦å å±å¹•35%
+
+    [Header("è°ƒè¯•é€‰é¡¹")]
+    public bool debugMode = true;  
+    public bool forceTextVisible = true;
+
+    private int currentSegmentIndex = 0; // å½“å‰å‰§æƒ…æ®µç´¢å¼•
+    private Coroutine textCoroutine;     // æ‰“å­—æœºåç¨‹
+    private bool isTextFinished = false; // æ–‡æœ¬æ˜¯å¦æ‰“å°å®Œæˆ
+    private bool isSkipping = false;     // æ˜¯å¦æ­£åœ¨è·³è¿‡
+    private bool isLongSkipping = false; // æ˜¯å¦æ­£åœ¨é•¿æŒ‰è·³è¿‡
+    private bool isInitialized = false;  // 
 
     void Start()
     {
-        // ³õÊ¼»¯ UI ×´Ì¬£¨Òş²Ø¼ÓÔØ½ø¶ÈÌõ£©
-        if (loadProgressBar != null)
+        if (debugMode)
         {
-            loadProgressBar.gameObject.SetActive(false);
-            progressText.gameObject.SetActive(false);
+            Debug.Log("=== StoryController å¯åŠ¨ ===");
+            Debug.Log($"useCodeFontSettings: {useCodeFontSettings}");
+            Debug.Log($"å­—ä½“ç»„ä»¶åŸå§‹è®¾ç½® - å¤§å°: {storyText?.fontSize}, é¢œè‰²: {storyText?.color}");
         }
 
-        // ³õÊ¼»¯Í¼Æ¬Í¸Ã÷¶È£¨Í¸Ã÷£©
-        storyText.text = "";
+        // ç¡®ä¿åªåˆå§‹åŒ–ä¸€æ¬¡
+        if (!isInitialized)
+        {
+            // åˆå§‹åŒ–æ‰€æœ‰UIç»„ä»¶
+            InitializeAllComponents();
+            isInitialized = true;
+        }
+
+        // å¼€å§‹æ’­æ”¾ç¬¬ä¸€æ®µå‰§æƒ…
+        StartCoroutine(PlayStorySegment(currentSegmentIndex));
+    }
+
+    void InitializeAllComponents()
+    {
+        if (debugMode) Debug.Log("å¼€å§‹åˆå§‹åŒ–æ‰€æœ‰ç»„ä»¶...");
+
+        // 1. å¼ºåˆ¶Canvasæ›´æ–°
+        Canvas.ForceUpdateCanvases();
+
+        // 2. ç­‰å¾…ä¸€å¸§ç¡®ä¿ç»„ä»¶åŠ è½½å®Œæˆ
+        StartCoroutine(DelayedInitialization());
+    }
+
+    IEnumerator DelayedInitialization()
+    {
+        yield return null; // é‡è¦ï¼šç­‰å¾…ä¸€å¸§ï¼Œè®©Unityå®Œæˆç»„ä»¶åˆå§‹åŒ–
+
+        // 3. åˆå§‹åŒ–èƒŒæ™¯å›¾ç‰‡
+        InitializeBackground();
+
+        // 4. åˆå§‹åŒ–æ–‡æœ¬ç»„ä»¶ï¼ˆå…³é”®ä¿®æ”¹ï¼‰
+        InitializeTextComponent();
+
+        // 5. åˆå§‹åŒ–è·³è¿‡æç¤º
+        InitializeSkipTip();
+
+        // 6. åˆå§‹åŒ–éŸ³é¢‘
+        InitializeAudio();
+
+        // 7. æœ€ç»ˆéªŒè¯
+        ValidateComponents();
+    }
+
+    void InitializeBackground()
+    {
+        if (bgImage == null)
+        {
+            Debug.LogError("é”™è¯¯: BgImage æœªåˆ†é…!");
+            enabled = false;
+            return;
+        }
+
+        RectTransform bgRect = bgImage.rectTransform;
+        bgRect.anchorMin = Vector2.zero;
+        bgRect.anchorMax = Vector2.one;
+        bgRect.offsetMin = Vector2.zero;
+        bgRect.offsetMax = Vector2.zero;
+        bgRect.pivot = new Vector2(0.5f, 0.5f);
+
+        bgImage.type = Image.Type.Simple;
+        bgImage.preserveAspect = true;
         bgImage.color = new Color(1, 1, 1, 0);
 
-        // ²¥·Å±³¾°ÒôÀÖ£¨µ­ÈëĞ§¹û£©
-        if (bgmAudioSource != null)
+        if (debugMode) Debug.Log("èƒŒæ™¯å›¾ç‰‡åˆå§‹åŒ–å®Œæˆ");
+    }
+
+    void InitializeTextComponent()
+    {
+        if (storyText == null)
         {
-            bgmAudioSource.volume = 0;
-            bgmAudioSource.Play();
-            StartCoroutine(FadeBgmVolume(0, bgmAudioSource.volume, bgmFadeDuration));
+            Debug.LogError("é”™è¯¯: StoryText æœªåˆ†é…!");
+            enabled = false;
+            return;
         }
 
-        // ¿ªÊ¼²¥·ÅµÚÒ»¶Î¾çÇé
-        StartCoroutine(PlayStorySegment(currentSegmentIndex));
+        // å…³é”®ä¿®å¤ï¼šæ£€æŸ¥å¹¶ä¿®å¤CanvasRenderer
+        CanvasRenderer textRenderer = storyText.GetComponent<CanvasRenderer>();
+        if (textRenderer != null)
+        {
+            if (debugMode) Debug.Log($"CanvasRendererçŠ¶æ€ - Cull: {textRenderer.cullTransparentMesh}, Alpha: {textRenderer.GetAlpha()}");
+
+            // å¼ºåˆ¶è®¾ç½®ä¸ºå¯è§çŠ¶æ€
+            textRenderer.cullTransparentMesh = false;
+            textRenderer.SetAlpha(1f);
+        }
+        else
+        {
+            Debug.LogWarning("StoryTextæ²¡æœ‰CanvasRendererç»„ä»¶!");
+        }
+
+        // è®¾ç½®æ–‡å­—æ¡†ä½ç½®å’Œå¤§å°ï¼ˆä¸æ¶‰åŠå­—ä½“æ ·å¼ï¼‰
+        SetupTextArea();
+
+        // å­—ä½“è®¾ç½®é€»è¾‘ï¼šæ ¹æ®å¼€å…³å†³å®šä½¿ç”¨å“ªç§è®¾ç½®
+        if (useCodeFontSettings)
+        {
+            ApplyCodeFontSettings();
+        }
+        else
+        {
+            // ä½¿ç”¨Inspectorä¸­çš„è®¾ç½®ï¼ŒåªåšéªŒè¯
+            ValidateInspectorSettings();
+        }
+
+        // å¼ºåˆ¶æ–‡æœ¬é‡æ–°æ¸²æŸ“
+        storyText.ForceMeshUpdate();
+        Canvas.ForceUpdateCanvases();
+
+        if (forceTextVisible)
+        {
+            // å¼ºåˆ¶æ˜¾ç¤ºæµ‹è¯•æ–‡æœ¬
+            StartCoroutine(TestTextVisibility());
+        }
+
+        if (debugMode)
+        {
+            Debug.Log($"æ–‡æœ¬ç»„ä»¶åˆå§‹åŒ–å®Œæˆ");
+            Debug.Log($"æœ€ç»ˆå­—ä½“è®¾ç½® - å¤§å°: {storyText.fontSize}, é¢œè‰²: {storyText.color}");
+        }
+    }
+
+    void SetupTextArea()
+    {
+        // åªè®¾ç½®ä½ç½®å’Œå¤§å°ï¼Œä¸è®¾ç½®å­—ä½“æ ·å¼
+        RectTransform textRect = storyText.rectTransform;
+
+        // è®¡ç®—æ–‡å­—æ¡†çš„ä½ç½®
+        float anchorMinX = textBoxMarginLeft;
+        float anchorMinY = textBoxMarginBottom;
+        float anchorMaxX = 1f - textBoxMarginRight;
+        float anchorMaxY = textBoxMarginBottom + textBoxHeightPercent;
+
+        // è®¾ç½®é”šç‚¹
+        textRect.anchorMin = new Vector2(anchorMinX, anchorMinY);
+        textRect.anchorMax = new Vector2(anchorMaxX, anchorMaxY);
+        textRect.offsetMin = Vector2.zero;
+        textRect.offsetMax = Vector2.zero;
+        textRect.pivot = new Vector2(0.5f, 0.5f);
+
+        if (debugMode)
+        {
+            Debug.Log($"æ–‡å­—æ¡†è®¾ç½®: ä½ç½®({anchorMinX:F2},{anchorMinY:F2}) å¤§å°({anchorMaxX - anchorMinX:F2},{anchorMaxY - anchorMinY:F2})");
+        }
+    }
+
+    void ApplyCodeFontSettings()
+    {
+        if (debugMode) Debug.Log("åº”ç”¨ä»£ç å­—ä½“è®¾ç½®");
+
+        // æ¸…ç©ºæ–‡æœ¬ï¼Œé¿å…æ—§æ–‡æœ¬å¹²æ‰°
+        storyText.text = "";
+
+        // å…³é”®ï¼šä½¿ç”¨å±æ€§è®¾ç½®ï¼Œè€Œä¸æ˜¯ç›´æ¥èµ‹å€¼
+        storyText.fontSize = fontSize;
+        storyText.color = textColor;
+        storyText.alignment = textAlignment;
+        storyText.enableWordWrapping = true;
+        storyText.overflowMode = TextOverflowModes.Overflow;  // æ”¹ä¸ºOverflowï¼Œç¡®ä¿æ˜¾ç¤º
+        storyText.enableAutoSizing = false;
+        storyText.lineSpacing = 20f;
+
+        // ç¡®ä¿å­—ä½“èµ„æºå­˜åœ¨
+        if (storyText.font == null)
+        {
+            Debug.LogError("å­—ä½“èµ„æºæœªè®¾ç½®ï¼è¯·åœ¨Inspectorä¸­ä¸ºStoryTextåˆ†é…å­—ä½“èµ„æº");
+        }
+    }
+
+    void ValidateInspectorSettings()
+    {
+        if (debugMode) Debug.Log("ä½¿ç”¨Inspectorå­—ä½“è®¾ç½®");
+
+        // åªéªŒè¯ä¸ä¿®æ”¹
+        if (storyText.font == null)
+        {
+            Debug.LogError("å­—ä½“èµ„æºæœªè®¾ç½®ï¼è¯·åœ¨Inspectorä¸­ä¸ºStoryTextåˆ†é…å­—ä½“èµ„æº");
+        }
+
+        if (storyText.color.a < 0.1f)
+        {
+            Debug.LogWarning($"å­—ä½“é¢œè‰²é€æ˜åº¦å¤ªä½: {storyText.color.a}ï¼Œå»ºè®®è®¾ç½®ä¸ºä¸é€æ˜");
+        }
+    }
+
+    IEnumerator TestTextVisibility()
+    {
+        yield return new WaitForEndOfFrame();
+
+        if (debugMode) Debug.Log("å¼€å§‹æ–‡æœ¬å¯è§æ€§æµ‹è¯•");
+
+        // ä¿å­˜å½“å‰æ–‡æœ¬
+        string originalText = storyText.text;
+        Color originalColor = storyText.color;
+        float originalSize = storyText.fontSize;
+
+        // æµ‹è¯•æ–‡æœ¬æ˜¯å¦å¯è§ï¼ˆä½¿ç”¨é†’ç›®çš„çº¢è‰²å’Œå¤§å­—ä½“ï¼‰
+        storyText.text = "å­—ä½“æµ‹è¯• - åº”æ˜¾ç¤ºçº¢è‰²å¤§å­—";
+        storyText.color = Color.red;
+        storyText.fontSize = 120; // æµ‹è¯•æ›´å¤§çš„å­—ä½“
+        storyText.ForceMeshUpdate();
+
+        if (debugMode)
+        {
+            Debug.Log($"æµ‹è¯•æ–‡æœ¬: {storyText.text}");
+            Debug.Log($"æµ‹è¯•é¢œè‰²: {storyText.color}");
+            Debug.Log($"æµ‹è¯•å¤§å°: {storyText.fontSize}");
+        }
+
+        yield return new WaitForSeconds(2.0f);
+
+        // æ¢å¤è®¾ç½®
+        if (useCodeFontSettings)
+        {
+            storyText.text = "";
+            storyText.color = textColor;
+            storyText.fontSize = fontSize;
+        }
+        else
+        {
+            storyText.text = originalText;
+            storyText.color = originalColor;
+            storyText.fontSize = originalSize;
+        }
+
+        storyText.ForceMeshUpdate();
+
+        if (debugMode) Debug.Log("æ–‡æœ¬å¯è§æ€§æµ‹è¯•å®Œæˆ");
+    }
+
+    void InitializeSkipTip()
+    {
+        if (skipTip == null)
+        {
+            if (debugMode) Debug.LogWarning("SkipTip æœªåˆ†é…ï¼Œè·³è¿‡åˆå§‹åŒ–");
+            return;
+        }
+
+        skipTip.text = "å³é”®è·³è¿‡ / é•¿æŒ‰1ç§’è·³è¿‡å…¨éƒ¨";
+        skipTip.color = new Color(1, 1, 0.7f, 0.8f);
+        skipTip.fontSize = 24;
+        skipTip.alignment = TextAlignmentOptions.Right;
+
+        RectTransform skipRect = skipTip.rectTransform;
+        skipRect.anchorMin = new Vector2(0.75f, 0.9f);
+        skipRect.anchorMax = new Vector2(0.95f, 0.95f);
+        skipRect.offsetMin = Vector2.zero;
+        skipRect.offsetMax = Vector2.zero;
+
+        if (debugMode) Debug.Log("è·³è¿‡æç¤ºåˆå§‹åŒ–å®Œæˆ");
+    }
+
+    void InitializeAudio()
+    {
+        if (bgmAudioSource == null)
+        {
+            if (debugMode) Debug.LogWarning("BgmAudioSource æœªåˆ†é…ï¼Œè·³è¿‡éŸ³é¢‘åˆå§‹åŒ–");
+            return;
+        }
+
+        if (bgmAudioSource.clip == null)
+        {
+            if (debugMode) Debug.LogWarning("BgmAudioSource æ²¡æœ‰éŸ³é¢‘å‰ªè¾‘");
+            return;
+        }
+
+        bgmAudioSource.volume = 0;
+        bgmAudioSource.Play();
+        StartCoroutine(FadeBgmVolume(0, 0.6f, bgmFadeDuration));
+
+        if (debugMode) Debug.Log($"éŸ³é¢‘åˆå§‹åŒ–: {bgmAudioSource.clip.name}");
+    }
+
+    void ValidateComponents()
+    {
+        bool allValid = true;
+
+        if (storyText == null)
+        {
+            Debug.LogError("StoryText æœªåˆ†é…");
+            allValid = false;
+        }
+        else if (storyText.font == null)
+        {
+            Debug.LogError("StoryText å­—ä½“èµ„æºæœªè®¾ç½®ï¼è¯·åœ¨Inspectorä¸­åˆ†é…å­—ä½“");
+            allValid = false;
+            // å°è¯•ä½¿ç”¨é»˜è®¤å­—ä½“
+            TMP_FontAsset defaultFont = Resources.GetBuiltinResource<TMP_FontAsset>("LiberationSans SDF");
+            if (defaultFont != null)
+            {
+                storyText.font = defaultFont;
+                Debug.Log("å·²ä½¿ç”¨é»˜è®¤å­—ä½“");
+            }
+        }
+
+        if (allValid && debugMode)
+        {
+            Debug.Log("æ‰€æœ‰ç»„ä»¶éªŒè¯é€šè¿‡");
+        }
     }
 
     void Update()
     {
-        // ÓÒ¼üµ¥»÷£ºÌø¹ıµ±Ç°¾çÇé¶Î
+        // å³é”®å•å‡»ï¼šè·³è¿‡å½“å‰å‰§æƒ…æ®µ
         if (Input.GetMouseButtonDown(1) && !isLongSkipping)
         {
+            if (debugMode) Debug.Log("å³é”®æŒ‰ä¸‹ï¼Œå¼€å§‹æ£€æµ‹é•¿æŒ‰");
             StartCoroutine(CheckLongPress());
         }
 
-        // ÓÒ¼üËÉ¿ª£ºÈ¡Ïû³¤°´ÅĞ¶Ï
         if (Input.GetMouseButtonUp(1))
         {
             isLongSkipping = false;
         }
+
+        // è°ƒè¯•å¿«æ·é”®
+        if (debugMode)
+        {
+            if (Input.GetKeyDown(KeyCode.F1))
+            {
+                DebugCurrentState();
+            }
+            if (Input.GetKeyDown(KeyCode.F2))
+            {
+                ToggleFontSettings();
+            }
+            if (Input.GetKeyDown(KeyCode.F3))
+            {
+                ForceRefreshText();
+            }
+        }
     }
 
-    // ²¥·Åµ¥¶Î¾çÇé
+    void ToggleFontSettings()
+    {
+        useCodeFontSettings = !useCodeFontSettings;
+        Debug.Log($"åˆ‡æ¢å­—ä½“è®¾ç½®æ¨¡å¼: {(useCodeFontSettings ? "ä»£ç è®¾ç½®" : "Inspectorè®¾ç½®")}");
+
+        if (useCodeFontSettings)
+        {
+            ApplyCodeFontSettings();
+        }
+        storyText.ForceMeshUpdate();
+    }
+
+    void ForceRefreshText()
+    {
+        if (storyText != null)
+        {
+            string currentText = storyText.text;
+            storyText.text = "";
+            storyText.text = currentText;
+            storyText.ForceMeshUpdate();
+            Canvas.ForceUpdateCanvases();
+            Debug.Log("å¼ºåˆ¶åˆ·æ–°æ–‡æœ¬æ˜¾ç¤º");
+        }
+    }
+
+    void DebugCurrentState()
+    {
+        Debug.Log("=== F1 è°ƒè¯•ä¿¡æ¯ ===");
+        Debug.Log($"å­—ä½“è®¾ç½®æ¨¡å¼: {(useCodeFontSettings ? "ä»£ç è®¾ç½®" : "Inspectorè®¾ç½®")}");
+        Debug.Log($"å½“å‰å­—ä½“å¤§å°: {storyText.fontSize}");
+        Debug.Log($"å½“å‰å­—ä½“é¢œè‰²: {storyText.color}");
+        Debug.Log($"å­—ä½“é€æ˜åº¦: {storyText.color.a}");
+        Debug.Log($"å­—ä½“èµ„æº: {storyText.font?.name ?? "æ— "}");
+        Debug.Log($"æ–‡æœ¬å†…å®¹: {(storyText.text.Length > 50 ? storyText.text.Substring(0, 50) + "..." : storyText.text)}");
+
+        // æ£€æŸ¥CanvasRenderer
+        CanvasRenderer renderer = storyText.GetComponent<CanvasRenderer>();
+        if (renderer != null)
+        {
+            Debug.Log($"CanvasRendereré€æ˜åº¦: {renderer.GetAlpha()}");
+            Debug.Log($"CullTransparentMesh: {renderer.cullTransparentMesh}");
+        }
+    }
+
+    // æ’­æ”¾å•æ®µå‰§æƒ…
     private IEnumerator PlayStorySegment(int index)
     {
-        // ËùÓĞ¾çÇé²¥·ÅÍê±Ï£¬¼ÓÔØÖ÷³¡¾°
+        if (debugMode) Debug.Log($"æ’­æ”¾å‰§æƒ…æ®µ {index + 1}/{storyData.storySegments.Length}");
+
         if (index >= storyData.storySegments.Length)
         {
+            if (debugMode) Debug.Log("æ‰€æœ‰å‰§æƒ…æ’­æ”¾å®Œæ¯•ï¼ŒåŠ è½½ä¸»åœºæ™¯");
             StartCoroutine(LoadMainScene());
             yield break;
         }
 
-        // ÖØÖÃ×´Ì¬
         isTextFinished = false;
         isSkipping = false;
         storyText.text = "";
 
-        // »ñÈ¡µ±Ç°¾çÇé¶ÎÊı¾İ
         StorySegment currentSegment = storyData.storySegments[index];
 
-        // 1. ±³¾°Í¼Æ¬µ­Èë
-        yield return StartCoroutine(FadeImage(bgImage, currentSegment.bgSprite, true));
+        if (currentSegment == null)
+        {
+            Debug.LogError($"å‰§æƒ…æ®µ {index} ä¸º nullï¼Œè·³è¿‡");
+            currentSegmentIndex++;
+            StartCoroutine(PlayStorySegment(currentSegmentIndex));
+            yield break;
+        }
 
-        // 2. ´ò×Ö»úĞ§¹ûÏÔÊ¾ÎÄ±¾
-        textCoroutine = StartCoroutine(TypeText(currentSegment.storyText, currentSegment.textSpeed));
+        // 1. èƒŒæ™¯å›¾ç‰‡æ·¡å…¥
+        if (currentSegment.bgSprite != null)
+        {
+            yield return StartCoroutine(FadeImage(bgImage, currentSegment.bgSprite, true));
+        }
+        else
+        {
+            if (debugMode) Debug.LogWarning($"å‰§æƒ…æ®µ {index} æ²¡æœ‰èƒŒæ™¯å›¾ç‰‡");
+            yield return new WaitForSeconds(0.5f);
+        }
 
-        // µÈ´ıÎÄ±¾´òÓ¡Íê³É»ò±»Ìø¹ı
+        // 2. æ‰“å­—æœºæ•ˆæœæ˜¾ç¤ºæ–‡æœ¬
+        if (!string.IsNullOrEmpty(currentSegment.storyText))
+        {
+            // ç¡®ä¿å­—ä½“è®¾ç½®æ­£ç¡®
+            if (useCodeFontSettings)
+            {
+                storyText.fontSize = fontSize;
+                storyText.color = textColor;
+            }
+
+            storyText.enabled = true;
+            storyText.ForceMeshUpdate();
+
+            textCoroutine = StartCoroutine(TypeText(currentSegment.storyText, currentSegment.textSpeed));
+        }
+        else
+        {
+            if (debugMode) Debug.LogWarning($"å‰§æƒ…æ®µ {index} æ²¡æœ‰æ–‡æœ¬å†…å®¹");
+            isTextFinished = true;
+        }
+
         while (!isTextFinished && !isSkipping)
+        {
             yield return null;
+        }
 
-        // 3. Í£Áô 0.5 Ãë£¬½øÈëÏÂÒ»¶Î
-        yield return new WaitForSeconds(0.5f);
+        yield return new WaitForSeconds(2.0f);
         currentSegmentIndex++;
         StartCoroutine(PlayStorySegment(currentSegmentIndex));
     }
 
-    // ´ò×Ö»úĞ§¹û
+    // æ‰“å­—æœºæ•ˆæœ
     private IEnumerator TypeText(string content, float speed)
     {
-        char[] chars = content.ToCharArray();
+        if (debugMode) Debug.Log($"å¼€å§‹æ‰“å­—æœºæ•ˆæœï¼Œæ–‡æœ¬é•¿åº¦: {content.Length}");
+
+        storyText.enabled = true;
         storyText.text = "";
+        storyText.ForceMeshUpdate();
+
+        char[] chars = content.ToCharArray();
+        isTextFinished = false;
 
         for (int i = 0; i < chars.Length; i++)
         {
             if (isSkipping || isLongSkipping)
-                break; // Ìø¹ıÔòÖ±½ÓÏÔÊ¾È«²¿ÎÄ±¾
-            storyText.text += chars[i];
+            {
+                if (debugMode) Debug.Log("æ‰“å­—æœºè¢«è·³è¿‡");
+                break;
+            }
+
+            storyText.text = content.Substring(0, i + 1);
+
+            // æ¯æ˜¾ç¤ºä¸€ä¸ªå­—ç¬¦éƒ½å¼ºåˆ¶æ›´æ–°
+            storyText.ForceMeshUpdate();
+            Canvas.ForceUpdateCanvases();
+
             yield return new WaitForSeconds(speed);
         }
 
-        // È·±£ÏÔÊ¾ÍêÕûÎÄ±¾
         storyText.text = content;
         isTextFinished = true;
+
+        if (debugMode) Debug.Log("æ‰“å­—æœºå®Œæˆ");
     }
 
-    // Í¼Æ¬µ­Èë/µ­³öĞ§¹û
+    // å›¾ç‰‡æ·¡å…¥/æ·¡å‡ºæ•ˆæœ
     private IEnumerator FadeImage(Image image, Sprite targetSprite, bool isFadeIn)
     {
-        // ÇĞ»»Í¼Æ¬£¨ÓĞÄ¿±êÍ¼Æ¬Ôò¸³Öµ£©
+        if (image == null)
+        {
+            Debug.LogError("FadeImage: image ä¸º null");
+            yield break;
+        }
+
         if (targetSprite != null)
         {
             image.sprite = targetSprite;
-            image.SetNativeSize(); // ÊÊÅäÍ¼Æ¬Ô­Ê¼´óĞ¡
-            image.preserveAspect = true; // ±£³Ö¿í¸ß±È
+            image.preserveAspect = true;
         }
 
-        float targetAlpha = isFadeIn ? 1 : 0; // µ­Èëµ½100%Í¸Ã÷£¬µ­³öµ½0%
+        float targetAlpha = isFadeIn ? 1 : 0;
         float currentAlpha = image.color.a;
         float timer = 0;
 
-        // ½¥±ä¹ı³Ì
+        if (debugMode) Debug.Log($"å›¾ç‰‡æ·¡å…¥æ·¡å‡º: {targetSprite?.name ?? "null"} {(isFadeIn ? "æ·¡å…¥" : "æ·¡å‡º")}");
+
         while (timer < imageFadeTime)
         {
             timer += Time.deltaTime;
@@ -143,108 +561,157 @@ public class StoryController : MonoBehaviour
             yield return null;
         }
 
-        // È·±£×îÖÕ×´Ì¬ÕıÈ·
         image.color = new Color(1, 1, 1, targetAlpha);
-        if (!isFadeIn)
-            image.sprite = null; // µ­³öºóÇå¿ÕÍ¼Æ¬£¬±ÜÃâ²ĞÁô
     }
 
-    // Ìø¹ıµ±Ç°¾çÇé¶Î
+    // è·³è¿‡å½“å‰å‰§æƒ…æ®µ
     private void SkipCurrentSegment()
     {
         if (isSkipping || isLongSkipping)
             return;
 
+        if (debugMode) Debug.Log("è·³è¿‡å½“å‰å‰§æƒ…æ®µ");
+
         isSkipping = true;
-        // Í£Ö¹´ò×Ö»úĞ­³Ì£¬ÏÔÊ¾È«²¿ÎÄ±¾
+
         if (textCoroutine != null)
         {
             StopCoroutine(textCoroutine);
-            storyText.text = storyData.storySegments[currentSegmentIndex].storyText;
         }
+
+        if (storyData != null && currentSegmentIndex < storyData.storySegments.Length)
+        {
+            storyText.text = storyData.storySegments[currentSegmentIndex].storyText;
+            storyText.ForceMeshUpdate();
+        }
+
         isTextFinished = true;
     }
 
-    // ¼ì²âÓÒ¼ü³¤°´£¨1ÃëÌø¹ıÈ«²¿£©
+    // æ£€æµ‹å³é”®é•¿æŒ‰ï¼ˆ1ç§’è·³è¿‡å…¨éƒ¨ï¼‰
     private IEnumerator CheckLongPress()
     {
         float pressTime = 0;
         isLongSkipping = true;
 
+        if (debugMode) Debug.Log("å¼€å§‹é•¿æŒ‰æ£€æµ‹");
+
         while (Input.GetMouseButton(1))
         {
             pressTime += Time.deltaTime;
-            // ³¤°´1Ãë£¬Ö±½Ó¼ÓÔØÖ÷³¡¾°
+
             if (pressTime >= 1f)
             {
-                // Í£Ö¹´ò×Ö»úĞ­³Ì
+                if (debugMode) Debug.Log("é•¿æŒ‰1ç§’ï¼Œè·³è¿‡å…¨éƒ¨å‰§æƒ…");
+
                 if (textCoroutine != null)
+                {
                     StopCoroutine(textCoroutine);
-                // ÏÔÊ¾½ø¶ÈÌõ£¬¼ÓÔØÖ÷³¡¾°
+                }
+
+                if (storyText != null)
+                {
+                    storyText.text = "è·³è¿‡å…¨éƒ¨å‰§æƒ…...";
+                    storyText.color = Color.yellow;
+                }
+
                 StartCoroutine(LoadMainScene());
                 yield break;
             }
             yield return null;
         }
 
-        // ³¤°´²»×ã1Ãë£¬ÊÓÎªÆÕÍ¨Ìø¹ıµ±Ç°¶Î
-        if (pressTime < 1f)
+        if (pressTime < 1f && pressTime > 0.1f)
         {
+            if (debugMode) Debug.Log($"çŸ­æŒ‰è·³è¿‡ ({pressTime:F2}ç§’)");
             SkipCurrentSegment();
+        }
+        else if (debugMode)
+        {
+            Debug.Log("å³é”®ç‚¹å‡»å¤ªçŸ­ï¼Œå¿½ç•¥");
         }
 
         isLongSkipping = false;
     }
 
-    // ¼ÓÔØÖ÷ÓÎÏ·³¡¾°
+    // åŠ è½½ä¸»æ¸¸æˆåœºæ™¯
     private IEnumerator LoadMainScene()
     {
-        // ±³¾°ÒôÀÖµ­³öÍ£Ö¹
+        if (debugMode) Debug.Log("=== å¼€å§‹åŠ è½½ä¸»åœºæ™¯ ===");
+
+        if (string.IsNullOrEmpty(mainSceneName))
+        {
+            Debug.LogError("é”™è¯¯: mainSceneName ä¸ºç©ºï¼");
+            if (storyText != null)
+            {
+                storyText.text = "é”™è¯¯: æœªè®¾ç½®ä¸»åœºæ™¯åç§°";
+                storyText.color = Color.red;
+            }
+            yield break;
+        }
+
+        if (debugMode) Debug.Log($"ç›®æ ‡åœºæ™¯: {mainSceneName}");
+
+        // 1. èƒŒæ™¯éŸ³ä¹æ·¡å‡ºåœæ­¢
         if (bgmAudioSource != null && bgmAudioSource.isPlaying)
         {
-            StartCoroutine(FadeBgmVolume(bgmAudioSource.volume, 0, bgmFadeDuration));
-            yield return new WaitForSeconds(bgmFadeDuration);
+            if (debugMode) Debug.Log("æ·¡å‡ºèƒŒæ™¯éŸ³ä¹");
+            yield return StartCoroutine(FadeBgmVolume(bgmAudioSource.volume, 0, bgmFadeDuration));
             bgmAudioSource.Stop();
         }
 
-        // ÏÔÊ¾¼ÓÔØ½ø¶ÈÌõ£¨Èç¹ûÓĞ£©
-        if (loadProgressBar != null)
+        // 3. æ˜¾ç¤ºåŠ è½½æç¤º
+        if (storyText != null)
         {
-            loadProgressBar.gameObject.SetActive(true);
-            progressText.gameObject.SetActive(true);
-            loadProgressBar.value = 0;
-            progressText.text = "0%";
+            storyText.text = "åŠ è½½åœºæ™¯ä¸­...";
+            storyText.color = Color.yellow;
+            storyText.fontSize = useCodeFontSettings ? fontSize : storyText.fontSize;
+            storyText.alignment = TextAlignmentOptions.Center;
+            storyText.ForceMeshUpdate();
         }
 
-        // Òì²½¼ÓÔØÖ÷³¡¾°£¨²»¿¨¶Ù£©
+        // 4. å¼‚æ­¥åŠ è½½ä¸»åœºæ™¯
         AsyncOperation asyncLoad = SceneManager.LoadSceneAsync(mainSceneName);
-        asyncLoad.allowSceneActivation = false; // ÏÈ²»¼¤»î£¬µÈ½ø¶È100%
+        asyncLoad.allowSceneActivation = false;
 
-        // ÊµÊ±¸üĞÂ¼ÓÔØ½ø¶È
+        if (debugMode) Debug.Log("å¼€å§‹å¼‚æ­¥åŠ è½½");
+
         while (!asyncLoad.isDone)
         {
-            // Unity ¼ÓÔØ½ø¶Èµ½ 0.9 ¼´´ú±í×ÊÔ´¼ÓÔØÍê³É
             float progress = Mathf.Clamp01(asyncLoad.progress / 0.9f);
-            // ¸üĞÂ½ø¶ÈÌõºÍÎÄ±¾
-            if (loadProgressBar != null)
+
+            if (storyText != null)
             {
-                loadProgressBar.value = progress;
-                progressText.text = $"{Mathf.RoundToInt(progress * 100)}%";
+                storyText.text = $"åŠ è½½ä¸­... {Mathf.RoundToInt(progress * 100)}%";
+                storyText.ForceMeshUpdate();
             }
 
-            // ½ø¶È100%ºó£¬¼¤»îÖ÷³¡¾°
             if (asyncLoad.progress >= 0.9f)
             {
+                if (storyText != null)
+                {
+                    storyText.text = "åŠ è½½å®Œæˆï¼";
+                    storyText.ForceMeshUpdate();
+                }
+
+                yield return new WaitForSeconds(0.5f);
+
+                if (debugMode) Debug.Log("æ¿€æ´»åœºæ™¯");
                 asyncLoad.allowSceneActivation = true;
             }
 
             yield return null;
         }
+
+        if (debugMode) Debug.Log("åœºæ™¯åŠ è½½å®Œæˆ");
     }
 
-    // ±³¾°ÒôÀÖµ­Èëµ­³öĞ§¹û
+    // èƒŒæ™¯éŸ³ä¹æ·¡å…¥æ·¡å‡ºæ•ˆæœ
     private IEnumerator FadeBgmVolume(float startVol, float targetVol, float duration)
     {
+        if (bgmAudioSource == null)
+            yield break;
+
         float timer = 0;
         while (timer < duration)
         {
