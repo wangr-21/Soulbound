@@ -18,15 +18,6 @@ public class StoryController : MonoBehaviour
     public string mainSceneName = "GameMain"; // 主游戏场景名称
     public float bgmFadeDuration = 1.5f; // 背景音乐淡入淡出时长（秒）
 
-    [Header("字体设置 - 优先级最高")]  // 明确说明
-    [Tooltip("如果为true，使用代码设置字体；如果为false，使用Inspector中的设置")]
-    public bool useCodeFontSettings = true;  // 新增：控制开关
-
-    [Header("代码字体设置（当useCodeFontSettings为true时生效）")]
-    public int fontSize = 100;           // 字体大小
-    public Color textColor = Color.white; // 字体颜色
-    public TextAlignmentOptions textAlignment = TextAlignmentOptions.Center;
-
     [Header("文字框设置")]
     public float textBoxMarginLeft = 0.05f;   // 左边距5%
     public float textBoxMarginRight = 0.05f;  // 右边距5%
@@ -34,7 +25,7 @@ public class StoryController : MonoBehaviour
     public float textBoxHeightPercent = 0.35f; // 高度占屏幕35%
 
     [Header("调试选项")]
-    public bool debugMode = true;  
+    public bool debugMode = true;
     public bool forceTextVisible = true;
 
     private int currentSegmentIndex = 0; // 当前剧情段索引
@@ -49,7 +40,6 @@ public class StoryController : MonoBehaviour
         if (debugMode)
         {
             Debug.Log("=== StoryController 启动 ===");
-            Debug.Log($"useCodeFontSettings: {useCodeFontSettings}");
             Debug.Log($"字体组件原始设置 - 大小: {storyText?.fontSize}, 颜色: {storyText?.color}");
         }
 
@@ -83,7 +73,7 @@ public class StoryController : MonoBehaviour
         // 3. 初始化背景图片
         InitializeBackground();
 
-        // 4. 初始化文本组件（关键修改）
+        // 4. 初始化文本组件
         InitializeTextComponent();
 
         // 5. 初始化跳过提示
@@ -143,19 +133,11 @@ public class StoryController : MonoBehaviour
             Debug.LogWarning("StoryText没有CanvasRenderer组件!");
         }
 
-        // 设置文字框位置和大小（不涉及字体样式）
+        // 只设置文字框位置和大小，不设置字体样式
         SetupTextArea();
 
-        // 字体设置逻辑：根据开关决定使用哪种设置
-        if (useCodeFontSettings)
-        {
-            ApplyCodeFontSettings();
-        }
-        else
-        {
-            // 使用Inspector中的设置，只做验证
-            ValidateInspectorSettings();
-        }
+        // 强制确保字体自动缩放关闭
+        storyText.enableAutoSizing = false;
 
         // 强制文本重新渲染
         storyText.ForceMeshUpdate();
@@ -170,7 +152,8 @@ public class StoryController : MonoBehaviour
         if (debugMode)
         {
             Debug.Log($"文本组件初始化完成");
-            Debug.Log($"最终字体设置 - 大小: {storyText.fontSize}, 颜色: {storyText.color}");
+            Debug.Log($"字体设置 - 大小: {storyText.fontSize}, 颜色: {storyText.color}");
+            Debug.Log($"自动缩放状态: {storyText.enableAutoSizing}");
         }
     }
 
@@ -198,61 +181,22 @@ public class StoryController : MonoBehaviour
         }
     }
 
-    void ApplyCodeFontSettings()
-    {
-        if (debugMode) Debug.Log("应用代码字体设置");
-
-        // 清空文本，避免旧文本干扰
-        storyText.text = "";
-
-        // 关键：使用属性设置，而不是直接赋值
-        storyText.fontSize = fontSize;
-        storyText.color = textColor;
-        storyText.alignment = textAlignment;
-        storyText.enableWordWrapping = true;
-        storyText.overflowMode = TextOverflowModes.Overflow;  // 改为Overflow，确保显示
-        storyText.enableAutoSizing = false;
-        storyText.lineSpacing = 20f;
-
-        // 确保字体资源存在
-        if (storyText.font == null)
-        {
-            Debug.LogError("字体资源未设置！请在Inspector中为StoryText分配字体资源");
-        }
-    }
-
-    void ValidateInspectorSettings()
-    {
-        if (debugMode) Debug.Log("使用Inspector字体设置");
-
-        // 只验证不修改
-        if (storyText.font == null)
-        {
-            Debug.LogError("字体资源未设置！请在Inspector中为StoryText分配字体资源");
-        }
-
-        if (storyText.color.a < 0.1f)
-        {
-            Debug.LogWarning($"字体颜色透明度太低: {storyText.color.a}，建议设置为不透明");
-        }
-    }
-
     IEnumerator TestTextVisibility()
     {
         yield return new WaitForEndOfFrame();
 
         if (debugMode) Debug.Log("开始文本可见性测试");
 
-        // 保存当前文本
+        // 保存当前文本和样式
         string originalText = storyText.text;
         Color originalColor = storyText.color;
         float originalSize = storyText.fontSize;
 
-        // 测试文本是否可见（使用醒目的红色和大字体）
-        storyText.text = "字体测试 - 应显示红色大字";
-        storyText.color = Color.red;
-        storyText.fontSize = 120; // 测试更大的字体
-        storyText.ForceMeshUpdate();
+        //// 测试文本是否可见（使用醒目的红色和大字体）
+        //storyText.text = "字体测试 - 应显示红色大字";
+        //storyText.color = Color.red;
+        //storyText.fontSize = 120; // 测试更大的字体
+        //storyText.ForceMeshUpdate();
 
         if (debugMode)
         {
@@ -263,19 +207,10 @@ public class StoryController : MonoBehaviour
 
         yield return new WaitForSeconds(2.0f);
 
-        // 恢复设置
-        if (useCodeFontSettings)
-        {
-            storyText.text = "";
-            storyText.color = textColor;
-            storyText.fontSize = fontSize;
-        }
-        else
-        {
-            storyText.text = originalText;
-            storyText.color = originalColor;
-            storyText.fontSize = originalSize;
-        }
+        // 恢复组件原始设置
+        storyText.text = originalText;
+        storyText.color = originalColor;
+        storyText.fontSize = originalSize;
 
         storyText.ForceMeshUpdate();
 
@@ -292,7 +227,7 @@ public class StoryController : MonoBehaviour
 
         skipTip.text = "右键跳过 / 长按1秒跳过全部";
         skipTip.color = new Color(1, 1, 0.7f, 0.8f);
-        skipTip.fontSize = 24;
+        skipTip.fontSize = 48;
         skipTip.alignment = TextAlignmentOptions.Right;
 
         RectTransform skipRect = skipTip.rectTransform;
@@ -301,7 +236,7 @@ public class StoryController : MonoBehaviour
         skipRect.offsetMin = Vector2.zero;
         skipRect.offsetMax = Vector2.zero;
 
-        if (debugMode) Debug.Log("跳过提示初始化完成");
+        //if (debugMode) Debug.Log("跳过提示初始化完成");
     }
 
     void InitializeAudio()
@@ -338,18 +273,12 @@ public class StoryController : MonoBehaviour
         {
             Debug.LogError("StoryText 字体资源未设置！请在Inspector中分配字体");
             allValid = false;
-            // 尝试使用默认字体
-            TMP_FontAsset defaultFont = Resources.GetBuiltinResource<TMP_FontAsset>("LiberationSans SDF");
-            if (defaultFont != null)
-            {
-                storyText.font = defaultFont;
-                Debug.Log("已使用默认字体");
-            }
         }
 
         if (allValid && debugMode)
         {
             Debug.Log("所有组件验证通过");
+            Debug.Log($"当前字体: {storyText.font?.name ?? "无"}, 大小: {storyText.fontSize}, 颜色: {storyText.color}");
         }
     }
 
@@ -374,27 +303,11 @@ public class StoryController : MonoBehaviour
             {
                 DebugCurrentState();
             }
-            if (Input.GetKeyDown(KeyCode.F2))
-            {
-                ToggleFontSettings();
-            }
             if (Input.GetKeyDown(KeyCode.F3))
             {
                 ForceRefreshText();
             }
         }
-    }
-
-    void ToggleFontSettings()
-    {
-        useCodeFontSettings = !useCodeFontSettings;
-        Debug.Log($"切换字体设置模式: {(useCodeFontSettings ? "代码设置" : "Inspector设置")}");
-
-        if (useCodeFontSettings)
-        {
-            ApplyCodeFontSettings();
-        }
-        storyText.ForceMeshUpdate();
     }
 
     void ForceRefreshText()
@@ -413,11 +326,11 @@ public class StoryController : MonoBehaviour
     void DebugCurrentState()
     {
         Debug.Log("=== F1 调试信息 ===");
-        Debug.Log($"字体设置模式: {(useCodeFontSettings ? "代码设置" : "Inspector设置")}");
         Debug.Log($"当前字体大小: {storyText.fontSize}");
         Debug.Log($"当前字体颜色: {storyText.color}");
         Debug.Log($"字体透明度: {storyText.color.a}");
         Debug.Log($"字体资源: {storyText.font?.name ?? "无"}");
+        Debug.Log($"自动缩放状态: {storyText.enableAutoSizing}");
         Debug.Log($"文本内容: {(storyText.text.Length > 50 ? storyText.text.Substring(0, 50) + "..." : storyText.text)}");
 
         // 检查CanvasRenderer
@@ -469,13 +382,6 @@ public class StoryController : MonoBehaviour
         // 2. 打字机效果显示文本
         if (!string.IsNullOrEmpty(currentSegment.storyText))
         {
-            // 确保字体设置正确
-            if (useCodeFontSettings)
-            {
-                storyText.fontSize = fontSize;
-                storyText.color = textColor;
-            }
-
             storyText.enabled = true;
             storyText.ForceMeshUpdate();
 
@@ -570,7 +476,7 @@ public class StoryController : MonoBehaviour
         if (isSkipping || isLongSkipping)
             return;
 
-        if (debugMode) Debug.Log("跳过当前剧情段");
+        //if (debugMode) Debug.Log("跳过当前剧情段");
 
         isSkipping = true;
 
@@ -609,11 +515,11 @@ public class StoryController : MonoBehaviour
                     StopCoroutine(textCoroutine);
                 }
 
-                if (storyText != null)
-                {
-                    storyText.text = "跳过全部剧情...";
-                    storyText.color = Color.yellow;
-                }
+                //if (storyText != null)
+                //{
+                //    storyText.text = "跳过全部剧情...";
+                //    storyText.color = Color.yellow;
+                //}
 
                 StartCoroutine(LoadMainScene());
                 yield break;
@@ -639,12 +545,19 @@ public class StoryController : MonoBehaviour
     {
         if (debugMode) Debug.Log("=== 开始加载主场景 ===");
 
+        // 安全检查：确保关键组件不为空
+        if (storyText == null)
+        {
+            Debug.LogWarning("警告: StoryText 组件已丢失，无法显示加载信息。");
+        }
+
         if (string.IsNullOrEmpty(mainSceneName))
         {
-            Debug.LogError("错误: mainSceneName 为空！");
+            string errorMsg = "错误: mainSceneName 为空！";
+            Debug.LogError(errorMsg);
             if (storyText != null)
             {
-                storyText.text = "错误: 未设置主场景名称";
+                storyText.text = errorMsg;
                 storyText.color = Color.red;
             }
             yield break;
@@ -652,7 +565,7 @@ public class StoryController : MonoBehaviour
 
         if (debugMode) Debug.Log($"目标场景: {mainSceneName}");
 
-        // 1. 背景音乐淡出停止
+        // 1. 背景音乐淡出停止 (增加空检查)
         if (bgmAudioSource != null && bgmAudioSource.isPlaying)
         {
             if (debugMode) Debug.Log("淡出背景音乐");
@@ -660,17 +573,16 @@ public class StoryController : MonoBehaviour
             bgmAudioSource.Stop();
         }
 
-        // 3. 显示加载提示
+        // 2. 显示加载提示 (增加空检查)
         if (storyText != null)
         {
-            storyText.text = "加载场景中...";
+            storyText.text = "等待你解开事情的谜团，好运。";
             storyText.color = Color.yellow;
-            storyText.fontSize = useCodeFontSettings ? fontSize : storyText.fontSize;
             storyText.alignment = TextAlignmentOptions.Center;
             storyText.ForceMeshUpdate();
         }
 
-        // 4. 异步加载主场景
+        // 3. 异步加载主场景
         AsyncOperation asyncLoad = SceneManager.LoadSceneAsync(mainSceneName);
         asyncLoad.allowSceneActivation = false;
 
@@ -703,7 +615,7 @@ public class StoryController : MonoBehaviour
             yield return null;
         }
 
-        if (debugMode) Debug.Log("场景加载完成");
+        if (debugMode) Debug.Log("Loading");
     }
 
     // 背景音乐淡入淡出效果
