@@ -95,11 +95,15 @@ public class PuzzleManager : MonoBehaviour
         hideErrorCoroutine = StartCoroutine(HideErrorCoroutine(delay));
     }
 
+    // 修改隐藏错误提示的协程，使用不受时间缩放影响的等待方式
     private IEnumerator HideErrorCoroutine(float delay = 1f)
     {
-        yield return new WaitForSeconds(delay);
-        errorText.gameObject.SetActive(false);
-        // 协程执行完毕后清空引用
+        // 用WaitForSecondsRealtime替代WaitForSeconds，确保延迟不受游戏时间缩放影响
+        yield return new WaitForSecondsRealtime(delay);
+        if (errorText != null) // 增加空引用检查，避免异常
+        {
+            errorText.gameObject.SetActive(false);
+        }
         hideErrorCoroutine = null;
     }
 
