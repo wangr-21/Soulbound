@@ -57,6 +57,10 @@ public class PuzzleManager : MonoBehaviour
         errorText.gameObject.SetActive(false);
         // 启动3分钟倒计时
         timer.StartCountdown(180);
+
+        // 新增：打开UI时，解锁鼠标并显示（方便操作拼图/按钮）
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
     }
 
     // 验证答案
@@ -113,6 +117,10 @@ public class PuzzleManager : MonoBehaviour
         puzzlePanel.SetActive(false);
         currentChest.LockChest();
         timer.StopCountdown();
+
+        // 新增：关闭UI后，重新锁定鼠标并隐藏（恢复玩家移动控制）
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
     }
 
     // 倒计时结束时调用

@@ -52,6 +52,10 @@ public class PuzzleManager1 : MonoBehaviour
         errorText.gameObject.SetActive(false);
         ShufflePuzzle(); // 打乱拼图
         timer.StartCountdown(180); // 4分钟倒计时（240秒）
+
+        // 新增：打开UI时，解锁鼠标并显示（方便操作拼图/按钮）
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
     }
 
     // 打乱拼图（Fisher-Yates洗牌算法，确保可解）
@@ -154,6 +158,10 @@ public class PuzzleManager1 : MonoBehaviour
         currentChest.LockChest1(); // 锁定Chest1，不可再打开
         timer.StopCountdown(); // 停止倒计时
         firstSelectedPiece = null; // 重置选中状态
+
+        // 新增：关闭UI后，重新锁定鼠标并隐藏（恢复玩家移动控制）
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
     }
 
     // 倒计时结束回调（由CountdownTimer调用）
