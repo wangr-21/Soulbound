@@ -11,6 +11,10 @@ public class PlayerSoulController : MonoBehaviour
     public float jumpForce = 5.0f;
     public float gravity = -9.81f;
 
+    [Header("粒子系统引用")]
+    public ParticleSystem soulParticles; // 添加粒子系统引用
+    public SoulAppearanceController soulAppearance; // 可选的外观控制器
+
     // 移动和跳跃相关变量
     private Vector3 playerVelocity;
     private bool isGrounded;
@@ -47,6 +51,22 @@ public class PlayerSoulController : MonoBehaviour
         else
         {
             Debug.LogError("未找到相机控制器！请确保主相机上有 CameraController 组件");
+        }
+
+        // 如果没有手动指定粒子系统，尝试自动获取
+        if (soulParticles == null)
+        {
+            soulParticles = GetComponentInChildren<ParticleSystem>();
+            if (soulParticles == null)
+            {
+                Debug.LogWarning("未找到粒子系统引用，请手动指定");
+            }
+        }
+
+        // 如果没有手动指定外观控制器，尝试自动获取
+        if (soulAppearance == null)
+        {
+            soulAppearance = GetComponent<SoulAppearanceController>();
         }
     }
 
@@ -181,6 +201,9 @@ public class PlayerSoulController : MonoBehaviour
                 GetComponent<Collider>().enabled = false;
                 characterController.enabled = false;
 
+                // 新增：隐藏粒子系统
+                HideSoulParticles();
+
                 // 切换相机目标到被附身的对象
                 if (cameraController != null)
                 {
@@ -203,6 +226,9 @@ public class PlayerSoulController : MonoBehaviour
             transform.position = currentPossessedObject.transform.position;
             characterController.enabled = true;
 
+            // 新增：显示粒子系统并确保位置正确
+            ShowSoulParticles();
+
             // 切换相机目标回灵魂
             if (cameraController != null)
             {
@@ -213,6 +239,68 @@ public class PlayerSoulController : MonoBehaviour
             currentPossessedObject = null;
             currentPossessable = null;
             isPossessing = false;
+        }
+    }
+
+    // 新增：隐藏粒子系统的方法
+    void HideSoulParticles()
+    {
+        // 方法1：通过粒子系统组件
+        if (soulParticles != null)
+        {
+            soulParticles.gameObject.SetActive(false);
+            Debug.Log("隐藏粒子系统");
+        }
+
+        // 方法2：通过外观控制器（如果有）
+        else if (soulAppearance != null)
+        {
+            soulAppearance.HideSoul();
+            Debug.Log("通过外观控制器隐藏灵魂");
+        }
+
+        // 方法3：如果没有指定引用，尝试自动查找并禁用所有粒子系统
+        else
+        {
+            ParticleSystem[] allParticles = GetComponentsInChildren<ParticleSystem>();
+            foreach (ParticleSystem ps in allParticles)
+            {
+                ps.gameObject.SetActive(false);
+            }
+            if (allParticles.Length > 0)
+            {
+                Debug.Log("自动查找到并隐藏了 " + allParticles.Length + " 个粒子系统");
+            }
+        }
+    }
+
+    // 新增：显示粒子系统的方法
+    void ShowSoulParticles()
+    {
+        // 确保灵魂位置正确
+        if (soulParticles != null)
+        {
+            soulParticles.transform.position = transform.position;
+            soulParticles.gameObject.SetActive(true);
+            Debug.Log("显示粒子系统");
+        }
+        else if (soulAppearance != null)
+        {
+            soulAppearance.ShowSoul();
+            Debug.Log("通过外观控制器显示灵魂");
+        }
+        else
+        {
+            ParticleSystem[] allParticles = GetComponentsInChildren<ParticleSystem>();
+            foreach (ParticleSystem ps in allParticles)
+            {
+                ps.gameObject.SetActive(true);
+                ps.transform.position = transform.position;
+            }
+            if (allParticles.Length > 0)
+            {
+                Debug.Log("自动查找到并显示了 " + allParticles.Length + " 个粒子系统");
+            }
         }
     }
 
