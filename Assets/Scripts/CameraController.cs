@@ -6,7 +6,7 @@ public class CameraController : MonoBehaviour
     public Transform target; // 要跟随的目标（灵魂或被附身对象）
 
     [Header("第一人称设置")]
-    public Vector3 firstPersonOffset = new Vector3(0, 8f, 12f); // 第一人称相机偏移（增加Y和Z值）
+    public Vector3 firstPersonOffset = new Vector3(0, 1.5f, 0.5f); // 降低Y值到1.5，增加向前偏移到0.5
     public float firstPersonFOV = 75f; // 第一人称视野角度
     private float originalFOV; // 原始视野角度
 
@@ -14,6 +14,12 @@ public class CameraController : MonoBehaviour
     public float thirdPersonDistance = 20f; // 第三人称相机距离进一步增加到20f
     public float thirdPersonHeight = 8f;   // 第三人称相机高度增加到8f
     public float mouseSensitivity = 2f;    // 鼠标灵敏度
+
+    [Header("第一人称视角限制")]
+    public float firstPersonMinY = -70f;   // 最低低头角度
+    public float firstPersonMaxY = 70f;    // 最高抬头角度
+    public float firstPersonHeadBobAmount = 0.05f; // 头部晃动幅度
+    public float firstPersonHeadBobSpeed = 4f;     // 头部晃动速度
 
     [Header("其他设置")]
     public float smoothSpeed = 12f;        // 平滑速度
@@ -26,6 +32,8 @@ public class CameraController : MonoBehaviour
     private bool isMouseLocked = true;     // 鼠标是否锁定
     private Vector3 cameraVelocity = Vector3.zero; // 用于SmoothDamp的当前速度
     private Camera cam; // 相机组件
+    private float headBobTimer = 0f;       // 头部晃动计时器
+    private Vector3 originalFirstPersonOffset; // 原始第一人称偏移
 
     void Start()
     {
@@ -50,6 +58,9 @@ public class CameraController : MonoBehaviour
             mouseX = target.eulerAngles.y;
             mouseY = 0f;
         }
+
+        // 保存原始第一人称偏移
+        originalFirstPersonOffset = firstPersonOffset;
 
         // 锁定并隐藏鼠标
         LockMouse();
@@ -93,7 +104,7 @@ public class CameraController : MonoBehaviour
     // 切换视角模式
     void ToggleViewMode()
     {
-        Debug.Log("V键被按下，开始切换视角"); // 添加这行
+        Debug.Log("V键被按下，开始切换视角");
         isFirstPerson = !isFirstPerson;
 
         // 切换时调整视野
@@ -148,37 +159,102 @@ public class CameraController : MonoBehaviour
         mouseY -= mouseDeltaY;
 
         // 限制垂直旋转角度
-        mouseY = Mathf.Clamp(mouseY, -90f, 90f);
+        if (isFirstPerson)
+        {
+            // 第一人称视角有更严格的垂直角度限制
+            mouseY = Mathf.Clamp(mouseY, firstPersonMinY, firstPersonMaxY);
+        }
+        else
+        {
+            // 第三人称视角限制不变
+            mouseY = Mathf.Clamp(mouseY, -90f, 90f);
+        }
     }
 
-    // 更新第一人称相机 - 提高视角并向后移动
+    // 更新第一人称相机 - 降低视角高度
     void UpdateFirstPersonCamera()
     {
-        // 设置目标物体的旋转（只影响水平旋转，Y轴）
-        Quaternion targetRotation = Quaternion.Euler(0, mouseX, 0);
-
-        // 平滑旋转目标
-        if (target.rotation != targetRotation)
-        {
-            target.rotation = Quaternion.Slerp(target.rotation, targetRotation, smoothSpeed * Time.deltaTime);
-        }
+        // 计算头部晃动效果
+        Vector3 headBobOffset = CalculateHeadBob();
 
         // 计算相机位置
-        // 第一人称相机应该像从角色"眼睛"位置看向外面，所以需要向上和向后偏移
-        Vector3 desiredPosition = target.position +
-                                  target.TransformDirection(new Vector3(firstPersonOffset.x, 0, 0)) +
-                                  Vector3.up * firstPersonOffset.y +
-                                  target.forward * -Mathf.Abs(firstPersonOffset.z); // 向后移动
+        // 第一人称相机应该在目标的位置上加上偏移
+        Vector3 desiredPosition = target.position;
+
+        // 添加基础的偏移
+        desiredPosition += Vector3.up * firstPersonOffset.y;      // 垂直偏移（高度）
+
+        // 添加水平偏移（基于目标的旋转）
+        Vector3 horizontalOffset = target.right * firstPersonOffset.x + target.forward * firstPersonOffset.z;
+        desiredPosition += horizontalOffset;
+
+        // 添加头部晃动
+        desiredPosition += headBobOffset;
 
         // 使用SmoothDamp平滑移动相机
-        transform.position = Vector3.SmoothDamp(transform.position, desiredPosition, ref cameraVelocity, 0.08f, Mathf.Infinity, Time.deltaTime);
+        transform.position = Vector3.SmoothDamp(transform.position, desiredPosition, ref cameraVelocity, 0.05f, Mathf.Infinity, Time.deltaTime);
 
         // 设置相机旋转
-        // 第一人称应该看向角色前方
-        Vector3 lookDirection = target.forward;
-        lookDirection = Quaternion.Euler(mouseY, 0, 0) * lookDirection;
-        transform.rotation = Quaternion.LookRotation(lookDirection);
+        // 第一人称视角直接跟随鼠标输入
+        Quaternion rotation = Quaternion.Euler(mouseY, mouseX, 0);
+        transform.rotation = rotation;
+
+        // 更新目标的水平旋转（只影响角色的水平朝向）
+        Vector3 targetEulerAngles = target.eulerAngles;
+        targetEulerAngles.y = mouseX; // 只更新Y轴旋转
+        target.rotation = Quaternion.Euler(targetEulerAngles);
     }
+
+    // 计算头部晃动效果
+    Vector3 CalculateHeadBob()
+    {
+        if (target == null) return Vector3.zero;
+
+        // 获取目标的移动速度
+        Rigidbody targetRb = target.GetComponent<Rigidbody>();
+        CharacterController targetCC = target.GetComponent<CharacterController>();
+
+        float speed = 0f;
+        if (targetRb != null)
+        {
+            speed = targetRb.velocity.magnitude;
+        }
+        else if (targetCC != null)
+        {
+            speed = targetCC.velocity.magnitude;
+        }
+
+        // 只有在移动时才添加头部晃动
+        if (speed > 0.1f)
+        {
+            headBobTimer += Time.deltaTime * firstPersonHeadBobSpeed * (speed * 0.5f);
+
+            // 计算晃动偏移
+            float verticalBob = Mathf.Sin(headBobTimer * 2f) * firstPersonHeadBobAmount * 0.5f;
+            float horizontalBob = Mathf.Sin(headBobTimer) * firstPersonHeadBobAmount * 0.3f;
+
+            // 基于目标的方向计算偏移
+            Vector3 bobOffset = new Vector3(
+                horizontalBob,
+                verticalBob,
+                0
+            );
+
+            // 将偏移转换到目标的局部空间
+            bobOffset = target.TransformDirection(bobOffset);
+
+            return bobOffset;
+        }
+        else
+        {
+            // 停止移动时，平滑归零头部晃动
+            headBobTimer = 0f;
+            return Vector3.Lerp(headBobOffset, Vector3.zero, Time.deltaTime * 5f);
+        }
+    }
+
+    // 头部晃动的当前偏移（用于平滑归零）
+    private Vector3 headBobOffset = Vector3.zero;
 
     // 更新第三人称相机 - 进一步增加距离
     void UpdateThirdPersonCamera()
@@ -237,6 +313,8 @@ public class CameraController : MonoBehaviour
             mouseX = target.eulerAngles.y;
             mouseY = 0f;
             cameraVelocity = Vector3.zero; // 重置速度以避免抖动
+            headBobTimer = 0f;
+            headBobOffset = Vector3.zero;
         }
     }
 
@@ -259,14 +337,36 @@ public class CameraController : MonoBehaviour
         thirdPersonDistance = Mathf.Max(characterRadius * 3f, 15f);
         thirdPersonHeight = Mathf.Max(characterRadius * 1.5f, 6f);
 
-        // 第一人称相机应该在角色上方并向后，可以看到角色的大部分
-        firstPersonOffset.y = Mathf.Max(characterRadius * 1.5f, 6f);
-        firstPersonOffset.z = -Mathf.Max(characterRadius * 2f, 8f); // 负值表示向后
+        // 第一人称相机应该更像人眼高度
+        // 根据角色大小调整第一人称高度，但保持在人眼高度范围内
+        firstPersonOffset.y = Mathf.Clamp(characterRadius * 0.8f, 1.2f, 2.0f);
+        firstPersonOffset.z = Mathf.Clamp(characterRadius * 0.1f, 0.1f, 0.3f);
 
         cameraCollisionRadius = characterRadius * 0.5f;
 
         Debug.Log($"相机已调整：第三人称距离={thirdPersonDistance}, 高度={thirdPersonHeight}");
-        Debug.Log($"第一人称：高度={firstPersonOffset.y}, 距离={Mathf.Abs(firstPersonOffset.z)}");
+        Debug.Log($"第一人称：高度={firstPersonOffset.y}, 前向偏移={firstPersonOffset.z}");
+    }
+
+    // 调整第一人称视角高度（可以在运行时调用）
+    public void AdjustFirstPersonHeight(float newHeight)
+    {
+        firstPersonOffset.y = newHeight;
+        Debug.Log($"第一人称高度调整为: {newHeight}");
+    }
+
+    // 调整第一人称前向偏移（控制相机在角色前方还是中心）
+    public void AdjustFirstPersonForwardOffset(float forwardOffset)
+    {
+        firstPersonOffset.z = forwardOffset;
+        Debug.Log($"第一人称前向偏移调整为: {forwardOffset}");
+    }
+
+    // 重置第一人称偏移到原始值
+    public void ResetFirstPersonOffset()
+    {
+        firstPersonOffset = originalFirstPersonOffset;
+        Debug.Log("第一人称偏移已重置");
     }
 
     // 可选的调试方法：在Scene视图中显示相机位置
@@ -279,12 +379,18 @@ public class CameraController : MonoBehaviour
 
         if (isFirstPerson)
         {
+            // 显示第一人称相机位置
             Vector3 desiredPosition = target.position +
                                       Vector3.up * firstPersonOffset.y +
                                       target.forward * firstPersonOffset.z;
+
             Gizmos.color = Color.green;
-            Gizmos.DrawSphere(desiredPosition, 0.5f);
+            Gizmos.DrawSphere(desiredPosition, 0.2f);
             Gizmos.DrawLine(target.position, desiredPosition);
+
+            // 显示视野方向
+            Gizmos.color = Color.red;
+            Gizmos.DrawRay(desiredPosition, transform.forward * 5f);
         }
         else
         {

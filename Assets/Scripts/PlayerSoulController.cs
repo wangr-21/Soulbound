@@ -1,36 +1,36 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 using UnityEngine.InputSystem;
 
 public class PlayerSoulController : MonoBehaviour
 {
-    [Header("ÒÆ¶¯ÉèÖÃ")]
+    [Header("ç§»åŠ¨è®¾ç½®")]
     public float moveSpeed = 5f;
     public float possessionRange = 3f;
 
-    [Header("ÌøÔ¾ÉèÖÃ")]
+    [Header("è·³è·ƒè®¾ç½®")]
     public float jumpForce = 5.0f;
     public float gravity = -9.81f;
 
-    [Header("Á£×ÓÏµÍ³ÒıÓÃ")]
-    public ParticleSystem soulParticles; // Ìí¼ÓÁ£×ÓÏµÍ³ÒıÓÃ
-    public SoulAppearanceController soulAppearance; // ¿ÉÑ¡µÄÍâ¹Û¿ØÖÆÆ÷
+    [Header("ç²’å­ç³»ç»Ÿå¼•ç”¨")]
+    public ParticleSystem soulParticles; // æ·»åŠ ç²’å­ç³»ç»Ÿå¼•ç”¨
+    public SoulAppearanceController soulAppearance; // å¯é€‰çš„å¤–è§‚æ§åˆ¶å™¨
 
-    // ÒÆ¶¯ºÍÌøÔ¾Ïà¹Ø±äÁ¿
+    // ç§»åŠ¨å’Œè·³è·ƒç›¸å…³å˜é‡
     private Vector3 playerVelocity;
     private bool isGrounded;
     private CharacterController characterController;
     private PlayerInputActions playerInputActions;
 
-    // ÊäÈëÏà¹Ø±äÁ¿
+    // è¾“å…¥ç›¸å…³å˜é‡
     private Vector2 currentMovementInput;
     private bool jumpTriggered = false;
 
-    // ¸½ÉíÏà¹Ø±äÁ¿
+    // é™„èº«ç›¸å…³å˜é‡
     private GameObject currentPossessedObject;
     private bool isPossessing = false;
     private IPossessable currentPossessable;
 
-    // ÊÓ½ÇÇĞ»»
+    // è§†è§’åˆ‡æ¢
     private CameraController cameraController;
 
     private void Awake()
@@ -41,29 +41,29 @@ public class PlayerSoulController : MonoBehaviour
 
     private void Start()
     {
-        // »ñÈ¡Ïà»ú¿ØÖÆÆ÷
+        // è·å–ç›¸æœºæ§åˆ¶å™¨
         cameraController = Camera.main.GetComponent<CameraController>();
         if (cameraController != null)
         {
             cameraController.SetTarget(transform);
-            Debug.Log("Ïà»ú¿ØÖÆÆ÷ÕÒµ½²¢ÉèÖÃÄ¿±ê");
+            Debug.Log("ç›¸æœºæ§åˆ¶å™¨æ‰¾åˆ°å¹¶è®¾ç½®ç›®æ ‡");
         }
         else
         {
-            Debug.LogError("Î´ÕÒµ½Ïà»ú¿ØÖÆÆ÷£¡ÇëÈ·±£Ö÷Ïà»úÉÏÓĞ CameraController ×é¼ş");
+            Debug.LogError("æœªæ‰¾åˆ°ç›¸æœºæ§åˆ¶å™¨ï¼è¯·ç¡®ä¿ä¸»ç›¸æœºä¸Šæœ‰ CameraController ç»„ä»¶");
         }
 
-        // Èç¹ûÃ»ÓĞÊÖ¶¯Ö¸¶¨Á£×ÓÏµÍ³£¬³¢ÊÔ×Ô¶¯»ñÈ¡
+        // å¦‚æœæ²¡æœ‰æ‰‹åŠ¨æŒ‡å®šç²’å­ç³»ç»Ÿï¼Œå°è¯•è‡ªåŠ¨è·å–
         if (soulParticles == null)
         {
             soulParticles = GetComponentInChildren<ParticleSystem>();
             if (soulParticles == null)
             {
-                Debug.LogWarning("Î´ÕÒµ½Á£×ÓÏµÍ³ÒıÓÃ£¬ÇëÊÖ¶¯Ö¸¶¨");
+                Debug.LogWarning("æœªæ‰¾åˆ°ç²’å­ç³»ç»Ÿå¼•ç”¨ï¼Œè¯·æ‰‹åŠ¨æŒ‡å®š");
             }
         }
 
-        // Èç¹ûÃ»ÓĞÊÖ¶¯Ö¸¶¨Íâ¹Û¿ØÖÆÆ÷£¬³¢ÊÔ×Ô¶¯»ñÈ¡
+        // å¦‚æœæ²¡æœ‰æ‰‹åŠ¨æŒ‡å®šå¤–è§‚æ§åˆ¶å™¨ï¼Œå°è¯•è‡ªåŠ¨è·å–
         if (soulAppearance == null)
         {
             soulAppearance = GetComponent<SoulAppearanceController>();
@@ -86,13 +86,13 @@ public class PlayerSoulController : MonoBehaviour
         playerInputActions.Player.Disable();
     }
 
-    // ÒÆ¶¯ÊäÈë»Øµ÷
+    // ç§»åŠ¨è¾“å…¥å›è°ƒ
     private void OnMove(InputAction.CallbackContext context)
     {
         currentMovementInput = context.ReadValue<Vector2>();
     }
 
-    // ÌøÔ¾ÊäÈë»Øµ÷
+    // è·³è·ƒè¾“å…¥å›è°ƒ
     private void OnJump(InputAction.CallbackContext context)
     {
         if (context.performed)
@@ -103,7 +103,7 @@ public class PlayerSoulController : MonoBehaviour
 
     void Update()
     {
-        // ¸½Éí/ÍÑÀëÊäÈë¼ì²â - ÒÆµ½×îÇ°Ãæ£¬È·±£ÈÎºÎ×´Ì¬ÏÂ¶¼ÄÜ¼ì²â
+        // é™„èº«/è„±ç¦»è¾“å…¥æ£€æµ‹ - ç§»åˆ°æœ€å‰é¢ï¼Œç¡®ä¿ä»»ä½•çŠ¶æ€ä¸‹éƒ½èƒ½æ£€æµ‹
         if (Input.GetKeyDown(KeyCode.E))
         {
             if (!isPossessing)
@@ -116,14 +116,14 @@ public class PlayerSoulController : MonoBehaviour
             }
         }
 
-        // Èç¹ûÕıÔÚ¸½Éí£¬¿ØÖÆÈ¨½»¸ø±»¸½Éí¶ÔÏó
+        // å¦‚æœæ­£åœ¨é™„èº«ï¼Œæ§åˆ¶æƒäº¤ç»™è¢«é™„èº«å¯¹è±¡
         if (isPossessing && currentPossessable != null)
         {
             currentPossessable.PossessedUpdate();
         }
         else
         {
-            // Èç¹ûÃ»ÓĞ¸½Éí£¬¿ØÖÆÁé»êÒÆ¶¯ºÍÌøÔ¾
+            // å¦‚æœæ²¡æœ‰é™„èº«ï¼Œæ§åˆ¶çµé­‚ç§»åŠ¨å’Œè·³è·ƒ
             HandleMovementAndJump();
         }
     }
@@ -137,23 +137,23 @@ public class PlayerSoulController : MonoBehaviour
             playerVelocity.y = -0.5f;
         }
 
-        // »ñÈ¡Ïà»úµÄµ±Ç°Ë®Æ½Ğı×ª½Ç¶È
+        // è·å–ç›¸æœºçš„å½“å‰æ°´å¹³æ—‹è½¬è§’åº¦
         float cameraYRotation = 0f;
         if (cameraController != null)
         {
             cameraYRotation = cameraController.GetCurrentYRotation();
         }
 
-        // ½«ÊäÈë·½Ïò×ª»»ÎªÏà¶ÔÓÚÏà»úÊÓ½ÇµÄ·½Ïò
+        // å°†è¾“å…¥æ–¹å‘è½¬æ¢ä¸ºç›¸å¯¹äºç›¸æœºè§†è§’çš„æ–¹å‘
         Vector3 moveDirection = new Vector3(currentMovementInput.x, 0, currentMovementInput.y);
 
-        // ´´½¨»ùÓÚÏà»úYÖáĞı×ªµÄĞı×ªËÄÔªÊı
+        // åˆ›å»ºåŸºäºç›¸æœºYè½´æ—‹è½¬çš„æ—‹è½¬å››å…ƒæ•°
         Quaternion cameraRotation = Quaternion.Euler(0, cameraYRotation, 0);
 
-        // ½«ÒÆ¶¯·½Ïò×ª»»ÎªÊÀ½ç¿Õ¼ä£¬Ïà¶ÔÓÚÏà»úÊÓ½Ç
+        // å°†ç§»åŠ¨æ–¹å‘è½¬æ¢ä¸ºä¸–ç•Œç©ºé—´ï¼Œç›¸å¯¹äºç›¸æœºè§†è§’
         moveDirection = cameraRotation * moveDirection;
 
-        // Ó¦ÓÃÒÆ¶¯
+        // åº”ç”¨ç§»åŠ¨
         characterController.Move(moveDirection * moveSpeed * Time.deltaTime);
 
         if (jumpTriggered && isGrounded)
@@ -168,49 +168,114 @@ public class PlayerSoulController : MonoBehaviour
 
     void AttemptPossession()
     {
+        Debug.Log("=== å°è¯•é™„èº« ===");
         Collider[] hitColliders = Physics.OverlapSphere(transform.position, possessionRange);
+
+        Debug.Log($"æ£€æµ‹èŒƒå›´å†…æœ‰ {hitColliders.Length} ä¸ªç¢°æ’ä½“");
+
         GameObject closestObject = null;
         float closestDistance = Mathf.Infinity;
 
         foreach (var hitCollider in hitColliders)
         {
-            IPossessable possessable = hitCollider.GetComponent<IPossessable>();
+            GameObject obj = hitCollider.gameObject;
+            float distance = Vector3.Distance(transform.position, obj.transform.position);
+
+            Debug.Log($"æ£€æµ‹åˆ°: {obj.name}, è·ç¦»: {distance:F2}");
+
+            // æ–¹æ³•1: ç›´æ¥è·å–IPossessable
+            IPossessable possessable = obj.GetComponent<IPossessable>();
+
+            // æ–¹æ³•2: å¦‚æœç›´æ¥è·å–å¤±è´¥ï¼Œå°è¯•é€šè¿‡åŸºç±»è·å–
+            if (possessable == null)
+            {
+                PossessableBase baseComponent = obj.GetComponent<PossessableBase>();
+                if (baseComponent != null)
+                {
+                    possessable = baseComponent;
+                    Debug.Log($"  -> é€šè¿‡PossessableBaseæ‰¾åˆ°å¯é™„èº«å¯¹è±¡: {obj.name}");
+                }
+            }
+
+            // æ–¹æ³•3: åœ¨å­ç‰©ä½“ä¸­æŸ¥æ‰¾
+            if (possessable == null)
+            {
+                possessable = obj.GetComponentInChildren<IPossessable>();
+                if (possessable != null)
+                {
+                    Debug.Log($"  -> åœ¨å­ç‰©ä½“ä¸­æ‰¾åˆ°å¯é™„èº«å¯¹è±¡: {obj.name}");
+                }
+            }
+
+            // æ–¹æ³•4: åœ¨çˆ¶ç‰©ä½“ä¸­æŸ¥æ‰¾
+            if (possessable == null)
+            {
+                possessable = obj.GetComponentInParent<IPossessable>();
+                if (possessable != null)
+                {
+                    Debug.Log($"  -> åœ¨çˆ¶ç‰©ä½“ä¸­æ‰¾åˆ°å¯é™„èº«å¯¹è±¡: {obj.name}");
+                }
+            }
+
             if (possessable != null)
             {
-                float distance = Vector3.Distance(transform.position, hitCollider.transform.position);
+                Debug.Log($"  -> âœ“ æ‰¾åˆ°å¯é™„èº«å¯¹è±¡: {obj.name}, ç»„ä»¶ç±»å‹: {possessable.GetType().Name}");
                 if (distance < closestDistance)
                 {
                     closestDistance = distance;
-                    closestObject = hitCollider.gameObject;
+                    closestObject = obj;
                 }
+            }
+            else
+            {
+                Debug.Log($"  -> âœ— æ²¡æœ‰æ‰¾åˆ°å¯é™„èº«ç»„ä»¶");
             }
         }
 
         if (closestObject != null)
         {
+            Debug.Log($"å‡†å¤‡é™„èº«åˆ°: {closestObject.name}");
             currentPossessedObject = closestObject;
+
+            // ä½¿ç”¨å¤šç§æ–¹å¼è·å–IPossessable
             currentPossessable = currentPossessedObject.GetComponent<IPossessable>();
+            if (currentPossessable == null)
+            {
+                currentPossessable = currentPossessedObject.GetComponentInChildren<IPossessable>();
+            }
+            if (currentPossessable == null)
+            {
+                currentPossessable = currentPossessedObject.GetComponentInParent<IPossessable>();
+            }
 
             if (currentPossessable != null)
             {
                 currentPossessable.OnPossess();
                 isPossessing = true;
 
-                // Òş²ØÁé»ê
+                // éšè—çµé­‚
                 GetComponent<Renderer>().enabled = false;
                 GetComponent<Collider>().enabled = false;
                 characterController.enabled = false;
 
-                // ĞÂÔö£ºÒş²ØÁ£×ÓÏµÍ³
+                // éšè—ç²’å­ç³»ç»Ÿ
                 HideSoulParticles();
 
-                // ÇĞ»»Ïà»úÄ¿±êµ½±»¸½ÉíµÄ¶ÔÏó
+                // åˆ‡æ¢ç›¸æœºç›®æ ‡åˆ°è¢«é™„èº«çš„å¯¹è±¡
                 if (cameraController != null)
                 {
                     cameraController.SetTarget(currentPossessedObject.transform);
-                    Debug.Log("Ïà»úÄ¿±êÇĞ»»µ½: " + currentPossessedObject.name);
+                    Debug.Log("ç›¸æœºç›®æ ‡åˆ‡æ¢åˆ°: " + currentPossessedObject.name);
                 }
             }
+            else
+            {
+                Debug.LogError("æ‰¾åˆ°äº†å¯¹è±¡ä½†æ— æ³•è·å–IPossessableç»„ä»¶ï¼");
+            }
+        }
+        else
+        {
+            Debug.Log("æ²¡æœ‰æ‰¾åˆ°å¯é™„èº«çš„å¯¹è±¡");
         }
     }
 
@@ -220,20 +285,20 @@ public class PlayerSoulController : MonoBehaviour
         {
             currentPossessable.OnRelease();
 
-            // ÏÔÊ¾Áé»ê²¢ÒÆ¶¯µ½±»¸½Éí¶ÔÏóµÄÎ»ÖÃ
+            // æ˜¾ç¤ºçµé­‚å¹¶ç§»åŠ¨åˆ°è¢«é™„èº«å¯¹è±¡çš„ä½ç½®
             GetComponent<Renderer>().enabled = true;
             GetComponent<Collider>().enabled = true;
             transform.position = currentPossessedObject.transform.position;
             characterController.enabled = true;
 
-            // ĞÂÔö£ºÏÔÊ¾Á£×ÓÏµÍ³²¢È·±£Î»ÖÃÕıÈ·
+            // æ–°å¢ï¼šæ˜¾ç¤ºç²’å­ç³»ç»Ÿå¹¶ç¡®ä¿ä½ç½®æ­£ç¡®
             ShowSoulParticles();
 
-            // ÇĞ»»Ïà»úÄ¿±ê»ØÁé»ê
+            // åˆ‡æ¢ç›¸æœºç›®æ ‡å›çµé­‚
             if (cameraController != null)
             {
                 cameraController.SetTarget(transform);
-                Debug.Log("Ïà»úÄ¿±êÇĞ»»»ØÁé»ê");
+                Debug.Log("ç›¸æœºç›®æ ‡åˆ‡æ¢å›çµé­‚");
             }
 
             currentPossessedObject = null;
@@ -242,24 +307,24 @@ public class PlayerSoulController : MonoBehaviour
         }
     }
 
-    // ĞÂÔö£ºÒş²ØÁ£×ÓÏµÍ³µÄ·½·¨
+    // æ–°å¢ï¼šéšè—ç²’å­ç³»ç»Ÿçš„æ–¹æ³•
     void HideSoulParticles()
     {
-        // ·½·¨1£ºÍ¨¹ıÁ£×ÓÏµÍ³×é¼ş
+        // æ–¹æ³•1ï¼šé€šè¿‡ç²’å­ç³»ç»Ÿç»„ä»¶
         if (soulParticles != null)
         {
             soulParticles.gameObject.SetActive(false);
-            Debug.Log("Òş²ØÁ£×ÓÏµÍ³");
+            Debug.Log("éšè—ç²’å­ç³»ç»Ÿ");
         }
 
-        // ·½·¨2£ºÍ¨¹ıÍâ¹Û¿ØÖÆÆ÷£¨Èç¹ûÓĞ£©
+        // æ–¹æ³•2ï¼šé€šè¿‡å¤–è§‚æ§åˆ¶å™¨ï¼ˆå¦‚æœæœ‰ï¼‰
         else if (soulAppearance != null)
         {
             soulAppearance.HideSoul();
-            Debug.Log("Í¨¹ıÍâ¹Û¿ØÖÆÆ÷Òş²ØÁé»ê");
+            Debug.Log("é€šè¿‡å¤–è§‚æ§åˆ¶å™¨éšè—çµé­‚");
         }
 
-        // ·½·¨3£ºÈç¹ûÃ»ÓĞÖ¸¶¨ÒıÓÃ£¬³¢ÊÔ×Ô¶¯²éÕÒ²¢½ûÓÃËùÓĞÁ£×ÓÏµÍ³
+        // æ–¹æ³•3ï¼šå¦‚æœæ²¡æœ‰æŒ‡å®šå¼•ç”¨ï¼Œå°è¯•è‡ªåŠ¨æŸ¥æ‰¾å¹¶ç¦ç”¨æ‰€æœ‰ç²’å­ç³»ç»Ÿ
         else
         {
             ParticleSystem[] allParticles = GetComponentsInChildren<ParticleSystem>();
@@ -269,25 +334,25 @@ public class PlayerSoulController : MonoBehaviour
             }
             if (allParticles.Length > 0)
             {
-                Debug.Log("×Ô¶¯²éÕÒµ½²¢Òş²ØÁË " + allParticles.Length + " ¸öÁ£×ÓÏµÍ³");
+                Debug.Log("è‡ªåŠ¨æŸ¥æ‰¾åˆ°å¹¶éšè—äº† " + allParticles.Length + " ä¸ªç²’å­ç³»ç»Ÿ");
             }
         }
     }
 
-    // ĞÂÔö£ºÏÔÊ¾Á£×ÓÏµÍ³µÄ·½·¨
+    // æ–°å¢ï¼šæ˜¾ç¤ºç²’å­ç³»ç»Ÿçš„æ–¹æ³•
     void ShowSoulParticles()
     {
-        // È·±£Áé»êÎ»ÖÃÕıÈ·
+        // ç¡®ä¿çµé­‚ä½ç½®æ­£ç¡®
         if (soulParticles != null)
         {
             soulParticles.transform.position = transform.position;
             soulParticles.gameObject.SetActive(true);
-            Debug.Log("ÏÔÊ¾Á£×ÓÏµÍ³");
+            Debug.Log("æ˜¾ç¤ºç²’å­ç³»ç»Ÿ");
         }
         else if (soulAppearance != null)
         {
             soulAppearance.ShowSoul();
-            Debug.Log("Í¨¹ıÍâ¹Û¿ØÖÆÆ÷ÏÔÊ¾Áé»ê");
+            Debug.Log("é€šè¿‡å¤–è§‚æ§åˆ¶å™¨æ˜¾ç¤ºçµé­‚");
         }
         else
         {
@@ -299,7 +364,7 @@ public class PlayerSoulController : MonoBehaviour
             }
             if (allParticles.Length > 0)
             {
-                Debug.Log("×Ô¶¯²éÕÒµ½²¢ÏÔÊ¾ÁË " + allParticles.Length + " ¸öÁ£×ÓÏµÍ³");
+                Debug.Log("è‡ªåŠ¨æŸ¥æ‰¾åˆ°å¹¶æ˜¾ç¤ºäº† " + allParticles.Length + " ä¸ªç²’å­ç³»ç»Ÿ");
             }
         }
     }
@@ -310,7 +375,7 @@ public class PlayerSoulController : MonoBehaviour
         Gizmos.DrawWireSphere(transform.position, possessionRange);
     }
 
-    // ÔÚ PlayerSoulController ÀàÖĞÌí¼ÓÕâ¸ö·½·¨
+    // åœ¨ PlayerSoulController ç±»ä¸­æ·»åŠ è¿™ä¸ªæ–¹æ³•
     public void ForceReleasePossession()
     {
         if (isPossessing)
