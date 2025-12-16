@@ -33,6 +33,8 @@ public class PlayerSoulController : MonoBehaviour
     // 视角切换
     private CameraController cameraController;
 
+    private int possessableLayerMask;
+
     private void Awake()
     {
         characterController = GetComponent<CharacterController>();
@@ -68,6 +70,8 @@ public class PlayerSoulController : MonoBehaviour
         {
             soulAppearance = GetComponent<SoulAppearanceController>();
         }
+
+        possessableLayerMask = LayerMask.GetMask("Default", "Possessable");
     }
 
     private void OnEnable()
@@ -169,11 +173,33 @@ public class PlayerSoulController : MonoBehaviour
     void AttemptPossession()
     {
         Debug.Log("=== 尝试附身 ===");
+        Debug.Log($"灵魂位置: {transform.position}");
+        Debug.Log($"附身范围: {possessionRange}");
+
+        // 可视化附身范围
+        Debug.DrawRay(transform.position, Vector3.up * possessionRange, Color.red, 2f);
+        Debug.DrawRay(transform.position, Vector3.down * possessionRange, Color.red, 2f);
+        Debug.DrawRay(transform.position, Vector3.left * possessionRange, Color.red, 2f);
+        Debug.DrawRay(transform.position, Vector3.right * possessionRange, Color.red, 2f);
+        Debug.DrawRay(transform.position, Vector3.forward * possessionRange, Color.red, 2f);
+        Debug.DrawRay(transform.position, Vector3.back * possessionRange, Color.red, 2f);
+
         Collider[] hitColliders = Physics.OverlapSphere(transform.position, possessionRange);
 
-        Debug.Log($"检测范围内有 {hitColliders.Length} 个碰撞体");
+        Debug.Log($"检测到 {hitColliders.Length} 个碰撞体");
+
+        if (hitColliders.Length == 0)
+        {
+            Debug.LogWarning("没有检测到任何碰撞体！可能原因：");
+            Debug.LogWarning("1. 鸟没有Collider组件");
+            Debug.LogWarning("2. possessionRange太小");
+            Debug.LogWarning("3. 鸟在另一个Layer上（被忽略）");
+            Debug.LogWarning("4. 鸟太远（检查Y轴高度差）");
+            return;
+        }
 
         GameObject closestObject = null;
+        IPossessable closestPossessable = null;
         float closestDistance = Mathf.Infinity;
 
         foreach (var hitCollider in hitColliders)
@@ -181,102 +207,126 @@ public class PlayerSoulController : MonoBehaviour
             GameObject obj = hitCollider.gameObject;
             float distance = Vector3.Distance(transform.position, obj.transform.position);
 
-            Debug.Log($"检测到: {obj.name}, 距离: {distance:F2}");
+            Debug.Log($"--- 检测到: {obj.name} ---");
+            Debug.Log($"  距离: {distance:F2}");
+            Debug.Log($"  位置: {obj.transform.position}");
+            Debug.Log($"  层级: {LayerMask.LayerToName(obj.layer)}");
+            Debug.Log($"  是否有Collider: {obj.GetComponent<Collider>() != null}");
 
-            // 方法1: 直接获取IPossessable
-            IPossessable possessable = obj.GetComponent<IPossessable>();
-
-            // 方法2: 如果直接获取失败，尝试通过基类获取
-            if (possessable == null)
+            // 打印所有组件
+            Component[] components = obj.GetComponents<Component>();
+            Debug.Log($"  组件数量: {components.Length}");
+            foreach (Component comp in components)
             {
-                PossessableBase baseComponent = obj.GetComponent<PossessableBase>();
-                if (baseComponent != null)
-                {
-                    possessable = baseComponent;
-                    Debug.Log($"  -> 通过PossessableBase找到可附身对象: {obj.name}");
-                }
+                Debug.Log($"    - {comp.GetType().Name}");
             }
 
-            // 方法3: 在子物体中查找
-            if (possessable == null)
+            // 检查CharacterController组件
+            CharacterController charController = obj.GetComponent<CharacterController>();
+            if (charController != null)
             {
-                possessable = obj.GetComponentInChildren<IPossessable>();
-                if (possessable != null)
-                {
-                    Debug.Log($"  -> 在子物体中找到可附身对象: {obj.name}");
-                }
+                Debug.Log($"  ✓ 有CharacterController组件");
             }
 
-            // 方法4: 在父物体中查找
-            if (possessable == null)
+            // 方法1: 直接获取BirdController
+            BirdController birdController = obj.GetComponent<BirdController>();
+            if (birdController != null)
             {
-                possessable = obj.GetComponentInParent<IPossessable>();
-                if (possessable != null)
-                {
-                    Debug.Log($"  -> 在父物体中找到可附身对象: {obj.name}");
-                }
-            }
-
-            if (possessable != null)
-            {
-                Debug.Log($"  -> ✓ 找到可附身对象: {obj.name}, 组件类型: {possessable.GetType().Name}");
+                Debug.Log($"  ✓ 直接找到BirdController组件！");
                 if (distance < closestDistance)
                 {
                     closestDistance = distance;
                     closestObject = obj;
+                    closestPossessable = birdController; // BirdController实现了IPossessable
+                    Debug.Log($"  ✓ 选择这个鸟作为目标");
                 }
+                continue;
             }
-            else
+
+            // 方法2: 尝试获取IPossessable接口
+            IPossessable possessable = obj.GetComponent<IPossessable>();
+            if (possessable != null)
             {
-                Debug.Log($"  -> ✗ 没有找到可附身组件");
+                Debug.Log($"  ✓ 找到IPossessable接口！类型: {possessable.GetType().Name}");
+                if (distance < closestDistance)
+                {
+                    closestDistance = distance;
+                    closestObject = obj;
+                    closestPossessable = possessable;
+                    Debug.Log($"  ✓ 选择这个可附身对象");
+                }
+                continue;
             }
+
+            // 方法3: 在子对象中查找
+            birdController = obj.GetComponentInChildren<BirdController>();
+            if (birdController != null)
+            {
+                Debug.Log($"  ✓ 在子对象中找到BirdController组件！");
+                if (distance < closestDistance)
+                {
+                    closestDistance = distance;
+                    closestObject = obj;
+                    closestPossessable = birdController;
+                }
+                continue;
+            }
+
+            // 方法4: 在父对象中查找
+            birdController = obj.GetComponentInParent<BirdController>();
+            if (birdController != null)
+            {
+                Debug.Log($"  ✓ 在父对象中找到BirdController组件！");
+                if (distance < closestDistance)
+                {
+                    closestDistance = distance;
+                    closestObject = obj;
+                    closestPossessable = birdController;
+                }
+                continue;
+            }
+
+            Debug.Log($"  ✗ 没有找到BirdController或IPossessable组件");
         }
 
-        if (closestObject != null)
+        if (closestObject != null && closestPossessable != null)
         {
-            Debug.Log($"准备附身到: {closestObject.name}");
-            currentPossessedObject = closestObject;
-
-            // 使用多种方式获取IPossessable
-            currentPossessable = currentPossessedObject.GetComponent<IPossessable>();
-            if (currentPossessable == null)
-            {
-                currentPossessable = currentPossessedObject.GetComponentInChildren<IPossessable>();
-            }
-            if (currentPossessable == null)
-            {
-                currentPossessable = currentPossessedObject.GetComponentInParent<IPossessable>();
-            }
-
-            if (currentPossessable != null)
-            {
-                currentPossessable.OnPossess();
-                isPossessing = true;
-
-                // 隐藏灵魂
-                GetComponent<Renderer>().enabled = false;
-                GetComponent<Collider>().enabled = false;
-                characterController.enabled = false;
-
-                // 隐藏粒子系统
-                HideSoulParticles();
-
-                // 切换相机目标到被附身的对象
-                if (cameraController != null)
-                {
-                    cameraController.SetTarget(currentPossessedObject.transform);
-                    Debug.Log("相机目标切换到: " + currentPossessedObject.name);
-                }
-            }
-            else
-            {
-                Debug.LogError("找到了对象但无法获取IPossessable组件！");
-            }
+            Debug.Log($"最终选择附身对象: {closestObject.name}");
+            PossessObject(closestObject, closestPossessable);
         }
         else
         {
-            Debug.Log("没有找到可附身的对象");
+            Debug.LogWarning("没有找到可附身的对象");
         }
+    }
+
+    void PossessObject(GameObject target, IPossessable possessable)
+    {
+        currentPossessedObject = target;
+        currentPossessable = possessable;
+
+        Debug.Log($"准备附身到: {target.name}");
+
+        // 调用附身方法
+        currentPossessable.OnPossess();
+        isPossessing = true;
+
+        // 隐藏灵魂
+        GetComponent<Renderer>().enabled = false;
+        GetComponent<Collider>().enabled = false;
+        characterController.enabled = false;
+
+        // 隐藏粒子系统
+        HideSoulParticles();
+
+        // 切换相机目标到被附身的对象
+        if (cameraController != null)
+        {
+            cameraController.SetTarget(currentPossessedObject.transform);
+            Debug.Log("相机目标切换到: " + currentPossessedObject.name);
+        }
+
+        Debug.Log("成功附身！");
     }
 
     void ReleasePossession()
@@ -288,7 +338,7 @@ public class PlayerSoulController : MonoBehaviour
             // 显示灵魂并移动到被附身对象的位置
             GetComponent<Renderer>().enabled = true;
             GetComponent<Collider>().enabled = true;
-            transform.position = currentPossessedObject.transform.position;
+            transform.position = currentPossessedObject.transform.position + Vector3.up * 1f; // 稍微上方一点
             characterController.enabled = true;
 
             // 新增：显示粒子系统并确保位置正确
