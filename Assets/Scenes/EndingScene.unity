@@ -247,7 +247,7 @@ MonoBehaviour:
   m_ScaleFactor: 1
   m_ReferenceResolution: {x: 1920, y: 1080}
   m_ScreenMatchMode: 0
-  m_MatchWidthOrHeight: 0
+  m_MatchWidthOrHeight: 0.5
   m_PhysicalUnit: 3
   m_FallbackScreenDPI: 96
   m_DefaultSpriteDPI: 96
@@ -404,8 +404,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0}
   m_AnchorMax: {x: 0.5, y: 0}
-  m_AnchoredPosition: {x: 0, y: 459}
-  m_SizeDelta: {x: 200, y: 50}
+  m_AnchoredPosition: {x: 0, y: 100}
+  m_SizeDelta: {x: 1500, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &252847312
 MonoBehaviour:
@@ -429,8 +429,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: 
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: 4365dd37c373cc64d983508b4f5fd0ac, type: 2}
+  m_sharedMaterial: {fileID: -6214020485600190390, guid: 4365dd37c373cc64d983508b4f5fd0ac, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -762,10 +762,10 @@ RectTransform:
   - {fileID: 300928233}
   m_Father: {fileID: 137380625}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.5, y: 0.5}
-  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 1, y: 1}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 100, y: 100}
+  m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &511239021
 MonoBehaviour:
@@ -793,23 +793,25 @@ MonoBehaviour:
   crack: {fileID: 300928234}
   subtitleText: {fileID: 252847312}
   typewriterSoundLength: 0.1
-  typewriterSpeed: 0.1
-  bgmSource: {fileID: 0}
+  typewriterSpeed: 0.02
+  bgmSource: {fileID: 1674236452}
+  bgmClip: {fileID: 8300000, guid: 8955e646b4fc2c5439c9b04dd34463e9, type: 3}
   typewriterKey: {fileID: 0}
   voice_07: {fileID: 0}
   soldierShout: {fileID: 0}
   spiritRoar: {fileID: 0}
-  breath: {fileID: 0}
-  wind: {fileID: 0}
-  drawSword: {fileID: 0}
-  bgmBaseVolume: 0.3
+  breath: {fileID: 8300000, guid: 731dddbd431e4ce4ab44d29c75f7bf83, type: 3}
+  wind: {fileID: 8300000, guid: c9f95123c725941478b21c9adddf6940, type: 3}
+  drawSword: {fileID: 8300000, guid: 8b3b3c899be561c4ca40eb0483dbcd40, type: 3}
+  bgmBaseVolume: 0.5
+  bgmFadeOutDuration: 2
   subtitleContents:
-  - "\u8FD9\u67C4\u6743\u6756\uFF0C\u4EE3\u8868\u738B\u56FD\u7684\u4FE1\u4EFB"
-  - "\u6211\u5C06\u4EE5\u751F\u547D\u5B88\u62A4\u5B83"
-  - "\u4F60\u7684\u738B\u56FD\uFF0C\u7EC8\u5C06\u5316\u4E3A\u7070\u70EC"
-  - "\u4ED6\u4EEC\u2026\u2026\u90FD\u4E0D\u5728\u4E86\uFF1F"
-  - "\u81F3\u5C11\uFF0C\u8FD8\u6709\u8FD9\u5EA7\u5854"
-  - "\u6211\u4F1A\u593A\u56DE\u4E00\u5207"
+  - "\u6211\u6700\u5F00\u5FC3\u7684\u4E00\u5929\uFF0C\u662F\u56FD\u738B\u5C06\u5B88\u62A4\u56FD\u5BB6\u7684\u4F7F\u547D\u6258\u4ED8\u4E8E\u6211\u3002\u90A3\u4E00\u523B\uFF0C\u6211\u611F\u5230\u524D\u6240\u672A\u6709\u7684\u8363\u8000\uFF0C\u4E5F\u5728\u5FC3\u4E2D\u7ACB\u4E0B\u8A93\u8A00\u2014\u2014\u6B64\u751F\u8FFD\u968F\u965B\u4E0B\uFF0C\u81F3\u6B7B\u4E0D\u6E1D\uFF01"
+  - "\u5F53\u56FD\u738B\u5BA3\u5E03\u91C7\u7EB3\u90BB\u56FD\u7684\u5EFA\u8BAE\u3001\u8BA9\u6211\u4EEC\u534F\u52A9\u5916\u6765\u7684\u5E2E\u624B\u6CBB\u7406\u7F6A\u6076\u65F6\uFF0C\u5C3D\u7BA1\u5FC3\u5B58\u7591\u60D1\uFF0C\u6211\u4ECD\u6BEB\u4E0D\u72B9\u8C6B\u5730\u9009\u62E9\u670D\u4ECE\u3002"
+  - "\u4F46\u2026\u6211\u6CA1\u60F3\u5230\uFF0C\u8FD9\u7FA4\u5E2E\u624B\u662F\u4E00\u7FA4\u602A\u7269\uFF01\u4ED6\u2026\u4ED6\u4EEC\u63A0\u593A\u767E\u59D3\u7684\u7075\u9B42\uFF0C\u5C06\u4ED6\u4EEC\u53D8\u6210\u4E00\u5177\u5177\u5080\u5121\uFF01"
+  - "\u7AD9\u5728\u904D\u5730\u65E0\u9B42\u7684\u8EAF\u4F53\u4E4B\u95F4\uFF0C\u542C\u7740\u767E\u59D3\u7684\u54C0\u568E\uFF0C\u6211\u7B2C\u4E00\u6B21\u5BF9\u81EA\u5DF1\u8A93\u6B7B\u6548\u5FE0\u7684\u56FD\u738B\u4EA7\u751F\u4E86\u52A8\u6447\u4E0E\u6050\u60E7\u3002"
+  - "\u90A3\u5929\u6211\u5982\u5E38\u7ACB\u4E8E\u54E8\u6240\uFF0C\u5374\u9762\u5BF9\u4E00\u4E2A\u5DF2\u7136\u964C\u751F\u7684\u56FD\u5BB6\uFF0C\u5FC3\u4E2D\u53EA\u5269\u4E0B\u65E0\u6CD5\u56DE\u7B54\u7684\u7591\u95EE\u4E0E\u8FF7\u60D8\u3002"
+  - "\u5F53\u6211\u660E\u767D\u6D3B\u4E0B\u53BB\u53EA\u4F1A\u6CA6\u4E3A\u602A\u7269\u6216\u5080\u5121\u65F6\uFF0C\u4FBF\u629A\u6478\u8FD9\u628A\u66FE\u8C61\u5F81\u8363\u8000\u7684\u5251\uFF0C\u5C06\u5B83\u523A\u5165\u81EA\u5DF1\u7684\u8EAB\u4F53\uFF0C\u7528\u6B7B\u4EA1\u5B88\u4F4F\u6700\u540E\u7684\u5C0A\u4E25\u3002"
 --- !u!1 &752885968
 GameObject:
   m_ObjectHideFlags: 0
@@ -1526,15 +1528,15 @@ AudioSource:
   m_Enabled: 1
   serializedVersion: 4
   OutputAudioMixerGroup: {fileID: 0}
-  m_audioClip: {fileID: 0}
-  m_PlayOnAwake: 0
+  m_audioClip: {fileID: 8300000, guid: 8955e646b4fc2c5439c9b04dd34463e9, type: 3}
+  m_PlayOnAwake: 1
   m_Volume: 1
   m_Pitch: 1
   Loop: 1
   Mute: 0
   Spatialize: 0
   SpatializePostEffects: 0
-  Priority: 128
+  Priority: 85
   DopplerLevel: 1
   MinDistance: 1
   MaxDistance: 500

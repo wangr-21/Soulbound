@@ -24,6 +24,7 @@ public class MemoryAnimationWithVoice : MonoBehaviour
 
     [Header("===== 声音素材 =====")]
     public AudioSource bgmSource;
+    public AudioClip bgmClip; // 新增：BGM音频clip，手动拖入
     public AudioClip typewriterKey; // 打字机单按键音效
     public AudioClip voice_07;      // 最后一张图人声
     public AudioClip soldierShout;  // 场景音效
@@ -33,15 +34,17 @@ public class MemoryAnimationWithVoice : MonoBehaviour
     public AudioClip drawSword;
 
     [Header("===== 配置参数 =====")]
-    public float bgmBaseVolume = 0.3f;
+    public float bgmBaseVolume = 1f;
+    [Tooltip("第7张图BGM淡出时长（秒）")]
+    public float bgmFadeOutDuration = 2f; // BGM逐渐变小的时长，可调整
     public string[] subtitleContents = new string[]
     {
-        "这柄权杖，代表王国的信任",
-        "我将以生命守护它",
-        "你的王国，终将化为灰烬",
-        "他们……都不在了？",
-        "至少，还有这座塔",
-        "我会夺回一切"
+        "我最开心的一天，是国王将守护国家的使命托付于我。那一刻，我感到前所未有的荣耀，也在心中立下誓言——此生追随陛下，至死不渝！",
+        "当国王宣布采纳邻国的建议、让我们协助外来的帮手治理罪恶时，尽管心存疑惑，我仍毫不犹豫地选择服从。",
+        "但…我没想到，这群帮手是一群怪物！他…他们掠夺百姓的灵魂，将他们变成一具具傀儡！",
+        "站在遍地无魂的躯体之间，听着百姓的哀嚎，我第一次对自己誓死效忠的国王产生了动摇与恐惧。",
+        "那天我如常立于哨所，却面对一个已然陌生的国家，心中只剩下无法回答的疑问与迷惘。",
+        "当我明白活下去只会沦为怪物或傀儡时，便抚摸这把曾象征荣耀的剑，将它刺入自己的身体，用死亡守住最后的尊严。"
     };
 
     private AudioSource typewriterSource; // 专门播放打字机音效的AudioSource
@@ -54,7 +57,20 @@ public class MemoryAnimationWithVoice : MonoBehaviour
         typewriterSource.volume = 0.5f;
 
         HideAllUI();
-        bgmSource.volume = bgmBaseVolume;
+        // 初始化BGM（直接用手动拖入的clip，删掉Resources.Load）
+        if (bgmSource != null && bgmClip != null)
+        {
+            bgmSource.clip = bgmClip;
+            bgmSource.volume = bgmBaseVolume;
+            bgmSource.loop = true; // 开启循环，确保BGM一直播
+            bgmSource.Play(); // 初始黑屏阶段就开始播放
+            Debug.Log("BGM开始播放：" + bgmClip.name);
+        }
+        else
+        {
+            Debug.LogError("BGM未赋值！请在Inspector面板拖入bgmSource和bgmClip");
+        }
+
         StartCoroutine(PlayFullAnimation());
     }
 
@@ -100,15 +116,37 @@ public class MemoryAnimationWithVoice : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// BGM淡出效果：音量从当前值逐渐降到0
+    /// </summary>
+    /// <param name="duration">淡出时长</param>
+    IEnumerator FadeOutBGM(float duration)
+    {
+        if (bgmSource == null) yield break;
+
+        float startVolume = bgmSource.volume;
+        float timer = 0;
+
+        while (timer < duration)
+        {
+            timer += Time.deltaTime;
+            // 线性插值：从startVolume降到0
+            bgmSource.volume = Mathf.Lerp(startVolume, 0, timer / duration);
+            yield return null;
+        }
+
+        // 淡出完成后，强制音量为0并停止BGM
+        bgmSource.volume = 0;
+        bgmSource.Stop();
+    }
+
     IEnumerator PlayFullAnimation()
     {
-        // 0秒：初始黑屏
+        // 0秒：初始黑屏（BGM已在Start中播放）
         yield return new WaitForSeconds(1f);
 
         // 1秒：片段1 - 荣耀时刻
         if (memoryImgs[0] != null) memoryImgs[0].enabled = true;
-        bgmSource.clip = Resources.Load<AudioClip>("Audio/BGM_Calm");
-        bgmSource.Play();
 
         // 图片放大特效
         float timer = 0;
@@ -193,9 +231,6 @@ public class MemoryAnimationWithVoice : MonoBehaviour
         // 6.5秒：片段3 - 灾难
         if (memoryImgs[2] != null) memoryImgs[2].enabled = true;
         if (spiritLight != null) spiritLight.enabled = true;
-        bgmSource.clip = Resources.Load<AudioClip>("Audio/BGM_Noise");
-        bgmSource.Play();
-        bgmSource.volume = bgmBaseVolume + 0.1f;
 
         timer = 0;
         while (timer < 1f)
@@ -240,7 +275,7 @@ public class MemoryAnimationWithVoice : MonoBehaviour
             yield return null;
         }
 
-        if (breath != null) AudioSource.PlayClipAtPoint(breath, Vector3.zero, 0.6f);
+        if (breath != null) AudioSource.PlayClipAtPoint(breath, Vector3.zero, 1.6f);
         if (subtitleContents.Length > 3)
         {
             yield return StartCoroutine(PlayTypewriterSubtitle(subtitleContents[3]));
@@ -268,9 +303,6 @@ public class MemoryAnimationWithVoice : MonoBehaviour
 
         // 13秒：片段5 - 坚守
         if (memoryImgs[4] != null) memoryImgs[4].enabled = true;
-        bgmSource.clip = Resources.Load<AudioClip>("Audio/BGM_Piano");
-        bgmSource.Play();
-        bgmSource.volume = bgmBaseVolume;
 
         timer = 0;
         while (timer < 1f)
@@ -308,7 +340,7 @@ public class MemoryAnimationWithVoice : MonoBehaviour
             yield return null;
         }
 
-        if (drawSword != null) AudioSource.PlayClipAtPoint(drawSword, Vector3.zero, 1f);
+        if (drawSword != null) AudioSource.PlayClipAtPoint(drawSword, Vector3.zero, 2f);
         if (subtitleContents.Length > 5)
         {
             yield return StartCoroutine(PlayTypewriterSubtitle(subtitleContents[5]));
@@ -319,19 +351,21 @@ public class MemoryAnimationWithVoice : MonoBehaviour
 
         // 19.5秒：片段7 - 结尾（黑色图）
         if (memoryImgs[6] != null) memoryImgs[6].enabled = true;
-        bgmSource.volume = bgmBaseVolume * 0.3f;
+
+        // 启动BGM淡出协程（逐渐变小）
+        StartCoroutine(FadeOutBGM(bgmFadeOutDuration));
 
         if (voice_07 != null) AudioSource.PlayClipAtPoint(voice_07, Vector3.zero, 1f);
         if (subtitleText != null)
         {
             subtitleText.enabled = true;
-            subtitleText.text = "这就是我的宿命吗？";
+            subtitleText.text = "我的国王啊！快醒醒吧…";
         }
 
-        yield return new WaitForSeconds(3f);
+        // 等待淡出完成+人声播放完毕（总时长=淡出时长+1秒缓冲）
+        yield return new WaitForSeconds(bgmFadeOutDuration + 1f);
         if (memoryImgs[6] != null) memoryImgs[6].enabled = false;
         if (subtitleText != null) subtitleText.enabled = false;
-        bgmSource.Stop();
 
         Debug.Log("动画播放完成！");
         // 可选：返回主菜单
