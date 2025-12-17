@@ -1,304 +1,388 @@
 using UnityEngine;
 
-[RequireComponent(typeof(CharacterController))]
-public class LeopardController : PossessableBase
+public class LeopardController : MonoBehaviour, IPossessable
 {
-    [Header("豹子的设置")]
-    public float walkSpeed = 12f;
-    public float sprintSpeed = 25f;
-    public float jumpForce = 10.0f;
-    public float gravity = -20f;
+    [Header("移动设置")]
+    public float walkSpeed = 3f;
+    public float runSpeed = 6f;
+    public float rotationSpeed = 8f;
+    public float jumpForce = 5f;
+    public float groundCheckDistance = 0.3f;
+    public LayerMask groundLayer = -1;
 
-    [Header("冲刺设置")]
-    public float sprintStamina = 100f;
-    public float sprintStaminaDrain = 20f;
-    public float sprintStaminaRegen = 15f;
+    [Header("动画参数")]
+    public string speedParam = "Speed";
+    public string isGroundedParam = "IsGrounded";
+    public string jumpParam = "Jump";
 
-    [Header("特殊能力")]
-    public float pounceForce = 15f;
-    public float pounceCooldown = 3f;
+    [Header("能力描述")]
+    public string abilityDescription = "可以快速奔跑和跳跃的豹子";
 
-    // 移动和跳跃相关变量
-    private CharacterController characterController;
-    private Vector3 playerVelocity;
-    private bool isGrounded;
-    private bool jumpTriggered = false;
+    [Header("状态")]
+    public bool isPossessed = false;
+    private bool isGrounded = true;
+    private bool isJumping = false;
 
-    // 冲刺相关
-    private bool isSprinting = false;
-    private float currentSpeed;
-    private float currentStamina;
+    [Header("组件引用")]
+    private Animator animator;
+    private CharacterController controller;
+    private Vector3 moveDirection = Vector3.zero;
 
-    // 猛扑相关
-    private bool canPounce = true;
-    private float pounceTimer = 0f;
+    [Header("调试")]
+    public bool showDebugInfo = true;
 
-    // 相机相关
-    private CameraController cameraController;
-
-    // 音频相关
-    private AudioSource audioSource;
+    // 移动相关
+    private float currentSpeed = 0f;
+    private Vector3 currentMovementInput = Vector3.zero;
+    private float verticalVelocity = 0f;
+    private const float GRAVITY = -9.81f;
 
     void Start()
     {
-        // 设置对象名称和描述
-        objectName = "豹子";
-        abilityDescription = "快速移动、冲刺和猛扑";
+        // 获取组件引用
+        animator = GetComponent<Animator>();
+        controller = GetComponent<CharacterController>();
 
-        Debug.Log($"LeopardController初始化: {objectName} - {abilityDescription}");
-
-        // 获取CharacterController
-        characterController = GetComponent<CharacterController>();
-        if (characterController == null)
+        if (animator == null)
         {
-            Debug.LogError("LeopardController: 缺少CharacterController组件！");
-            return;
+            Debug.LogError("豹子控制器需要Animator组件！");
         }
 
-        // 调整CharacterController参数
-        characterController.height = 2f;
-        characterController.radius = 0.5f;
-        characterController.center = new Vector3(0, 1f, 0);
-
-        // 获取相机控制器
-        if (Camera.main != null)
+        if (controller == null)
         {
-            cameraController = Camera.main.GetComponent<CameraController>();
+            Debug.LogError("豹子控制器需要CharacterController组件！");
         }
 
-        // 获取或添加AudioSource
-        audioSource = GetComponent<AudioSource>();
-        if (audioSource == null)
+        // 初始设置为待机状态
+        if (animator != null)
         {
-            audioSource = gameObject.AddComponent<AudioSource>();
-            audioSource.spatialBlend = 1f;
-            audioSource.volume = 0.7f;
+            animator.SetFloat(speedParam, 0f);
+            animator.SetBool(isGroundedParam, true);
         }
 
-        // 初始化状态
-        currentSpeed = walkSpeed;
-        currentStamina = sprintStamina;
+        SetupCharacterController();
+}
 
-        // 确保Base类初始化
-        base.Start();
+    void SetupCharacterController()
+    {
+        if (controller == null)
+        {
+            controller = GetComponent<CharacterController>();
+            if (controller == null)
+            {
+                controller = gameObject.AddComponent<CharacterController>();
+            }
+        }
 
-        Debug.Log("豹子初始化完成");
+        // 尝试找到模型渲染器来获取大小
+        MeshRenderer[] renderers = GetComponentsInChildren<MeshRenderer>();
+        if (renderers.Length > 0)
+        {
+            Bounds totalBounds = new Bounds(transform.position, Vector3.zero);
+
+            foreach (MeshRenderer renderer in renderers)
+            {
+                totalBounds.Encapsulate(renderer.bounds);
+            }
+
+            // 将世界坐标转换为局部坐标
+            Vector3 localCenter = transform.InverseTransformPoint(totalBounds.center);
+            Vector3 localSize = totalBounds.size;
+
+            // 调整CharacterController
+            controller.center = new Vector3(0, localCenter.y, 0); // 保持X和Z为0
+            controller.height = localSize.y * 0.8f; // 稍微小于模型高度
+            controller.radius = Mathf.Max(localSize.x, localSize.z) * 0.5f * 0.7f; // 半径大约是宽度/深度的一半
+
+            Debug.Log($"自动设置CharacterController:");
+            Debug.Log($"  模型包围盒: 中心={localCenter}, 大小={localSize}");
+            Debug.Log($"  Controller设置: Center={controller.center}, Height={controller.height}, Radius={controller.radius}");
+        }
+        else
+        {
+            // 如果没有渲染器，使用默认值
+            controller.center = new Vector3(0, 1, 0);
+            controller.height = 2f;
+            controller.radius = 0.5f;
+            Debug.LogWarning("没有找到MeshRenderer，使用默认CharacterController设置");
+        }
     }
 
     void Update()
     {
-        // 更新猛扑冷却计时器
-        if (!canPounce)
+        // 非附身状态下的逻辑（如果有的话）
+        if (!isPossessed)
         {
-            pounceTimer -= Time.deltaTime;
-            if (pounceTimer <= 0f)
-            {
-                canPounce = true;
-                Debug.Log("猛扑技能已冷却");
-            }
-        }
-
-        // 更新耐力
-        if (isSprinting)
-        {
-            currentStamina -= sprintStaminaDrain * Time.deltaTime;
-            if (currentStamina <= 0f)
-            {
-                currentStamina = 0f;
-                StopSprint();
-            }
-        }
-        else if (currentStamina < sprintStamina)
-        {
-            currentStamina += sprintStaminaRegen * Time.deltaTime;
-            currentStamina = Mathf.Min(currentStamina, sprintStamina);
+            // 可以添加一些AI行为或空闲动画
+            UpdateIdleAnimations();
+            return;
         }
     }
 
-    // 实现被附身时的更新
-    public override void PossessedUpdate()
+    // ===== 实现 IPossessable 接口 =====
+
+    public void OnPossess()
     {
-        HandleInput();
-        HandleMovementAndJump();
-    }
+        isPossessed = true;
+        Debug.Log("豹子被附身了！");
 
-    // 处理输入
-    private void HandleInput()
-    {
-        // 跳跃输入
-        if (Input.GetKeyDown(KeyCode.Space))
+        // 确保控制器启用
+        if (controller != null)
         {
-            jumpTriggered = true;
-        }
-
-        // 冲刺输入
-        if (Input.GetKeyDown(KeyCode.LeftShift) && currentStamina > 10f)
-        {
-            StartSprint();
-        }
-        if (Input.GetKeyUp(KeyCode.LeftShift))
-        {
-            StopSprint();
-        }
-
-        // 猛扑输入
-        if (Input.GetKeyDown(KeyCode.F) && canPounce && isGrounded)
-        {
-            Pounce();
-        }
-    }
-
-    // 开始冲刺
-    private void StartSprint()
-    {
-        if (!isSprinting && currentStamina > 10f)
-        {
-            isSprinting = true;
-            currentSpeed = sprintSpeed;
-            Debug.Log("开始冲刺！");
-        }
-    }
-
-    // 停止冲刺
-    private void StopSprint()
-    {
-        if (isSprinting)
-        {
-            isSprinting = false;
-            currentSpeed = walkSpeed;
-            Debug.Log("停止冲刺");
-        }
-    }
-
-    // 猛扑技能
-    private void Pounce()
-    {
-        canPounce = false;
-        pounceTimer = pounceCooldown;
-
-        // 计算猛扑方向
-        Vector3 moveDirection = Vector3.zero;
-        float moveX = Input.GetAxis("Horizontal");
-        float moveZ = Input.GetAxis("Vertical");
-
-        if (moveX != 0 || moveZ != 0)
-        {
-            // 如果有输入，朝输入方向猛扑
-            moveDirection = new Vector3(moveX, 0, moveZ);
-            if (cameraController != null)
-            {
-                float cameraYRotation = cameraController.GetCurrentYRotation();
-                Quaternion cameraRotation = Quaternion.Euler(0, cameraYRotation, 0);
-                moveDirection = cameraRotation * moveDirection;
-            }
+            controller.enabled = true;
         }
         else
         {
-            // 如果没有输入，朝豹子前方猛扑
-            moveDirection = transform.forward;
+            controller = GetComponent<CharacterController>();
+            if (controller == null)
+            {
+                Debug.LogError("豹子的CharacterController组件丢失！");
+            }
         }
 
-        // 应用猛扑力
-        moveDirection.Normalize();
-        playerVelocity.y = Mathf.Sqrt(pounceForce * -2f * gravity * 0.5f);
-        playerVelocity.x = moveDirection.x * pounceForce * 0.5f;
-        playerVelocity.z = moveDirection.z * pounceForce * 0.5f;
-
-        Debug.Log("猛扑！");
-    }
-
-    // 处理移动和跳跃
-    private void HandleMovementAndJump()
-    {
-        if (characterController == null) return;
-
-        isGrounded = characterController.isGrounded;
-
-        if (isGrounded && playerVelocity.y < 0)
+        // 设置初始动画状态
+        if (animator != null)
         {
-            playerVelocity.y = -2f;
-        }
-
-        float moveX = Input.GetAxis("Horizontal");
-        float moveZ = Input.GetAxis("Vertical");
-        Vector3 moveDirection = new Vector3(moveX, 0, moveZ);
-
-        // 基于相机视角转换移动方向
-        if (cameraController != null)
-        {
-            float cameraYRotation = cameraController.GetCurrentYRotation();
-            Quaternion cameraRotation = Quaternion.Euler(0, cameraYRotation, 0);
-            moveDirection = cameraRotation * moveDirection;
-        }
-
-        // 应用移动
-        characterController.Move(moveDirection * currentSpeed * Time.deltaTime);
-
-        // 处理跳跃
-        if (jumpTriggered && isGrounded)
-        {
-            playerVelocity.y = Mathf.Sqrt(jumpForce * -2f * gravity);
-            jumpTriggered = false;
-            Debug.Log("豹子跳跃！");
-        }
-
-        // 应用重力
-        playerVelocity.y += gravity * Time.deltaTime;
-        characterController.Move(playerVelocity * Time.deltaTime);
-    }
-
-    // 重写附身方法
-    public override void OnPossess()
-    {
-        base.OnPossess(); // 调用基类方法，设置isPossessed为true并改变颜色
-
-        if (characterController != null)
-        {
-            characterController.enabled = true;
+            animator.SetFloat(speedParam, 0f);
+            animator.SetBool(isGroundedParam, true);
         }
 
         // 重置状态
-        currentStamina = sprintStamina;
-        StopSprint();
-
-        Debug.Log("已附身到豹子！");
-        Debug.Log("控制说明：");
-        Debug.Log("- WASD: 移动");
-        Debug.Log("- 空格键: 跳跃");
-        Debug.Log("- Shift: 冲刺（消耗耐力）");
-        Debug.Log("- F键: 猛扑（冷却时间: " + pounceCooldown + "秒）");
-        Debug.Log("- E键: 脱离");
+        isJumping = false;
+        currentSpeed = 0f;
+        moveDirection = Vector3.zero;
     }
 
-    // 重写脱离方法
-    public override void OnRelease()
+    public void OnRelease()
     {
-        base.OnRelease(); // 调用基类方法，设置isPossessed为false并恢复颜色
-        StopSprint();
-        Debug.Log("从豹子脱离");
+        isPossessed = false;
+
+        if (animator != null)
+        {
+            animator.SetFloat(speedParam, 0f);
+            animator.SetBool(isGroundedParam, true);
+        }
+
+        // 重置移动方向
+        moveDirection = Vector3.zero;
+        currentSpeed = 0f;
+        isJumping = false;
+
+        Debug.Log("豹子脱离附身！");
     }
 
-    // 实现接口方法：获取能力描述
-    public override string GetAbilityDescription()
+    public string GetAbilityDescription()
     {
         return abilityDescription;
     }
 
-    // 获取当前耐力百分比（用于UI显示）
-    public float GetStaminaPercentage()
+    public void PossessedUpdate()
     {
-        return currentStamina / sprintStamina;
+        if (!isPossessed) return;
+
+        HandleMovement();
+        UpdateAnimations();
+        CheckGroundStatus();
+    }
+    // ===== 接口实现结束 =====
+
+    void HandleMovement()
+    {
+        if (controller == null)
+        {
+            Debug.LogError("CharacterController为空！");
+            return;
+        }
+
+        float horizontal = Input.GetAxis("Horizontal");
+        float vertical = Input.GetAxis("Vertical");
+        bool sprint = Input.GetKey(KeyCode.LeftShift);
+        bool jumpPressed = Input.GetButtonDown("Jump");
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"豹子移动输入: H={horizontal:F2}, V={vertical:F2}, Sprint={sprint}, Jump={jumpPressed}");
+        }
+
+        // 基础移动方向（基于世界坐标）
+        Vector3 move = new Vector3(horizontal, 0, vertical);
+
+        // 获取相机方向（如果使用了相机控制器）
+        Camera mainCamera = Camera.main;
+        if (mainCamera != null)
+        {
+            // 获取相机的前向和右向（忽略Y轴）
+            Vector3 cameraForward = mainCamera.transform.forward;
+            Vector3 cameraRight = mainCamera.transform.right;
+
+            cameraForward.y = 0;
+            cameraRight.y = 0;
+
+            // 标准化
+            cameraForward.Normalize();
+            cameraRight.Normalize();
+
+            // 根据相机方向计算移动
+            move = cameraForward * vertical + cameraRight * horizontal;
+        }
+
+        // 计算移动速度（考虑冲刺）
+        float targetSpeed = 0f;
+        if (move.magnitude > 0.1f)
+        {
+            if (sprint)
+            {
+                targetSpeed = runSpeed;
+            }
+            else
+            {
+                targetSpeed = walkSpeed;
+            }
+        }
+
+        // 平滑速度变化
+        currentSpeed = Mathf.Lerp(currentSpeed, targetSpeed, Time.deltaTime * 5f);
+
+        // 设置移动方向
+        moveDirection = move * currentSpeed;
+
+        // 处理跳跃
+        if (jumpPressed && isGrounded && !isJumping)
+        {
+            Jump();
+        }
+
+        // 应用重力
+        if (!isGrounded)
+        {
+            verticalVelocity += GRAVITY * Time.deltaTime;
+        }
+        else if (verticalVelocity < 0)
+        {
+            verticalVelocity = -0.5f; // 轻微向下的力，确保贴地
+        }
+
+        // 应用移动
+        Vector3 finalMove = new Vector3(moveDirection.x, verticalVelocity, moveDirection.z);
+        controller.Move(finalMove * Time.deltaTime);
+
+        // 旋转控制 - 只有在移动时才旋转
+        if (move.magnitude > 0.1f)
+        {
+            Quaternion targetRotation = Quaternion.LookRotation(new Vector3(move.x, 0, move.z));
+            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
+        }
     }
 
-    // 获取猛扑冷却剩余时间（用于UI显示）
-    public float GetPounceCooldownRemaining()
+    void Jump()
     {
-        return canPounce ? 0f : pounceTimer;
+        isJumping = true;
+        verticalVelocity = Mathf.Sqrt(jumpForce * -2f * GRAVITY);
+
+        if (animator != null)
+        {
+            animator.SetTrigger(jumpParam);
+        }
+
+        if (showDebugInfo) Debug.Log("豹子跳跃！");
     }
 
-    // 获取猛扑是否可用
-    public bool CanPounce()
+    void UpdateAnimations()
     {
-        return canPounce && isGrounded;
+        if (animator == null) return;
+
+        // 更新速度参数
+        animator.SetFloat(speedParam, currentSpeed);
+
+        // 更新地面状态
+        animator.SetBool(isGroundedParam, isGrounded);
+
+        // 如果跳跃后落地，重置跳跃状态
+        if (isGrounded && isJumping)
+        {
+            isJumping = false;
+        }
+    }
+
+    void UpdateIdleAnimations()
+    {
+        // 非附身状态下的简单动画处理
+        // 可以随机切换Idle1和Idle2，增加自然感
+        if (animator != null && isGrounded)
+        {
+            // 这里可以添加一些随机的待机动画切换
+        }
+    }
+
+    void CheckGroundStatus()
+    {
+        if (controller == null) return;
+
+        // 使用CharacterController的isGrounded和射线检测双重检查
+        bool wasGrounded = isGrounded;
+        isGrounded = controller.isGrounded;
+
+        // 额外的射线检测确保准确性
+        if (!isGrounded)
+        {
+            RaycastHit hit;
+            if (Physics.Raycast(transform.position, Vector3.down, out hit, groundCheckDistance, groundLayer))
+            {
+                isGrounded = true;
+            }
+        }
+
+        // 状态变化时的额外处理
+        if (wasGrounded != isGrounded)
+        {
+            if (isGrounded && showDebugInfo)
+                Debug.Log("豹子已落地");
+            else if (!isGrounded && showDebugInfo)
+                Debug.Log("豹子已离地");
+        }
+    }
+
+    // 添加一些辅助方法供外部调用
+    public void ForceIdle()
+    {
+        if (animator != null)
+        {
+            animator.SetFloat(speedParam, 0f);
+        }
+        currentSpeed = 0f;
+    }
+
+    public void ForceRun()
+    {
+        if (animator != null)
+        {
+            animator.SetFloat(speedParam, runSpeed);
+        }
+        currentSpeed = runSpeed;
+    }
+
+    // 调试信息
+    void OnDrawGizmosSelected()
+    {
+        if (showDebugInfo)
+        {
+            // 绘制地面检测线
+            Gizmos.color = Color.yellow;
+            Gizmos.DrawLine(transform.position, transform.position + Vector3.down * groundCheckDistance);
+
+            // 绘制移动方向
+            if (Application.isPlaying)
+            {
+                Gizmos.color = Color.blue;
+                Gizmos.DrawLine(transform.position, transform.position + moveDirection.normalized * 2f);
+            }
+        }
+    }
+
+    // 确保接口实现正确
+    void TestInterface()
+    {
+        Debug.Log($"这个对象实现了IPossessable: {this is IPossessable}");
+        Debug.Log($"能力描述: {GetAbilityDescription()}");
     }
 }

@@ -5,15 +5,18 @@ public class PlayerSoulController : MonoBehaviour
 {
     [Header("移动设置")]
     public float moveSpeed = 5f;
-    public float possessionRange = 3f;
+    public float possessionRange = 5f; // 增加范围
 
     [Header("跳跃设置")]
     public float jumpForce = 5.0f;
     public float gravity = -9.81f;
 
     [Header("粒子系统引用")]
-    public ParticleSystem soulParticles; // 添加粒子系统引用
-    public SoulAppearanceController soulAppearance; // 可选的外观控制器
+    public ParticleSystem soulParticles;
+    public SoulAppearanceController soulAppearance;
+
+    [Header("附身设置")]
+    public LayerMask possessableLayerMask = -1; // 改为public，可在Inspector设置
 
     // 移动和跳跃相关变量
     private Vector3 playerVelocity;
@@ -33,11 +36,20 @@ public class PlayerSoulController : MonoBehaviour
     // 视角切换
     private CameraController cameraController;
 
-    private int possessableLayerMask;
+    // 新增：调试信息
+    [Header("调试")]
+    public bool debugMode = true;
 
     private void Awake()
     {
+        // 确保有CharacterController组件
         characterController = GetComponent<CharacterController>();
+        if (characterController == null)
+        {
+            characterController = gameObject.AddComponent<CharacterController>();
+            Debug.Log("灵魂: 自动添加CharacterController组件");
+        }
+
         playerInputActions = new PlayerInputActions();
     }
 
@@ -48,30 +60,33 @@ public class PlayerSoulController : MonoBehaviour
         if (cameraController != null)
         {
             cameraController.SetTarget(transform);
-            Debug.Log("相机控制器找到并设置目标");
+            if (debugMode) Debug.Log("相机控制器找到并设置目标");
         }
         else
         {
             Debug.LogError("未找到相机控制器！请确保主相机上有 CameraController 组件");
         }
 
-        // 如果没有手动指定粒子系统，尝试自动获取
+        // 粒子系统
         if (soulParticles == null)
         {
             soulParticles = GetComponentInChildren<ParticleSystem>();
-            if (soulParticles == null)
-            {
-                Debug.LogWarning("未找到粒子系统引用，请手动指定");
-            }
         }
 
-        // 如果没有手动指定外观控制器，尝试自动获取
+        // 外观控制器
         if (soulAppearance == null)
         {
             soulAppearance = GetComponent<SoulAppearanceController>();
         }
 
-        possessableLayerMask = LayerMask.GetMask("Default", "Possessable");
+        // 如果LayerMask未设置，使用默认值
+        if (possessableLayerMask.value == 0)
+        {
+            possessableLayerMask = LayerMask.GetMask("Default");
+            if (debugMode) Debug.Log($"使用默认LayerMask: {possessableLayerMask.value}");
+        }
+
+        if (debugMode) Debug.Log($"灵魂控制器初始化完成 - 位置: {transform.position}");
     }
 
     private void OnEnable()
@@ -90,13 +105,11 @@ public class PlayerSoulController : MonoBehaviour
         playerInputActions.Player.Disable();
     }
 
-    // 移动输入回调
     private void OnMove(InputAction.CallbackContext context)
     {
         currentMovementInput = context.ReadValue<Vector2>();
     }
 
-    // 跳跃输入回调
     private void OnJump(InputAction.CallbackContext context)
     {
         if (context.performed)
@@ -107,7 +120,7 @@ public class PlayerSoulController : MonoBehaviour
 
     void Update()
     {
-        // 附身/脱离输入检测 - 移到最前面，确保任何状态下都能检测
+        // 附身/脱离输入检测
         if (Input.GetKeyDown(KeyCode.E))
         {
             if (!isPossessing)
@@ -134,6 +147,8 @@ public class PlayerSoulController : MonoBehaviour
 
     private void HandleMovementAndJump()
     {
+        if (characterController == null) return;
+
         isGrounded = characterController.isGrounded;
 
         if (isGrounded && playerVelocity.y < 0)
@@ -141,7 +156,7 @@ public class PlayerSoulController : MonoBehaviour
             playerVelocity.y = -0.5f;
         }
 
-        // 获取相机的当前水平旋转角度
+        // 获取相机旋转
         float cameraYRotation = 0f;
         if (cameraController != null)
         {
@@ -151,30 +166,30 @@ public class PlayerSoulController : MonoBehaviour
         // 将输入方向转换为相对于相机视角的方向
         Vector3 moveDirection = new Vector3(currentMovementInput.x, 0, currentMovementInput.y);
 
-        // 创建基于相机Y轴旋转的旋转四元数
-        Quaternion cameraRotation = Quaternion.Euler(0, cameraYRotation, 0);
+        if (moveDirection.magnitude > 0.1f)
+        {
+            Quaternion cameraRotation = Quaternion.Euler(0, cameraYRotation, 0);
+            moveDirection = cameraRotation * moveDirection;
 
-        // 将移动方向转换为世界空间，相对于相机视角
-        moveDirection = cameraRotation * moveDirection;
+            // 应用移动
+            characterController.Move(moveDirection * moveSpeed * Time.deltaTime);
+        }
 
-        // 应用移动
-        characterController.Move(moveDirection * moveSpeed * Time.deltaTime);
-
+        // 跳跃
         if (jumpTriggered && isGrounded)
         {
             playerVelocity.y = Mathf.Sqrt(jumpForce * -2f * gravity);
             jumpTriggered = false;
         }
 
+        // 应用重力
         playerVelocity.y += gravity * Time.deltaTime;
         characterController.Move(playerVelocity * Time.deltaTime);
     }
 
     void AttemptPossession()
     {
-        Debug.Log("=== 尝试附身 ===");
-        Debug.Log($"灵魂位置: {transform.position}");
-        Debug.Log($"附身范围: {possessionRange}");
+        if (debugMode) Debug.Log("=== 尝试附身 ===");
 
         // 可视化附身范围
         Debug.DrawRay(transform.position, Vector3.up * possessionRange, Color.red, 2f);
@@ -184,17 +199,19 @@ public class PlayerSoulController : MonoBehaviour
         Debug.DrawRay(transform.position, Vector3.forward * possessionRange, Color.red, 2f);
         Debug.DrawRay(transform.position, Vector3.back * possessionRange, Color.red, 2f);
 
-        Collider[] hitColliders = Physics.OverlapSphere(transform.position, possessionRange);
+        // 检测范围内的所有碰撞体
+        Collider[] hitColliders = Physics.OverlapSphere(transform.position, possessionRange, possessableLayerMask);
 
-        Debug.Log($"检测到 {hitColliders.Length} 个碰撞体");
+        if (debugMode) Debug.Log($"检测到 {hitColliders.Length} 个碰撞体（在指定层中）");
 
         if (hitColliders.Length == 0)
         {
-            Debug.LogWarning("没有检测到任何碰撞体！可能原因：");
-            Debug.LogWarning("1. 鸟没有Collider组件");
-            Debug.LogWarning("2. possessionRange太小");
-            Debug.LogWarning("3. 鸟在另一个Layer上（被忽略）");
-            Debug.LogWarning("4. 鸟太远（检查Y轴高度差）");
+            if (debugMode)
+            {
+                Debug.LogWarning("没有检测到任何可附身的碰撞体！");
+                Debug.LogWarning($"检测范围: 半径={possessionRange}, 层={LayerMask.LayerToName(possessableLayerMask.value)}");
+                Debug.LogWarning($"灵魂位置: {transform.position}");
+            }
             return;
         }
 
@@ -207,96 +224,90 @@ public class PlayerSoulController : MonoBehaviour
             GameObject obj = hitCollider.gameObject;
             float distance = Vector3.Distance(transform.position, obj.transform.position);
 
-            Debug.Log($"--- 检测到: {obj.name} ---");
-            Debug.Log($"  距离: {distance:F2}");
-            Debug.Log($"  位置: {obj.transform.position}");
-            Debug.Log($"  层级: {LayerMask.LayerToName(obj.layer)}");
-            Debug.Log($"  是否有Collider: {obj.GetComponent<Collider>() != null}");
-
-            // 打印所有组件
-            Component[] components = obj.GetComponents<Component>();
-            Debug.Log($"  组件数量: {components.Length}");
-            foreach (Component comp in components)
+            if (debugMode)
             {
-                Debug.Log($"    - {comp.GetType().Name}");
+                Debug.Log($"--- 检测到: {obj.name} ---");
+                Debug.Log($"  距离: {distance:F2}");
+                Debug.Log($"  位置: {obj.transform.position}");
+                Debug.Log($"  层级: {LayerMask.LayerToName(obj.layer)}");
             }
 
-            // 检查CharacterController组件
-            CharacterController charController = obj.GetComponent<CharacterController>();
-            if (charController != null)
-            {
-                Debug.Log($"  ✓ 有CharacterController组件");
-            }
-
-            // 方法1: 直接获取BirdController
-            BirdController birdController = obj.GetComponent<BirdController>();
-            if (birdController != null)
-            {
-                Debug.Log($"  ✓ 直接找到BirdController组件！");
-                if (distance < closestDistance)
-                {
-                    closestDistance = distance;
-                    closestObject = obj;
-                    closestPossessable = birdController; // BirdController实现了IPossessable
-                    Debug.Log($"  ✓ 选择这个鸟作为目标");
-                }
-                continue;
-            }
-
-            // 方法2: 尝试获取IPossessable接口
+            // 方法1: 检查IPossessable接口（应该能同时检测BirdController和LeopardController）
             IPossessable possessable = obj.GetComponent<IPossessable>();
             if (possessable != null)
             {
-                Debug.Log($"  ✓ 找到IPossessable接口！类型: {possessable.GetType().Name}");
+                if (debugMode) Debug.Log($"  ✓ 找到IPossessable接口！类型: {possessable.GetType().Name}");
+
+                // 特殊检查：如果是LeopardController，确保它有必要的组件
+                if (possessable is LeopardController leopard)
+                {
+                    if (debugMode) Debug.Log($"  ✓ 这是LeopardController，检查组件状态...");
+
+                    // 检查LeopardController的必要组件
+                    CharacterController cc = obj.GetComponent<CharacterController>();
+                    Animator anim = obj.GetComponent<Animator>();
+
+                    if (cc == null)
+                    {
+                        if (debugMode) Debug.Log($"  ✗ LeopardController缺少CharacterController组件");
+                        continue;
+                    }
+
+                    if (!cc.enabled && !leopard.isPossessed)
+                    {
+                        if (debugMode) Debug.Log($"  ✓ CharacterController已禁用（符合预期）");
+                    }
+                }
+
                 if (distance < closestDistance)
                 {
                     closestDistance = distance;
                     closestObject = obj;
                     closestPossessable = possessable;
-                    Debug.Log($"  ✓ 选择这个可附身对象");
+                    if (debugMode) Debug.Log($"  ✓ 选择这个对象作为目标");
                 }
                 continue;
             }
 
-            // 方法3: 在子对象中查找
-            birdController = obj.GetComponentInChildren<BirdController>();
-            if (birdController != null)
+            // 方法2: 在子对象中查找IPossessable
+            possessable = obj.GetComponentInChildren<IPossessable>();
+            if (possessable != null)
             {
-                Debug.Log($"  ✓ 在子对象中找到BirdController组件！");
+                if (debugMode) Debug.Log($"  ✓ 在子对象中找到IPossessable接口！类型: {possessable.GetType().Name}");
                 if (distance < closestDistance)
                 {
                     closestDistance = distance;
                     closestObject = obj;
-                    closestPossessable = birdController;
+                    closestPossessable = possessable;
                 }
                 continue;
             }
 
-            // 方法4: 在父对象中查找
-            birdController = obj.GetComponentInParent<BirdController>();
-            if (birdController != null)
+            // 方法3: 在父对象中查找IPossessable
+            possessable = obj.GetComponentInParent<IPossessable>();
+            if (possessable != null)
             {
-                Debug.Log($"  ✓ 在父对象中找到BirdController组件！");
+                if (debugMode) Debug.Log($"  ✓ 在父对象中找到IPossessable接口！类型: {possessable.GetType().Name}");
                 if (distance < closestDistance)
                 {
                     closestDistance = distance;
                     closestObject = obj;
-                    closestPossessable = birdController;
+                    closestPossessable = possessable;
                 }
                 continue;
             }
 
-            Debug.Log($"  ✗ 没有找到BirdController或IPossessable组件");
+            if (debugMode) Debug.Log($"  ✗ 没有找到IPossessable组件");
         }
 
         if (closestObject != null && closestPossessable != null)
         {
-            Debug.Log($"最终选择附身对象: {closestObject.name}");
+            if (debugMode) Debug.Log($"最终选择附身对象: {closestObject.name} (距离: {closestDistance:F2})");
             PossessObject(closestObject, closestPossessable);
         }
         else
         {
-            Debug.LogWarning("没有找到可附身的对象");
+            if (debugMode) Debug.LogWarning("没有找到可附身的对象（有碰撞体但没有IPossessable接口）");
         }
     }
 
@@ -305,16 +316,20 @@ public class PlayerSoulController : MonoBehaviour
         currentPossessedObject = target;
         currentPossessable = possessable;
 
-        Debug.Log($"准备附身到: {target.name}");
+        if (debugMode) Debug.Log($"准备附身到: {target.name} (类型: {possessable.GetType().Name})");
 
         // 调用附身方法
         currentPossessable.OnPossess();
         isPossessing = true;
 
         // 隐藏灵魂
-        GetComponent<Renderer>().enabled = false;
-        GetComponent<Collider>().enabled = false;
-        characterController.enabled = false;
+        Renderer renderer = GetComponent<Renderer>();
+        if (renderer != null) renderer.enabled = false;
+
+        Collider collider = GetComponent<Collider>();
+        if (collider != null) collider.enabled = false;
+
+        if (characterController != null) characterController.enabled = false;
 
         // 隐藏粒子系统
         HideSoulParticles();
@@ -323,10 +338,10 @@ public class PlayerSoulController : MonoBehaviour
         if (cameraController != null)
         {
             cameraController.SetTarget(currentPossessedObject.transform);
-            Debug.Log("相机目标切换到: " + currentPossessedObject.name);
+            if (debugMode) Debug.Log("相机目标切换到: " + currentPossessedObject.name);
         }
 
-        Debug.Log("成功附身！");
+        if (debugMode) Debug.Log("成功附身！");
     }
 
     void ReleasePossession()
@@ -336,45 +351,48 @@ public class PlayerSoulController : MonoBehaviour
             currentPossessable.OnRelease();
 
             // 显示灵魂并移动到被附身对象的位置
-            GetComponent<Renderer>().enabled = true;
-            GetComponent<Collider>().enabled = true;
-            transform.position = currentPossessedObject.transform.position + Vector3.up * 1f; // 稍微上方一点
-            characterController.enabled = true;
+            Renderer renderer = GetComponent<Renderer>();
+            if (renderer != null) renderer.enabled = true;
 
-            // 新增：显示粒子系统并确保位置正确
+            Collider collider = GetComponent<Collider>();
+            if (collider != null) collider.enabled = true;
+
+            // 将灵魂放在被附身对象上方
+            if (currentPossessedObject != null)
+            {
+                transform.position = currentPossessedObject.transform.position + Vector3.up * 2f;
+            }
+
+            if (characterController != null) characterController.enabled = true;
+
+            // 显示粒子系统
             ShowSoulParticles();
 
             // 切换相机目标回灵魂
             if (cameraController != null)
             {
                 cameraController.SetTarget(transform);
-                Debug.Log("相机目标切换回灵魂");
+                if (debugMode) Debug.Log("相机目标切换回灵魂");
             }
 
             currentPossessedObject = null;
             currentPossessable = null;
             isPossessing = false;
+
+            if (debugMode) Debug.Log("已脱离附身");
         }
     }
 
-    // 新增：隐藏粒子系统的方法
     void HideSoulParticles()
     {
-        // 方法1：通过粒子系统组件
         if (soulParticles != null)
         {
             soulParticles.gameObject.SetActive(false);
-            Debug.Log("隐藏粒子系统");
         }
-
-        // 方法2：通过外观控制器（如果有）
         else if (soulAppearance != null)
         {
             soulAppearance.HideSoul();
-            Debug.Log("通过外观控制器隐藏灵魂");
         }
-
-        // 方法3：如果没有指定引用，尝试自动查找并禁用所有粒子系统
         else
         {
             ParticleSystem[] allParticles = GetComponentsInChildren<ParticleSystem>();
@@ -382,27 +400,19 @@ public class PlayerSoulController : MonoBehaviour
             {
                 ps.gameObject.SetActive(false);
             }
-            if (allParticles.Length > 0)
-            {
-                Debug.Log("自动查找到并隐藏了 " + allParticles.Length + " 个粒子系统");
-            }
         }
     }
 
-    // 新增：显示粒子系统的方法
     void ShowSoulParticles()
     {
-        // 确保灵魂位置正确
         if (soulParticles != null)
         {
             soulParticles.transform.position = transform.position;
             soulParticles.gameObject.SetActive(true);
-            Debug.Log("显示粒子系统");
         }
         else if (soulAppearance != null)
         {
             soulAppearance.ShowSoul();
-            Debug.Log("通过外观控制器显示灵魂");
         }
         else
         {
@@ -412,10 +422,6 @@ public class PlayerSoulController : MonoBehaviour
                 ps.gameObject.SetActive(true);
                 ps.transform.position = transform.position;
             }
-            if (allParticles.Length > 0)
-            {
-                Debug.Log("自动查找到并显示了 " + allParticles.Length + " 个粒子系统");
-            }
         }
     }
 
@@ -423,9 +429,12 @@ public class PlayerSoulController : MonoBehaviour
     {
         Gizmos.color = Color.yellow;
         Gizmos.DrawWireSphere(transform.position, possessionRange);
+
+        // 绘制检测范围的可视化
+        Gizmos.color = new Color(1, 1, 0, 0.2f);
+        Gizmos.DrawSphere(transform.position, possessionRange);
     }
 
-    // 在 PlayerSoulController 类中添加这个方法
     public void ForceReleasePossession()
     {
         if (isPossessing)
