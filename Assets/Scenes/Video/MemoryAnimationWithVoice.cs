@@ -7,7 +7,10 @@ using TMPro;
 public class MemoryAnimationWithVoice : MonoBehaviour
 {
     [Header("===== 图片UI =====")]
-    public RawImage[] memoryImgs; // Img_01~Img_07
+    public RawImage[] memoryImgs; // Img_01~Img_07（主图）
+
+    [Header("===== 片段2分帧图片（单独赋值） =====")]
+    public Texture2D[] memory02Frames; // 片段2的3张分帧图（拖入即可）
 
     [Header("===== 特效UI =====")]
     public RawImage flashWhite;
@@ -19,24 +22,38 @@ public class MemoryAnimationWithVoice : MonoBehaviour
     public TMP_Text subtitleText;
     [Tooltip("打字机音效时长（秒），需和裁剪后的音效一致")]
     public float typewriterSoundLength = 0.1f;
-    [Tooltip("打字速度（秒/字），必须和音效时长一致")]
-    public float typewriterSpeed = 0.1f;
 
     [Header("===== 声音素材 =====")]
     public AudioSource bgmSource;
-    public AudioClip bgmClip; // 新增：BGM音频clip，手动拖入
-    public AudioClip typewriterKey; // 打字机单按键音效
-    public AudioClip voice_07;      // 最后一张图人声
-    public AudioClip soldierShout;  // 场景音效
+    public AudioClip bgmClip;
+    public AudioClip typewriterKey;
+    public AudioClip voice_07;
+    public AudioClip soldierShout;
     public AudioClip spiritRoar;
     public AudioClip breath;
     public AudioClip wind;
     public AudioClip drawSword;
 
-    [Header("===== 配置参数 =====")]
+    [Header("===== 音量配置（统一放大特效声） =====")]
     public float bgmBaseVolume = 1f;
+    public float typewriterVolume = 1.0f; // 打字机音量（原0.5）
+    public float soldierShoutVolume = 30f; // 士兵呐喊（原20）
+    public float spiritRoarVolume = 20f; // 灵体咆哮（原10）
+    public float breathVolume = 100f; // 呼吸声（原20）
+    public float windVolume = 100f; // 风声（原50）
+    public float drawSwordVolume = 100f; // 拔剑声（原50）
+    public float voice07Volume = 2.0f; // 最后人声（原1）
+
+    [Header("===== 动画配置 =====")]
     [Tooltip("第7张图BGM淡出时长（秒）")]
-    public float bgmFadeOutDuration = 2f; // BGM逐渐变小的时长，可调整
+    public float bgmFadeOutDuration = 2f;
+    [Tooltip("片段间过渡时长（秒），控制流畅度，0=无缝")]
+    public float transitionSmoothTime = 0.1f; // 过渡时长，建议0.1-0.2
+    [Tooltip("第三张图灵体光效最大透明度（0-1），调大更明显")]
+    public float spiritLightMaxAlpha = 1.0f; // 原0.8，增大为1.0
+    [Tooltip("第一张→第二张闪白特效时长（秒）")]
+    public float flashWhiteDuration = 0.08f; // 闪白持续时间
+
     public string[] subtitleContents = new string[]
     {
         "我最开心的一天，是国王将守护国家的使命托付于我。那一刻，我感到前所未有的荣耀，也在心中立下誓言——此生追随陛下，至死不渝！",
@@ -54,16 +71,16 @@ public class MemoryAnimationWithVoice : MonoBehaviour
         // 初始化打字机AudioSource
         typewriterSource = gameObject.AddComponent<AudioSource>();
         typewriterSource.clip = typewriterKey;
-        typewriterSource.volume = 0.5f;
+        typewriterSource.volume = typewriterVolume;
 
         HideAllUI();
-        // 初始化BGM（直接用手动拖入的clip，删掉Resources.Load）
+        // 初始化BGM
         if (bgmSource != null && bgmClip != null)
         {
             bgmSource.clip = bgmClip;
             bgmSource.volume = bgmBaseVolume;
-            bgmSource.loop = true; // 开启循环，确保BGM一直播
-            bgmSource.Play(); // 初始黑屏阶段就开始播放
+            bgmSource.loop = true;
+            bgmSource.Play();
             Debug.Log("BGM开始播放：" + bgmClip.name);
         }
         else
@@ -76,7 +93,16 @@ public class MemoryAnimationWithVoice : MonoBehaviour
 
     void HideAllUI()
     {
-        foreach (var img in memoryImgs) if (img != null) img.enabled = false;
+        foreach (var img in memoryImgs)
+        {
+            if (img != null)
+            {
+                img.enabled = false;
+                img.color = Color.white;
+                img.rectTransform.localScale = Vector3.one;
+                img.rectTransform.anchoredPosition = Vector2.zero;
+            }
+        }
         if (flashWhite != null) flashWhite.enabled = false;
         if (flashBlack != null) flashBlack.enabled = false;
         if (spiritLight != null) spiritLight.enabled = false;
@@ -101,25 +127,21 @@ public class MemoryAnimationWithVoice : MonoBehaviour
 
         for (int i = 0; i < content.Length; i++)
         {
-            // 播放打字机音效（精准同步）
+            // 播放打字机音效（放大音量）
             if (typewriterKey != null)
             {
-                typewriterSource.PlayOneShot(typewriterKey, 0.5f);
+                typewriterSource.PlayOneShot(typewriterKey, typewriterVolume);
             }
 
-            // 显示1个字
             sb.Append(content[i]);
             subtitleText.text = sb.ToString();
-
-            // 等待和音效时长一致的时间
             yield return new WaitForSeconds(typewriterSoundLength);
         }
     }
 
     /// <summary>
-    /// BGM淡出效果：音量从当前值逐渐降到0
+    /// BGM淡出效果
     /// </summary>
-    /// <param name="duration">淡出时长</param>
     IEnumerator FadeOutBGM(float duration)
     {
         if (bgmSource == null) yield break;
@@ -130,24 +152,73 @@ public class MemoryAnimationWithVoice : MonoBehaviour
         while (timer < duration)
         {
             timer += Time.deltaTime;
-            // 线性插值：从startVolume降到0
             bgmSource.volume = Mathf.Lerp(startVolume, 0, timer / duration);
             yield return null;
         }
 
-        // 淡出完成后，强制音量为0并停止BGM
         bgmSource.volume = 0;
         bgmSource.Stop();
     }
 
+    /// <summary>
+    /// 转场闪黑（无缝衔接版）
+    /// </summary>
+    IEnumerator PlayFlashBlack()
+    {
+        if (flashBlack == null) yield break;
+        flashBlack.enabled = true;
+        flashBlack.color = new Color(0, 0, 0, 0);
+
+        float timer = 0;
+        while (timer < 0.3f)
+        {
+            timer += Time.deltaTime;
+            float alpha = timer < 0.15f ? timer / 0.15f : 1 - (timer - 0.15f) / 0.15f;
+            flashBlack.color = new Color(0, 0, 0, alpha);
+            yield return null;
+        }
+        flashBlack.enabled = false;
+    }
+
+    /// <summary>
+    /// 转场渐亮（无缝衔接版）
+    /// </summary>
+    IEnumerator PlayFadeInWhite()
+    {
+        if (flashWhite == null) yield break;
+        flashWhite.enabled = true;
+        flashWhite.color = new Color(1, 1, 1, 1);
+
+        float timer = 0;
+        while (timer < 0.5f)
+        {
+            timer += Time.deltaTime;
+            float alpha = 1 - timer / 0.5f;
+            flashWhite.color = new Color(1, 1, 1, alpha);
+            yield return null;
+        }
+        flashWhite.enabled = false;
+    }
+
+    /// <summary>
+    /// 瞬间闪白特效（用于第一张→第二张转场）
+    /// </summary>
+    IEnumerator PlayInstantFlashWhite()
+    {
+        if (flashWhite == null) yield break;
+        flashWhite.enabled = true;
+        flashWhite.color = new Color(1, 1, 1, 1); // 纯白不透明
+        yield return new WaitForSeconds(flashWhiteDuration); // 闪白时长可在Inspector调整
+        flashWhite.enabled = false;
+    }
+
     IEnumerator PlayFullAnimation()
     {
-        // 0秒：初始黑屏（BGM已在Start中播放）
+        // 0秒：初始黑屏（BGM已播放）
         yield return new WaitForSeconds(1f);
 
-        // 1秒：片段1 - 荣耀时刻
+        // ===================== 片段1：荣耀时刻 =====================
         if (memoryImgs[0] != null) memoryImgs[0].enabled = true;
-
         // 图片放大特效
         float timer = 0;
         while (timer < 0.5f)
@@ -157,88 +228,65 @@ public class MemoryAnimationWithVoice : MonoBehaviour
             if (memoryImgs[0] != null) memoryImgs[0].rectTransform.localScale = new Vector3(scale, scale, 1f);
             yield return null;
         }
-
-        // 打字机字幕
+        // 字幕播放（无额外等待，播完直接过渡）
         if (subtitleContents.Length > 0)
         {
             yield return StartCoroutine(PlayTypewriterSubtitle(subtitleContents[0]));
         }
-        yield return new WaitForSeconds(1f);
+        // 第一段→第二段：隐藏当前图 + 闪白特效 + 短过渡
         if (memoryImgs[0] != null) memoryImgs[0].enabled = false;
         if (subtitleText != null) subtitleText.enabled = false;
+        yield return StartCoroutine(PlayInstantFlashWhite()); // 恢复闪白特效
+        yield return new WaitForSeconds(transitionSmoothTime); // 仅0.1秒过渡，无空白
 
-        // 3.5秒：转场1 - 闪白
-        if (flashWhite != null)
-        {
-            flashWhite.enabled = true;
-            flashWhite.color = new Color(1, 1, 1, 0);
-            timer = 0;
-            while (timer < 0.2f)
-            {
-                timer += Time.deltaTime;
-                float alpha = timer < 0.1f ? timer / 0.1f : 1 - (timer - 0.1f) / 0.1f;
-                flashWhite.color = new Color(1, 1, 1, alpha);
-                yield return null;
-            }
-            flashWhite.enabled = false;
-        }
-
-        // 3.7秒：片段2 - 责任
-        for (int i = 0; i < 3; i++)
-        {
-            if (memoryImgs[1] != null)
-            {
-                memoryImgs[1].texture = Resources.Load<Texture2D>($"Textures/Memory_02_Part{i + 1}");
-                memoryImgs[1].enabled = true;
-                if (i == 0 && soldierShout != null)
-                {
-                    AudioSource.PlayClipAtPoint(soldierShout, Vector3.zero, 0.7f);
-                }
-                yield return new WaitForSeconds(0.5f);
-                memoryImgs[1].enabled = false;
-            }
-        }
-
+        // ===================== 片段2：责任 =====================
         if (memoryImgs[1] != null)
         {
-            memoryImgs[1].texture = Resources.Load<Texture2D>("Textures/Memory_02");
+            // 播放3张分帧图（无空白）
+            for (int i = 0; i < 3; i++)
+            {
+                if (memory02Frames.Length > i && memory02Frames[i] != null)
+                {
+                    memoryImgs[1].texture = memory02Frames[i];
+                    memoryImgs[1].enabled = true;
+                    // 放大士兵呐喊音量
+                    if (i == 0 && soldierShout != null)
+                    {
+                        AudioSource.PlayClipAtPoint(soldierShout, Vector3.zero, soldierShoutVolume);
+                    }
+                    yield return new WaitForSeconds(0.5f);
+                    memoryImgs[1].enabled = false;
+                }
+                else
+                {
+                    yield return new WaitForSeconds(0.5f);
+                }
+            }
+            // 显示主图
             memoryImgs[1].enabled = true;
         }
+        // 字幕播放
         if (subtitleContents.Length > 1)
         {
             yield return StartCoroutine(PlayTypewriterSubtitle(subtitleContents[1]));
         }
-        yield return new WaitForSeconds(1f);
+        // 转场闪黑（和隐藏图片同步，无空白）
+        yield return StartCoroutine(PlayFlashBlack());
         if (memoryImgs[1] != null) memoryImgs[1].enabled = false;
         if (subtitleText != null) subtitleText.enabled = false;
 
-        // 6.2秒：转场2 - 闪黑
-        if (flashBlack != null)
-        {
-            flashBlack.enabled = true;
-            flashBlack.color = new Color(0, 0, 0, 0);
-            timer = 0;
-            while (timer < 0.3f)
-            {
-                timer += Time.deltaTime;
-                float alpha = timer < 0.15f ? timer / 0.15f : 1 - (timer - 0.15f) / 0.15f;
-                flashBlack.color = new Color(0, 0, 0, alpha);
-                yield return null;
-            }
-            flashBlack.enabled = false;
-        }
-
-        // 6.5秒：片段3 - 灾难
+        // ===================== 片段3：灾难 =====================
         if (memoryImgs[2] != null) memoryImgs[2].enabled = true;
         if (spiritLight != null) spiritLight.enabled = true;
-
+        // 灵体光效（增大透明度，可在Inspector调整）
         timer = 0;
         while (timer < 1f)
         {
             timer += Time.deltaTime;
             if (spiritLight != null)
             {
-                float lightAlpha = Mathf.PingPong(timer * 3, 0.8f);
+                // 最大透明度改为可配置的spiritLightMaxAlpha（默认1.0）
+                float lightAlpha = Mathf.PingPong(timer * 3, spiritLightMaxAlpha);
                 spiritLight.color = new Color(1, 1, 1, lightAlpha);
             }
             if (memoryImgs[2] != null)
@@ -248,21 +296,23 @@ public class MemoryAnimationWithVoice : MonoBehaviour
             }
             yield return null;
         }
-
-        if (spiritRoar != null) AudioSource.PlayClipAtPoint(spiritRoar, Vector3.zero, 0.9f);
+        // 放大灵体咆哮音量
+        if (spiritRoar != null) AudioSource.PlayClipAtPoint(spiritRoar, Vector3.zero, spiritRoarVolume);
+        // 字幕播放
         if (subtitleContents.Length > 2)
         {
             yield return StartCoroutine(PlayTypewriterSubtitle(subtitleContents[2]));
         }
-        yield return new WaitForSeconds(1.5f);
+        // 无缝隐藏
         if (memoryImgs[2] != null) memoryImgs[2].enabled = false;
         if (spiritLight != null) spiritLight.enabled = false;
         if (subtitleText != null) subtitleText.enabled = false;
+        yield return new WaitForSeconds(transitionSmoothTime);
 
-        // 10秒：片段4 - 绝望
+        // ===================== 片段4：绝望 =====================
         if (memoryImgs[3] != null) memoryImgs[3].enabled = true;
         if (crack != null) crack.enabled = true;
-
+        // 抖动特效
         timer = 0;
         while (timer < 0.5f)
         {
@@ -274,36 +324,22 @@ public class MemoryAnimationWithVoice : MonoBehaviour
             }
             yield return null;
         }
-
-        if (breath != null) AudioSource.PlayClipAtPoint(breath, Vector3.zero, 1.6f);
+        // 放大呼吸声音量
+        if (breath != null) AudioSource.PlayClipAtPoint(breath, Vector3.zero, breathVolume);
+        // 字幕播放
         if (subtitleContents.Length > 3)
         {
             yield return StartCoroutine(PlayTypewriterSubtitle(subtitleContents[3]));
         }
-        yield return new WaitForSeconds(1f);
+        // 转场渐亮（同步隐藏，无空白）
+        yield return StartCoroutine(PlayFadeInWhite());
         if (memoryImgs[3] != null) memoryImgs[3].enabled = false;
         if (crack != null) crack.enabled = false;
         if (subtitleText != null) subtitleText.enabled = false;
 
-        // 12.5秒：转场3 - 渐亮
-        if (flashWhite != null)
-        {
-            flashWhite.enabled = true;
-            flashWhite.color = new Color(1, 1, 1, 1);
-            timer = 0;
-            while (timer < 0.5f)
-            {
-                timer += Time.deltaTime;
-                float alpha = 1 - timer / 0.5f;
-                flashWhite.color = new Color(1, 1, 1, alpha);
-                yield return null;
-            }
-            flashWhite.enabled = false;
-        }
-
-        // 13秒：片段5 - 坚守
+        // ===================== 片段5：坚守 =====================
         if (memoryImgs[4] != null) memoryImgs[4].enabled = true;
-
+        // 淡入特效
         timer = 0;
         while (timer < 1f)
         {
@@ -315,19 +351,21 @@ public class MemoryAnimationWithVoice : MonoBehaviour
             }
             yield return null;
         }
-
-        if (wind != null) AudioSource.PlayClipAtPoint(wind, Vector3.zero, 0.5f);
+        // 放大风声音量
+        if (wind != null) AudioSource.PlayClipAtPoint(wind, Vector3.zero, windVolume);
+        // 字幕播放
         if (subtitleContents.Length > 4)
         {
             yield return StartCoroutine(PlayTypewriterSubtitle(subtitleContents[4]));
         }
-        yield return new WaitForSeconds(1.5f);
+        // 无缝隐藏
         if (memoryImgs[4] != null) memoryImgs[4].enabled = false;
         if (subtitleText != null) subtitleText.enabled = false;
+        yield return new WaitForSeconds(transitionSmoothTime);
 
-        // 16.5秒：片段6 - 决心
+        // ===================== 片段6：决心 =====================
         if (memoryImgs[5] != null) memoryImgs[5].enabled = true;
-
+        // 放大特效
         timer = 0;
         while (timer < 1f)
         {
@@ -339,36 +377,34 @@ public class MemoryAnimationWithVoice : MonoBehaviour
             }
             yield return null;
         }
-
-        if (drawSword != null) AudioSource.PlayClipAtPoint(drawSword, Vector3.zero, 2f);
+        // 放大拔剑声音量
+        if (drawSword != null) AudioSource.PlayClipAtPoint(drawSword, Vector3.zero, drawSwordVolume);
+        // 字幕播放
         if (subtitleContents.Length > 5)
         {
             yield return StartCoroutine(PlayTypewriterSubtitle(subtitleContents[5]));
         }
-        yield return new WaitForSeconds(1f);
+        // 无缝隐藏
         if (memoryImgs[5] != null) memoryImgs[5].enabled = false;
         if (subtitleText != null) subtitleText.enabled = false;
+        yield return new WaitForSeconds(transitionSmoothTime);
 
-        // 19.5秒：片段7 - 结尾（黑色图）
+        // ===================== 片段7：结尾 =====================
         if (memoryImgs[6] != null) memoryImgs[6].enabled = true;
-
-        // 启动BGM淡出协程（逐渐变小）
+        // BGM淡出
         StartCoroutine(FadeOutBGM(bgmFadeOutDuration));
-
-        if (voice_07 != null) AudioSource.PlayClipAtPoint(voice_07, Vector3.zero, 1f);
+        // 放大最后人声音量
+        if (voice_07 != null) AudioSource.PlayClipAtPoint(voice_07, Vector3.zero, voice07Volume);
         if (subtitleText != null)
         {
             subtitleText.enabled = true;
             subtitleText.text = "我的国王啊！快醒醒吧…";
         }
-
-        // 等待淡出完成+人声播放完毕（总时长=淡出时长+1秒缓冲）
+        // 等待淡出完成
         yield return new WaitForSeconds(bgmFadeOutDuration + 1f);
         if (memoryImgs[6] != null) memoryImgs[6].enabled = false;
         if (subtitleText != null) subtitleText.enabled = false;
 
         Debug.Log("动画播放完成！");
-        // 可选：返回主菜单
-        // SceneManager.LoadScene("MainMenu");
     }
 }
