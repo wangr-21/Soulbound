@@ -12,13 +12,20 @@ public class ChestController1 : MonoBehaviour
 
     void Update()
     {
-        // 鼠标左键点击未打开的Chest1
-        if (Input.GetMouseButtonDown(0) && !isOpened)
+        // 仅当宝箱未打开时，检测O键输入
+        if (!isOpened)
         {
-            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-            if (Physics.Raycast(ray, out RaycastHit hit) && hit.collider.gameObject == this.gameObject)
+            if (Input.GetKeyDown(KeyCode.O))
             {
-                OpenPuzzlePanel();
+                // 射线检测：瞄准宝箱才能触发
+                Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+                if (Physics.Raycast(ray, out RaycastHit hit))
+                {
+                    if (hit.collider.gameObject == this.gameObject)
+                    {
+                        OpenPuzzlePanel();
+                    }
+                }
             }
         }
     }
@@ -30,6 +37,7 @@ public class ChestController1 : MonoBehaviour
         {
             puzzlePanel1.SetActive(true);
             PuzzleManager1.Instance.StartPuzzle(this); // 通知拼图管理器启动谜题
+            isOpened = true; // 锁定宝箱，避免重复打开
         }
     }
 
