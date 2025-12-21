@@ -1,8 +1,8 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 
 public class LeopardController : MonoBehaviour, IPossessable
 {
-    [Header("ÒÆ¶¯ÉèÖÃ")]
+    [Header("ç§»åŠ¨è®¾ç½®")]
     public float walkSpeed = 3f;
     public float runSpeed = 6f;
     public float rotationSpeed = 8f;
@@ -10,28 +10,28 @@ public class LeopardController : MonoBehaviour, IPossessable
     public float groundCheckDistance = 0.3f;
     public LayerMask groundLayer = -1;
 
-    [Header("¶¯»­²ÎÊı")]
+    [Header("åŠ¨ç”»å‚æ•°")]
     public string speedParam = "Speed";
     public string isGroundedParam = "IsGrounded";
     public string jumpParam = "Jump";
 
-    [Header("ÄÜÁ¦ÃèÊö")]
-    public string abilityDescription = "¿ÉÒÔ¿ìËÙ±¼ÅÜºÍÌøÔ¾µÄ±ª×Ó";
+    [Header("èƒ½åŠ›æè¿°")]
+    public string abilityDescription = "å¯ä»¥å¿«é€Ÿå¥”è·‘å’Œè·³è·ƒçš„è±¹å­";
 
-    [Header("×´Ì¬")]
+    [Header("çŠ¶æ€")]
     public bool isPossessed = false;
     private bool isGrounded = true;
     private bool isJumping = false;
 
-    [Header("×é¼şÒıÓÃ")]
+    [Header("ç»„ä»¶å¼•ç”¨")]
     private Animator animator;
     private CharacterController controller;
     private Vector3 moveDirection = Vector3.zero;
 
-    [Header("µ÷ÊÔ")]
+    [Header("è°ƒè¯•")]
     public bool showDebugInfo = true;
 
-    // ÒÆ¶¯Ïà¹Ø
+    // ç§»åŠ¨ç›¸å…³
     private float currentSpeed = 0f;
     private Vector3 currentMovementInput = Vector3.zero;
     private float verticalVelocity = 0f;
@@ -39,31 +39,110 @@ public class LeopardController : MonoBehaviour, IPossessable
 
     void Start()
     {
-        // »ñÈ¡×é¼şÒıÓÃ
+        Debug.Log($"=== è±¹å­åˆå§‹åŒ–å¼€å§‹ ===");
+        Debug.Log($"è±¹å­å¯¹è±¡: {gameObject.name}");
+
+        // æ£€æŸ¥å¹¶ç¡®ä¿è„šæœ¬åªåœ¨æ­£ç¡®çš„å¯¹è±¡ä¸Šè¿è¡Œ
+        if (transform.parent != null)
+        {
+            Debug.Log($"çˆ¶å¯¹è±¡: {transform.parent.name}");
+        }
+
+        // è·å–ç»„ä»¶å¼•ç”¨
         animator = GetComponent<Animator>();
         controller = GetComponent<CharacterController>();
 
         if (animator == null)
         {
-            Debug.LogError("±ª×Ó¿ØÖÆÆ÷ĞèÒªAnimator×é¼ş£¡");
+            Debug.LogError("è±¹å­æ§åˆ¶å™¨éœ€è¦Animatorç»„ä»¶ï¼");
         }
 
         if (controller == null)
         {
-            Debug.LogError("±ª×Ó¿ØÖÆÆ÷ĞèÒªCharacterController×é¼ş£¡");
+            Debug.LogError("è±¹å­æ§åˆ¶å™¨éœ€è¦CharacterControllerç»„ä»¶ï¼");
         }
 
-        // ³õÊ¼ÉèÖÃÎª´ı»ú×´Ì¬
+        // åˆå§‹è®¾ç½®ä¸ºå¾…æœºçŠ¶æ€
         if (animator != null)
         {
             animator.SetFloat(speedParam, 0f);
             animator.SetBool(isGroundedParam, true);
         }
 
-        SetupCharacterController();
-}
+        // ç¡®ä¿æœ‰åˆé€‚çš„ç¢°æ’ä½“ç”¨äºæ£€æµ‹
+        SetupColliderForDetection();
 
-    void SetupCharacterController()
+        // ä¿®æ­£CharacterControllerè®¾ç½®
+        FixCharacterController();
+
+        // æ¥å£éªŒè¯
+        TestInterfaceImplementation();
+
+        Debug.Log($"=== è±¹å­åˆå§‹åŒ–å®Œæˆ ===");
+    }
+
+    void TestInterfaceImplementation()
+    {
+        Debug.Log("=== è±¹å­æ¥å£éªŒè¯ ===");
+        Debug.Log($"è„šæœ¬ç±»å‹: {GetType().FullName}");
+
+        // æ£€æŸ¥æ˜¯å¦å®ç°äº†IPossessableæ¥å£
+        System.Type[] interfaces = GetType().GetInterfaces();
+        Debug.Log($"å®ç°çš„æ¥å£æ•°é‡: {interfaces.Length}");
+
+        foreach (System.Type iface in interfaces)
+        {
+            Debug.Log($"æ¥å£: {iface.FullName}");
+            if (iface.Name == "IPossessable")
+            {
+                Debug.Log($"âœ“ ç¡®è®¤å®ç°äº†IPossessableæ¥å£ï¼");
+
+                // æ£€æŸ¥æ¥å£æ–¹æ³•æ˜¯å¦éƒ½å­˜åœ¨
+                var methods = iface.GetMethods();
+                Debug.Log($"æ¥å£æ–¹æ³•æ•°é‡: {methods.Length}");
+                foreach (var method in methods)
+                {
+                    Debug.Log($"  æ–¹æ³•: {method.Name}");
+                }
+            }
+        }
+
+        // ç›´æ¥æ£€æŸ¥
+        if (this is IPossessable)
+        {
+            Debug.Log("âœ“ this is IPossessable è¿”å› true");
+            Debug.Log($"èƒ½åŠ›æè¿°: {GetAbilityDescription()}");
+        }
+        else
+        {
+            Debug.LogError("âœ— this is IPossessable è¿”å› false");
+        }
+
+        Debug.Log("=== æ¥å£éªŒè¯ç»“æŸ ===");
+    }
+
+    void SetupColliderForDetection()
+    {
+        // æ·»åŠ ä¸€ä¸ªé¢å¤–çš„CapsuleColliderç”¨äºæ£€æµ‹ï¼ˆä¸ä½œä¸ºè§¦å‘å™¨ï¼‰
+        // è¿™æ ·çµé­‚æ§åˆ¶å™¨å¯ä»¥æ£€æµ‹åˆ°è±¹å­ï¼Œä½†ä¸ä¼šå½±å“ç‰©ç†ç¢°æ’
+        CapsuleCollider detectionCollider = GetComponent<CapsuleCollider>();
+
+        if (detectionCollider == null)
+        {
+            detectionCollider = gameObject.AddComponent<CapsuleCollider>();
+            Debug.Log("æ·»åŠ äº†CapsuleColliderç”¨äºé™„èº«æ£€æµ‹");
+        }
+
+        // è®¾ç½®åˆç†çš„ç¢°æ’ä½“å¤§å°
+        detectionCollider.center = new Vector3(0, 1, 0);
+        detectionCollider.height = 2f;
+        detectionCollider.radius = 0.5f;
+        detectionCollider.isTrigger = false; // ä¸è¦è®¾ä¸ºè§¦å‘å™¨ï¼Œå¦åˆ™ä¸ä¼šè¢«Physics.OverlapSphereæ£€æµ‹åˆ°
+
+        Debug.Log($"CapsuleColliderè®¾ç½®: Center={detectionCollider.center}, Height={detectionCollider.height}, Radius={detectionCollider.radius}");
+    }
+
+    void FixCharacterController()
     {
         if (controller == null)
         {
@@ -71,62 +150,63 @@ public class LeopardController : MonoBehaviour, IPossessable
             if (controller == null)
             {
                 controller = gameObject.AddComponent<CharacterController>();
+                Debug.Log("æ·»åŠ äº†CharacterControllerç»„ä»¶");
             }
         }
 
-        // ³¢ÊÔÕÒµ½Ä£ĞÍäÖÈ¾Æ÷À´»ñÈ¡´óĞ¡
-        MeshRenderer[] renderers = GetComponentsInChildren<MeshRenderer>();
-        if (renderers.Length > 0)
-        {
-            Bounds totalBounds = new Bounds(transform.position, Vector3.zero);
+        // å¼ºåˆ¶é‡ç½®CharacterControlleråˆ°åˆç†å€¼
+        controller.center = new Vector3(0, 1, 0);
+        controller.height = 2.0f;
+        controller.radius = 0.5f;
+        controller.slopeLimit = 45f;
+        controller.stepOffset = 0.3f;
+        controller.skinWidth = 0.08f;
+        controller.minMoveDistance = 0.001f;
 
-            foreach (MeshRenderer renderer in renderers)
+        Debug.Log($"CharacterControlleré‡ç½®:");
+        Debug.Log($"  Center: {controller.center}");
+        Debug.Log($"  Height: {controller.height}");
+        Debug.Log($"  Radius: {controller.radius}");
+    }
+
+    void OnDestroy()
+    {
+        // æ¸…ç†é‡å¤çš„è„šæœ¬
+        CleanUpDuplicateScripts();
+    }
+
+    void CleanUpDuplicateScripts()
+    {
+        // å¦‚æœè¿™æ˜¯å­å¯¹è±¡ä¸Šçš„è„šæœ¬ï¼Œè‡ªåŠ¨é”€æ¯å®ƒ
+        if (gameObject.name == "Leopard_Hybrid" && transform.parent != null)
+        {
+            if (transform.parent.GetComponent<LeopardController>() != null)
             {
-                totalBounds.Encapsulate(renderer.bounds);
+                Debug.LogWarning($"æ£€æµ‹åˆ°é‡å¤çš„LeopardControllerè„šæœ¬åœ¨ {gameObject.name} ä¸Šï¼Œè‡ªåŠ¨ç§»é™¤");
+                Destroy(this);
             }
-
-            // ½«ÊÀ½ç×ø±ê×ª»»Îª¾Ö²¿×ø±ê
-            Vector3 localCenter = transform.InverseTransformPoint(totalBounds.center);
-            Vector3 localSize = totalBounds.size;
-
-            // µ÷ÕûCharacterController
-            controller.center = new Vector3(0, localCenter.y, 0); // ±£³ÖXºÍZÎª0
-            controller.height = localSize.y * 0.8f; // ÉÔÎ¢Ğ¡ÓÚÄ£ĞÍ¸ß¶È
-            controller.radius = Mathf.Max(localSize.x, localSize.z) * 0.5f * 0.7f; // °ë¾¶´óÔ¼ÊÇ¿í¶È/Éî¶ÈµÄÒ»°ë
-
-            Debug.Log($"×Ô¶¯ÉèÖÃCharacterController:");
-            Debug.Log($"  Ä£ĞÍ°üÎ§ºĞ: ÖĞĞÄ={localCenter}, ´óĞ¡={localSize}");
-            Debug.Log($"  ControllerÉèÖÃ: Center={controller.center}, Height={controller.height}, Radius={controller.radius}");
-        }
-        else
-        {
-            // Èç¹ûÃ»ÓĞäÖÈ¾Æ÷£¬Ê¹ÓÃÄ¬ÈÏÖµ
-            controller.center = new Vector3(0, 1, 0);
-            controller.height = 2f;
-            controller.radius = 0.5f;
-            Debug.LogWarning("Ã»ÓĞÕÒµ½MeshRenderer£¬Ê¹ÓÃÄ¬ÈÏCharacterControllerÉèÖÃ");
         }
     }
 
     void Update()
     {
-        // ·Ç¸½Éí×´Ì¬ÏÂµÄÂß¼­£¨Èç¹ûÓĞµÄ»°£©
+        // éé™„èº«çŠ¶æ€ä¸‹çš„é€»è¾‘ï¼ˆå¦‚æœæœ‰çš„è¯ï¼‰
         if (!isPossessed)
         {
-            // ¿ÉÒÔÌí¼ÓÒ»Ğ©AIĞĞÎª»ò¿ÕÏĞ¶¯»­
+            // å¯ä»¥æ·»åŠ ä¸€äº›AIè¡Œä¸ºæˆ–ç©ºé—²åŠ¨ç”»
             UpdateIdleAnimations();
             return;
         }
     }
 
-    // ===== ÊµÏÖ IPossessable ½Ó¿Ú =====
+    // ===== å®ç° IPossessable æ¥å£ =====
 
     public void OnPossess()
     {
         isPossessed = true;
-        Debug.Log("±ª×Ó±»¸½ÉíÁË£¡");
+        Debug.Log("è±¹å­è¢«é™„èº«äº†ï¼");
 
-        // È·±£¿ØÖÆÆ÷ÆôÓÃ
+        // ç¡®ä¿æ§åˆ¶å™¨å¯ç”¨
         if (controller != null)
         {
             controller.enabled = true;
@@ -136,18 +216,18 @@ public class LeopardController : MonoBehaviour, IPossessable
             controller = GetComponent<CharacterController>();
             if (controller == null)
             {
-                Debug.LogError("±ª×ÓµÄCharacterController×é¼ş¶ªÊ§£¡");
+                Debug.LogError("è±¹å­çš„CharacterControllerç»„ä»¶ä¸¢å¤±ï¼");
             }
         }
 
-        // ÉèÖÃ³õÊ¼¶¯»­×´Ì¬
+        // è®¾ç½®åˆå§‹åŠ¨ç”»çŠ¶æ€
         if (animator != null)
         {
             animator.SetFloat(speedParam, 0f);
             animator.SetBool(isGroundedParam, true);
         }
 
-        // ÖØÖÃ×´Ì¬
+        // é‡ç½®çŠ¶æ€
         isJumping = false;
         currentSpeed = 0f;
         moveDirection = Vector3.zero;
@@ -163,12 +243,12 @@ public class LeopardController : MonoBehaviour, IPossessable
             animator.SetBool(isGroundedParam, true);
         }
 
-        // ÖØÖÃÒÆ¶¯·½Ïò
+        // é‡ç½®ç§»åŠ¨æ–¹å‘
         moveDirection = Vector3.zero;
         currentSpeed = 0f;
         isJumping = false;
 
-        Debug.Log("±ª×ÓÍÑÀë¸½Éí£¡");
+        Debug.Log("è±¹å­è„±ç¦»é™„èº«ï¼");
     }
 
     public string GetAbilityDescription()
@@ -184,13 +264,13 @@ public class LeopardController : MonoBehaviour, IPossessable
         UpdateAnimations();
         CheckGroundStatus();
     }
-    // ===== ½Ó¿ÚÊµÏÖ½áÊø =====
+    // ===== æ¥å£å®ç°ç»“æŸ =====
 
     void HandleMovement()
     {
         if (controller == null)
         {
-            Debug.LogError("CharacterControllerÎª¿Õ£¡");
+            Debug.LogError("CharacterControllerä¸ºç©ºï¼");
             return;
         }
 
@@ -201,32 +281,32 @@ public class LeopardController : MonoBehaviour, IPossessable
 
         if (showDebugInfo)
         {
-            Debug.Log($"±ª×ÓÒÆ¶¯ÊäÈë: H={horizontal:F2}, V={vertical:F2}, Sprint={sprint}, Jump={jumpPressed}");
+            Debug.Log($"è±¹å­ç§»åŠ¨è¾“å…¥: H={horizontal:F2}, V={vertical:F2}, Sprint={sprint}, Jump={jumpPressed}");
         }
 
-        // »ù´¡ÒÆ¶¯·½Ïò£¨»ùÓÚÊÀ½ç×ø±ê£©
+        // åŸºç¡€ç§»åŠ¨æ–¹å‘ï¼ˆåŸºäºä¸–ç•Œåæ ‡ï¼‰
         Vector3 move = new Vector3(horizontal, 0, vertical);
 
-        // »ñÈ¡Ïà»ú·½Ïò£¨Èç¹ûÊ¹ÓÃÁËÏà»ú¿ØÖÆÆ÷£©
+        // è·å–ç›¸æœºæ–¹å‘ï¼ˆå¦‚æœä½¿ç”¨äº†ç›¸æœºæ§åˆ¶å™¨ï¼‰
         Camera mainCamera = Camera.main;
         if (mainCamera != null)
         {
-            // »ñÈ¡Ïà»úµÄÇ°ÏòºÍÓÒÏò£¨ºöÂÔYÖá£©
+            // è·å–ç›¸æœºçš„å‰å‘å’Œå³å‘ï¼ˆå¿½ç•¥Yè½´ï¼‰
             Vector3 cameraForward = mainCamera.transform.forward;
             Vector3 cameraRight = mainCamera.transform.right;
 
             cameraForward.y = 0;
             cameraRight.y = 0;
 
-            // ±ê×¼»¯
+            // æ ‡å‡†åŒ–
             cameraForward.Normalize();
             cameraRight.Normalize();
 
-            // ¸ù¾İÏà»ú·½Ïò¼ÆËãÒÆ¶¯
+            // æ ¹æ®ç›¸æœºæ–¹å‘è®¡ç®—ç§»åŠ¨
             move = cameraForward * vertical + cameraRight * horizontal;
         }
 
-        // ¼ÆËãÒÆ¶¯ËÙ¶È£¨¿¼ÂÇ³å´Ì£©
+        // è®¡ç®—ç§»åŠ¨é€Ÿåº¦ï¼ˆè€ƒè™‘å†²åˆºï¼‰
         float targetSpeed = 0f;
         if (move.magnitude > 0.1f)
         {
@@ -240,33 +320,33 @@ public class LeopardController : MonoBehaviour, IPossessable
             }
         }
 
-        // Æ½»¬ËÙ¶È±ä»¯
+        // å¹³æ»‘é€Ÿåº¦å˜åŒ–
         currentSpeed = Mathf.Lerp(currentSpeed, targetSpeed, Time.deltaTime * 5f);
 
-        // ÉèÖÃÒÆ¶¯·½Ïò
+        // è®¾ç½®ç§»åŠ¨æ–¹å‘
         moveDirection = move * currentSpeed;
 
-        // ´¦ÀíÌøÔ¾
+        // å¤„ç†è·³è·ƒ
         if (jumpPressed && isGrounded && !isJumping)
         {
             Jump();
         }
 
-        // Ó¦ÓÃÖØÁ¦
+        // åº”ç”¨é‡åŠ›
         if (!isGrounded)
         {
             verticalVelocity += GRAVITY * Time.deltaTime;
         }
         else if (verticalVelocity < 0)
         {
-            verticalVelocity = -0.5f; // ÇáÎ¢ÏòÏÂµÄÁ¦£¬È·±£ÌùµØ
+            verticalVelocity = -0.5f; // è½»å¾®å‘ä¸‹çš„åŠ›ï¼Œç¡®ä¿è´´åœ°
         }
 
-        // Ó¦ÓÃÒÆ¶¯
+        // åº”ç”¨ç§»åŠ¨
         Vector3 finalMove = new Vector3(moveDirection.x, verticalVelocity, moveDirection.z);
         controller.Move(finalMove * Time.deltaTime);
 
-        // Ğı×ª¿ØÖÆ - Ö»ÓĞÔÚÒÆ¶¯Ê±²ÅĞı×ª
+        // æ—‹è½¬æ§åˆ¶ - åªæœ‰åœ¨ç§»åŠ¨æ—¶æ‰æ—‹è½¬
         if (move.magnitude > 0.1f)
         {
             Quaternion targetRotation = Quaternion.LookRotation(new Vector3(move.x, 0, move.z));
@@ -284,20 +364,20 @@ public class LeopardController : MonoBehaviour, IPossessable
             animator.SetTrigger(jumpParam);
         }
 
-        if (showDebugInfo) Debug.Log("±ª×ÓÌøÔ¾£¡");
+        if (showDebugInfo) Debug.Log("è±¹å­è·³è·ƒï¼");
     }
 
     void UpdateAnimations()
     {
         if (animator == null) return;
 
-        // ¸üĞÂËÙ¶È²ÎÊı
+        // æ›´æ–°é€Ÿåº¦å‚æ•°
         animator.SetFloat(speedParam, currentSpeed);
 
-        // ¸üĞÂµØÃæ×´Ì¬
+        // æ›´æ–°åœ°é¢çŠ¶æ€
         animator.SetBool(isGroundedParam, isGrounded);
 
-        // Èç¹ûÌøÔ¾ºóÂäµØ£¬ÖØÖÃÌøÔ¾×´Ì¬
+        // å¦‚æœè·³è·ƒåè½åœ°ï¼Œé‡ç½®è·³è·ƒçŠ¶æ€
         if (isGrounded && isJumping)
         {
             isJumping = false;
@@ -306,11 +386,11 @@ public class LeopardController : MonoBehaviour, IPossessable
 
     void UpdateIdleAnimations()
     {
-        // ·Ç¸½Éí×´Ì¬ÏÂµÄ¼òµ¥¶¯»­´¦Àí
-        // ¿ÉÒÔËæ»úÇĞ»»Idle1ºÍIdle2£¬Ôö¼Ó×ÔÈ»¸Ğ
+        // éé™„èº«çŠ¶æ€ä¸‹çš„ç®€å•åŠ¨ç”»å¤„ç†
+        // å¯ä»¥éšæœºåˆ‡æ¢Idle1å’ŒIdle2ï¼Œå¢åŠ è‡ªç„¶æ„Ÿ
         if (animator != null && isGrounded)
         {
-            // ÕâÀï¿ÉÒÔÌí¼ÓÒ»Ğ©Ëæ»úµÄ´ı»ú¶¯»­ÇĞ»»
+            // è¿™é‡Œå¯ä»¥æ·»åŠ ä¸€äº›éšæœºçš„å¾…æœºåŠ¨ç”»åˆ‡æ¢
         }
     }
 
@@ -318,11 +398,11 @@ public class LeopardController : MonoBehaviour, IPossessable
     {
         if (controller == null) return;
 
-        // Ê¹ÓÃCharacterControllerµÄisGroundedºÍÉäÏß¼ì²âË«ÖØ¼ì²é
+        // ä½¿ç”¨CharacterControllerçš„isGroundedå’Œå°„çº¿æ£€æµ‹åŒé‡æ£€æŸ¥
         bool wasGrounded = isGrounded;
         isGrounded = controller.isGrounded;
 
-        // ¶îÍâµÄÉäÏß¼ì²âÈ·±£×¼È·ĞÔ
+        // é¢å¤–çš„å°„çº¿æ£€æµ‹ç¡®ä¿å‡†ç¡®æ€§
         if (!isGrounded)
         {
             RaycastHit hit;
@@ -332,17 +412,17 @@ public class LeopardController : MonoBehaviour, IPossessable
             }
         }
 
-        // ×´Ì¬±ä»¯Ê±µÄ¶îÍâ´¦Àí
+        // çŠ¶æ€å˜åŒ–æ—¶çš„é¢å¤–å¤„ç†
         if (wasGrounded != isGrounded)
         {
             if (isGrounded && showDebugInfo)
-                Debug.Log("±ª×ÓÒÑÂäµØ");
+                Debug.Log("è±¹å­å·²è½åœ°");
             else if (!isGrounded && showDebugInfo)
-                Debug.Log("±ª×ÓÒÑÀëµØ");
+                Debug.Log("è±¹å­å·²ç¦»åœ°");
         }
     }
 
-    // Ìí¼ÓÒ»Ğ©¸¨Öú·½·¨¹©Íâ²¿µ÷ÓÃ
+    // æ·»åŠ ä¸€äº›è¾…åŠ©æ–¹æ³•ä¾›å¤–éƒ¨è°ƒç”¨
     public void ForceIdle()
     {
         if (animator != null)
@@ -361,16 +441,26 @@ public class LeopardController : MonoBehaviour, IPossessable
         currentSpeed = runSpeed;
     }
 
-    // µ÷ÊÔĞÅÏ¢
+    // è°ƒè¯•ä¿¡æ¯
     void OnDrawGizmosSelected()
     {
         if (showDebugInfo)
         {
-            // »æÖÆµØÃæ¼ì²âÏß
+            // ç»˜åˆ¶åœ°é¢æ£€æµ‹çº¿
             Gizmos.color = Color.yellow;
             Gizmos.DrawLine(transform.position, transform.position + Vector3.down * groundCheckDistance);
 
-            // »æÖÆÒÆ¶¯·½Ïò
+            // ç»˜åˆ¶CharacterControllerèƒ¶å›Šä½“
+            if (controller != null)
+            {
+                Gizmos.color = Color.green;
+                Vector3 center = transform.TransformPoint(controller.center);
+                Gizmos.DrawWireSphere(center, controller.radius);
+                Gizmos.DrawWireSphere(center + Vector3.up * (controller.height * 0.5f - controller.radius), controller.radius);
+                Gizmos.DrawWireSphere(center - Vector3.up * (controller.height * 0.5f - controller.radius), controller.radius);
+            }
+
+            // ç»˜åˆ¶ç§»åŠ¨æ–¹å‘
             if (Application.isPlaying)
             {
                 Gizmos.color = Color.blue;
@@ -379,10 +469,13 @@ public class LeopardController : MonoBehaviour, IPossessable
         }
     }
 
-    // È·±£½Ó¿ÚÊµÏÖÕıÈ·
-    void TestInterface()
+    void OnDrawGizmos()
     {
-        Debug.Log($"Õâ¸ö¶ÔÏóÊµÏÖÁËIPossessable: {this is IPossessable}");
-        Debug.Log($"ÄÜÁ¦ÃèÊö: {GetAbilityDescription()}");
+        if (showDebugInfo)
+        {
+            // ç»˜åˆ¶è±¹å­çš„æ£€æµ‹èŒƒå›´
+            Gizmos.color = new Color(0, 1, 0, 0.1f);
+            Gizmos.DrawSphere(transform.position, 2f);
+        }
     }
 }
