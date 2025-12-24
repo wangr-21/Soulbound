@@ -52,9 +52,8 @@ public class StoryAnimation : MonoBehaviour
         bgmSource.volume = bgmVolume;
         bgmSource.loop = true; // BGM循环播放
 
-        // 按钮始终激活（移除隐藏逻辑）
+        // 注册按钮事件
         nextButton.onClick.AddListener(OnNextButtonClick);
-        nextButton.gameObject.SetActive(true);
     }
 
     void Start()
@@ -68,9 +67,14 @@ public class StoryAnimation : MonoBehaviour
 
         // 启动剧情
         if (storySegments.Length > 0)
+        {
             PlayStory(0);
+        }
         else
+        {
             Debug.LogWarning("未配置任何剧情片段！");
+            nextButton.gameObject.SetActive(false); // 无剧情时隐藏按钮
+        }
     }
 
     void PlayStory(int index)
@@ -85,12 +89,16 @@ public class StoryAnimation : MonoBehaviour
 
         currentIndex = index;
 
-        // 更新背景图（保留你的preserveAspect逻辑）
+        // 更新背景图（保留preserveAspect逻辑）
         if (bgImage != null && storySegments[index].storyImage != null)
         {
             bgImage.sprite = storySegments[index].storyImage;
             bgImage.preserveAspect = true;
         }
+
+        // 控制按钮显示：最后一个片段时隐藏，其他时候显示
+        bool isLastSegment = (index == storySegments.Length - 1);
+        nextButton.gameObject.SetActive(!isLastSegment);
 
         // 重置文本并开始打字
         subtitleText.text = "";
