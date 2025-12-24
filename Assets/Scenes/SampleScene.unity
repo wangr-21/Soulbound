@@ -1298,6 +1298,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: FX_Flipbook003
       objectReference: {fileID: 0}
+    - target: {fileID: 8080156424910990937, guid: a4a854a599000554ea07ead6681e648f, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 8080156424910990950, guid: a4a854a599000554ea07ead6681e648f, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
