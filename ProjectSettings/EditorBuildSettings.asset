@@ -20,4 +20,7 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Village.unity
     guid: 9b98ebe44a13a6d49b477f341dfabe80
+  - enabled: 1
+    path: Assets/Scenes/DowlScene.unity
+    guid: 2910f95f4aeec4c4496a96bebcae2055
   m_configObjects: {}
