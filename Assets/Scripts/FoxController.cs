@@ -1,8 +1,9 @@
-using UnityEngine;
+ï»¿using UnityEngine;
+using System.Collections;
 
 public class FoxController : MonoBehaviour, IPossessable
 {
-    [Header("ÒÆ¶¯ÉèÖÃ")]
+    [Header("ç§»åŠ¨è®¾ç½®")]
     public float walkSpeed = 2f;
     public float runSpeed = 5f;
     public float jumpForce = 6f;
@@ -10,61 +11,73 @@ public class FoxController : MonoBehaviour, IPossessable
     public float groundCheckDistance = 0.2f;
     public LayerMask groundLayer = -1;
 
-    [Header("Ä£ĞÍÒıÓÃ")]
-    public Transform foxModel; // Ö¸ÏòÊµ¼ÊÏÔÊ¾Ä£ĞÍµÄTransform
-    public bool fixModelRotation = true; // ÊÇ·ñĞŞ¸´Ä£ĞÍĞı×ª
+    [Header("æ¨¡å‹å¼•ç”¨")]
+    public Transform foxModel;
+    public bool fixModelRotation = true;
 
-    [Header("¶¯»­²ÎÊı")]
+    [Header("åŠ¨ç”»å‚æ•° - å¿…é¡»ä¸Animatorä¸­çš„å‚æ•°åå®Œå…¨ä¸€è‡´ï¼")]
     public string speedParam = "Speed";
-    public string isGroundedParam = "IsGrounded";
+    public string isGroundedParam = "IsGround";
     public string jumpParam = "Jump";
 
-    [Header("ÄÜÁ¦ÃèÊö")]
-    public string abilityDescription = "Ãô½İµÄºüÀê£¬¿ÉÒÔĞĞ×ß¡¢±¼ÅÜºÍÌøÔ¾";
+    [Header("åŠ¨ç”»é˜ˆå€¼")]
+    public float walkThreshold = 0.1f;
+    public float runThreshold = 0.5f;
 
-    [Header("×´Ì¬")]
+    [Header("è·³è·ƒä¿®å¤è®¾ç½®")]
+    public float jumpAnimationCooldown = 0.5f; // è·³è·ƒåŠ¨ç”»å†·å´æ—¶é—´ï¼Œé˜²æ­¢è¿ç»­è§¦å‘
+    public bool forceJumpTransition = true; // æ˜¯å¦å¼ºåˆ¶åˆ‡æ¢è·³è·ƒçŠ¶æ€
+    public float jumpTransitionDuration = 0.05f; // è·³è·ƒè¿‡æ¸¡æ—¶é—´
+
+    [Header("èƒ½åŠ›æè¿°")]
+    public string abilityDescription = "æ•æ·çš„ç‹ç‹¸ï¼Œå¯ä»¥è¡Œèµ°ã€å¥”è·‘å’Œè·³è·ƒ";
+
+    [Header("çŠ¶æ€")]
     public bool isPossessed = false;
     private bool isGrounded = true;
     private float currentSpeed = 0f;
     private Vector3 moveDirection = Vector3.zero;
     private bool jumpTriggered = false;
+    private bool isJumping = false;
+    private bool wasJumping = false;
+    private float lastJumpTime = 0f;
 
-    [Header("×é¼şÒıÓÃ")]
+    [Header("ç»„ä»¶å¼•ç”¨")]
     private Animator animator;
     private CharacterController controller;
 
-    [Header("µ÷ÊÔ")]
+    [Header("è°ƒè¯•")]
     public bool showDebugInfo = true;
     public bool drawDebugGizmos = true;
+    public bool logAnimationState = true;
+    public bool autoFixParameters = true;
+    public bool showRealTimeState = true; // å®æ—¶æ˜¾ç¤ºçŠ¶æ€
 
-    // ¼ÇÂ¼¸½ÉíÇ°µÄ×´Ì¬
+    // è®°å½•é™„èº«å‰çš„çŠ¶æ€
     private Vector3 originalPosition;
     private Quaternion originalRotation;
-    private Quaternion modelOriginalRotation;
     private bool controllerWasEnabled = true;
 
     void Start()
     {
         InitializeComponents();
-        TestInterface();
 
         if (showDebugInfo)
         {
-            Debug.Log($"ºüÀê({gameObject.name})³õÊ¼»¯Íê³É:");
-            Debug.Log($"- ¿ØÖÆÆ÷Î»ÖÃ: {transform.position}");
-            Debug.Log($"- ¿ØÖÆÆ÷Ğı×ª: {transform.rotation.eulerAngles}");
-            Debug.Log($"- Ä£ĞÍÎ»ÖÃ: {(foxModel != null ? foxModel.position.ToString() : "N/A")}");
-            Debug.Log($"- Ä£ĞÍĞı×ª: {(foxModel != null ? foxModel.rotation.eulerAngles.ToString() : "N/A")}");
-            Debug.Log($"- ×é¼ş: Animator={animator != null}, Controller={controller != null}");
+            Debug.Log($"ç‹ç‹¸({gameObject.name})åˆå§‹åŒ–å®Œæˆ:");
+            Debug.Log($"- æ§åˆ¶å™¨ä½ç½®: {transform.position}");
+            Debug.Log($"- æ§åˆ¶å™¨æ—‹è½¬: {transform.rotation.eulerAngles}");
+            Debug.Log($"- æ¨¡å‹ä½ç½®: {(foxModel != null ? foxModel.position.ToString() : "N/A")}");
+            Debug.Log($"- æ¨¡å‹æ—‹è½¬: {(foxModel != null ? foxModel.rotation.eulerAngles.ToString() : "N/A")}");
+            Debug.Log($"- ç»„ä»¶: Animator={animator != null}, Controller={controller != null}");
         }
     }
 
     void InitializeComponents()
     {
-        // ×Ô¶¯ÕÒµ½×Ó¶ÔÏóÖĞµÄÄ£ĞÍºÍAnimator
+        // è‡ªåŠ¨æ‰¾åˆ°å­å¯¹è±¡ä¸­çš„æ¨¡å‹å’ŒAnimator
         if (foxModel == null)
         {
-            // ²éÕÒ×Ó¶ÔÏóÖĞ´øMeshRenderer»òSkinnedMeshRendererµÄ¶ÔÏó
             foreach (Transform child in transform)
             {
                 if (child.GetComponent<MeshRenderer>() != null ||
@@ -84,29 +97,20 @@ public class FoxController : MonoBehaviour, IPossessable
         if (foxModel == null)
         {
             foxModel = transform;
-            if (showDebugInfo) Debug.Log($"ºüÀê({gameObject.name}): Ê¹ÓÃ×ÔÉí×÷ÎªÄ£ĞÍÒıÓÃ");
-        }
-        else
-        {
-            if (showDebugInfo) Debug.Log($"ºüÀê({gameObject.name}): ÕÒµ½Ä£ĞÍÒıÓÃ - {foxModel.name}");
         }
 
-        // »ñÈ¡Animator£¨ÔÚÄ£ĞÍ¶ÔÏóÉÏ£©
+        // è·å–Animator
         animator = foxModel.GetComponent<Animator>();
         if (animator == null)
         {
             animator = GetComponentInChildren<Animator>();
             if (animator == null)
             {
-                Debug.LogError($"ºüÀê({gameObject.name}): ĞèÒªAnimator×é¼ş£¡");
-            }
-            else
-            {
-                if (showDebugInfo) Debug.Log($"ºüÀê({gameObject.name}): ÔÚ×Ó¶ÔÏóÖĞÕÒµ½Animator×é¼ş");
+                Debug.LogError($"ç‹ç‹¸({gameObject.name}): éœ€è¦Animatorç»„ä»¶ï¼");
             }
         }
 
-        // »ñÈ¡»òÌí¼ÓCharacterController£¨ÔÚ¿ØÖÆÆ÷¶ÔÏóÉÏ£©
+        // è·å–æˆ–æ·»åŠ CharacterController
         controller = GetComponent<CharacterController>();
         if (controller == null)
         {
@@ -114,96 +118,143 @@ public class FoxController : MonoBehaviour, IPossessable
             controller.center = new Vector3(0, 0.5f, 0);
             controller.height = 1f;
             controller.radius = 0.3f;
-            if (showDebugInfo) Debug.Log($"ºüÀê({gameObject.name}): ×Ô¶¯Ìí¼ÓCharacterController×é¼ş");
         }
 
-        // ±£´æÄ£ĞÍÔ­Ê¼Ğı×ª£¨ÓÃÓÚĞŞ¸´£©
-        if (foxModel != null)
+        // è‡ªåŠ¨ä¿®å¤å‚æ•°å
+        if (autoFixParameters && animator != null)
         {
-            modelOriginalRotation = foxModel.localRotation;
-            if (showDebugInfo) Debug.Log($"ºüÀêÄ£ĞÍÔ­Ê¼Ğı×ª: {modelOriginalRotation.eulerAngles}");
+            AutoFixParameterNames();
         }
 
-        // È·±£ÓĞµØÃæ²ã
+        // ç¡®ä¿æœ‰åœ°é¢å±‚
         if (groundLayer.value == 0 || groundLayer.value == -1)
         {
             groundLayer = LayerMask.GetMask("Default");
         }
 
-        // ³õÊ¼»¯Î»ÖÃ
+        // åˆå§‹åŒ–ä½ç½®
         originalPosition = transform.position;
         originalRotation = transform.rotation;
         controllerWasEnabled = controller != null && controller.enabled;
 
-        // ĞŞ¸´Ä£ĞÍĞı×ª£¨Èç¹ûĞèÒª£©
+        // ä¿®å¤æ¨¡å‹æ—‹è½¬
         if (fixModelRotation && foxModel != null)
         {
             FixModelRotation();
         }
     }
 
-    // ĞŞ¸´Ä£ĞÍĞı×ªµÄ·½·¨
+    void AutoFixParameterNames()
+    {
+        if (animator == null) return;
+
+        Debug.Log("=== è‡ªåŠ¨æ£€æŸ¥Animatorå‚æ•° ===");
+
+        // æ£€æŸ¥æ‰€æœ‰å‚æ•°
+        foreach (AnimatorControllerParameter param in animator.parameters)
+        {
+            Debug.Log($"æ‰¾åˆ°å‚æ•°: {param.name} ({param.type})");
+        }
+
+        // æ£€æŸ¥å¹¶ä¿®å¤å‚æ•°å
+        CheckAndFixParameter(speedParam, "Speed", "speed", "MoveSpeed");
+        CheckAndFixParameter(isGroundedParam, "IsGround", "IsGrounded", "Grounded");
+        CheckAndFixParameter(jumpParam, "Jump", "jump", "JumpTrigger");
+
+        Debug.Log($"æœ€ç»ˆä½¿ç”¨çš„å‚æ•°: Speed={speedParam}, Grounded={isGroundedParam}, Jump={jumpParam}");
+    }
+
+    void CheckAndFixParameter(string currentParam, params string[] possibleNames)
+    {
+        if (HasParameter(currentParam)) return;
+
+        foreach (string name in possibleNames)
+        {
+            if (HasParameter(name))
+            {
+                Debug.Log($"å‚æ•° '{currentParam}' ä¸å­˜åœ¨ï¼Œè‡ªåŠ¨æ”¹ä¸º '{name}'");
+
+                // æ ¹æ®å‚æ•°ç±»å‹è®¾ç½®æ­£ç¡®çš„å­—æ®µ
+                if (possibleNames[0].Contains("Speed"))
+                    speedParam = name;
+                else if (possibleNames[0].Contains("Ground"))
+                    isGroundedParam = name;
+                else if (possibleNames[0].Contains("Jump"))
+                    jumpParam = name;
+
+                return;
+            }
+        }
+
+        Debug.LogWarning($"æœªæ‰¾åˆ°å‚æ•° '{currentParam}' çš„ä»»ä½•å˜ä½“ï¼");
+    }
+
+    bool HasParameter(string paramName)
+    {
+        if (animator == null) return false;
+
+        foreach (AnimatorControllerParameter param in animator.parameters)
+        {
+            if (param.name == paramName)
+                return true;
+        }
+        return false;
+    }
+
     void FixModelRotation()
     {
         if (foxModel == null) return;
 
-        // ¼ì²éÄ£ĞÍÊÇ·ñĞı×ªÁË-90¶È
         Vector3 modelEuler = foxModel.localRotation.eulerAngles;
         if (Mathf.Abs(modelEuler.x + 90) < 1f || Mathf.Abs(modelEuler.x - 270) < 1f)
         {
-            // ÕâÊÇ³£¼ûµÄFBXµ¼ÈëÎÊÌâ£¬ĞèÒªĞŞ¸´
-            if (showDebugInfo) Debug.Log($"¼ì²âµ½Ä£ĞÍĞı×ªÎÊÌâ: {modelEuler}");
+            if (showDebugInfo) Debug.Log($"æ£€æµ‹åˆ°æ¨¡å‹æ—‹è½¬é—®é¢˜: {modelEuler}");
 
-            // ´´½¨Ò»¸öĞŞ¸´Ğı×ª
             Quaternion fixedRotation = Quaternion.Euler(0, modelEuler.y, modelEuler.z);
             foxModel.localRotation = fixedRotation;
-
-            if (showDebugInfo) Debug.Log($"ÒÑĞŞ¸´Ä£ĞÍĞı×ª: {foxModel.localRotation.eulerAngles}");
         }
     }
 
     void Update()
     {
-        // ¼ì²éÌøÔ¾ÊäÈë
-        if (Input.GetButtonDown("Jump"))
+        // æ£€æŸ¥è·³è·ƒè¾“å…¥ - å†·å´æ—¶é—´æ£€æŸ¥
+        if (Input.GetButtonDown("Jump") && !jumpTriggered && (Time.time - lastJumpTime) > jumpAnimationCooldown)
         {
             jumpTriggered = true;
+            if (showDebugInfo) Debug.Log($"è·³è·ƒè§¦å‘ - æ—¶é—´: {Time.time:F2}, ä¸Šæ¬¡è·³è·ƒ: {lastJumpTime:F2}");
         }
 
-        // ·Ç¸½Éí×´Ì¬ÏÂµÄÂß¼­
+        // éé™„èº«çŠ¶æ€ä¸‹çš„é€»è¾‘
         if (!isPossessed)
         {
-            // ¿ÉÒÔÌí¼ÓÒ»Ğ©AIĞĞÎª»ò¿ÕÏĞ¶¯»­
             UpdateIdleBehavior();
             return;
         }
     }
 
-    // ===== ÊµÏÖ IPossessable ½Ó¿Ú =====
+    // ===== å®ç° IPossessable æ¥å£ =====
     public void OnPossess()
     {
         isPossessed = true;
 
-        // ¼ÇÂ¼¸½ÉíÇ°µÄÎ»ÖÃºÍĞı×ª
         originalPosition = transform.position;
         originalRotation = transform.rotation;
         controllerWasEnabled = controller != null && controller.enabled;
 
         if (showDebugInfo)
         {
-            Debug.Log($"=== ºüÀê({gameObject.name})±»¸½Éí ===");
-            Debug.Log($"- Ô­Ê¼Î»ÖÃ: {originalPosition}");
-            Debug.Log($"- Ô­Ê¼Ğı×ª: {originalRotation.eulerAngles}");
-            Debug.Log($"- ¿ØÖÆÆ÷ÆôÓÃ×´Ì¬: {controllerWasEnabled}");
+            Debug.Log($"=== ç‹ç‹¸({gameObject.name})è¢«é™„èº« ===");
+            Debug.Log($"- æ§åˆ¶å™¨å¯ç”¨çŠ¶æ€: {controllerWasEnabled}");
+            Debug.Log($"- å½“å‰åŠ¨ç”»å‚æ•°: Speed={speedParam}, Grounded={isGroundedParam}, Jump={jumpParam}");
         }
 
-        // È·±£¿ØÖÆÆ÷ÆôÓÃ
+        // ç¡®ä¿æ§åˆ¶å™¨å¯ç”¨
         if (controller != null)
         {
             controller.enabled = true;
         }
 
-        // ÖØÖÃ¶¯»­×´Ì¬
+        // é‡ç½®åŠ¨ç”»çŠ¶æ€
         if (animator != null)
         {
             animator.SetFloat(speedParam, 0f);
@@ -211,18 +262,21 @@ public class FoxController : MonoBehaviour, IPossessable
             animator.ResetTrigger(jumpParam);
         }
 
-        // ÖØÖÃÒÆ¶¯×´Ì¬
+        // é‡ç½®ç§»åŠ¨çŠ¶æ€
         moveDirection = Vector3.zero;
         currentSpeed = 0f;
         jumpTriggered = false;
+        isJumping = false;
+        wasJumping = false;
+        lastJumpTime = 0f;
 
-        // È·±£ÔÚµØÃæ
+        // ç¡®ä¿åœ¨åœ°é¢
         if (controller != null)
         {
             isGrounded = controller.isGrounded;
         }
 
-        if (showDebugInfo) Debug.Log($"ºüÀê({gameObject.name})×¼±¸½ÓÊÜ¿ØÖÆ");
+        if (showDebugInfo) Debug.Log($"ç‹ç‹¸({gameObject.name})å‡†å¤‡æ¥å—æ§åˆ¶");
     }
 
     public void OnRelease()
@@ -231,24 +285,23 @@ public class FoxController : MonoBehaviour, IPossessable
 
         if (animator != null)
         {
-            // ÖØÖÃ¶¯»­²ÎÊı
             animator.SetFloat(speedParam, 0f);
             animator.SetBool(isGroundedParam, true);
             animator.ResetTrigger(jumpParam);
         }
 
-        // ÖØÖÃÒÆ¶¯·½Ïò
         moveDirection = Vector3.zero;
         currentSpeed = 0f;
         jumpTriggered = false;
+        isJumping = false;
+        wasJumping = false;
 
-        // »Ö¸´¿ØÖÆÆ÷×´Ì¬
         if (controller != null)
         {
             controller.enabled = controllerWasEnabled;
         }
 
-        if (showDebugInfo) Debug.Log($"ºüÀê({gameObject.name})ÍÑÀë¸½Éí£¡");
+        if (showDebugInfo) Debug.Log($"ç‹ç‹¸({gameObject.name})è„±ç¦»é™„èº«ï¼");
     }
 
     public string GetAbilityDescription()
@@ -263,106 +316,169 @@ public class FoxController : MonoBehaviour, IPossessable
         HandleMovement();
         CheckGroundStatus();
         UpdateAnimations();
+        DebugAnimations();
+        CheckJumpState();
     }
-    // ===== ½Ó¿ÚÊµÏÖ½áÊø =====
+    // ===== æ¥å£å®ç°ç»“æŸ =====
 
     void HandleMovement()
     {
-        if (controller == null)
-        {
-            Debug.LogError($"ºüÀê({gameObject.name}): CharacterControllerÎª¿Õ£¡");
-            return;
-        }
+        if (controller == null) return;
 
-        // ¼ì²éÊÇ·ñÔÚµØÃæ
+        // æ£€æŸ¥æ˜¯å¦åœ¨åœ°é¢
         isGrounded = controller.isGrounded;
 
-        // Èç¹ûÔÚµØÃæÇÒÏÂÂäËÙ¶ÈĞ¡ÓÚ0£¬ÖØÖÃYËÙ¶È
+        // å¦‚æœåœ¨åœ°é¢ä¸”ä¸‹è½é€Ÿåº¦å°äº0ï¼Œé‡ç½®Yé€Ÿåº¦
         if (isGrounded && moveDirection.y < 0)
         {
             moveDirection.y = -2f;
         }
 
-        // »ñÈ¡ÊäÈë
+        // è·å–è¾“å…¥
         float horizontal = Input.GetAxis("Horizontal");
         float vertical = Input.GetAxis("Vertical");
         bool runInput = Input.GetKey(KeyCode.LeftShift);
 
-        // ¼ÆËãÒÆ¶¯·½Ïò£¨»ùÓÚÊÀ½ç×ø±ê£©
+        // è®¡ç®—ç§»åŠ¨æ–¹å‘
         Vector3 move = new Vector3(horizontal, 0, vertical);
 
-        // »ñÈ¡Ïà»ú·½Ïò
+        // è·å–ç›¸æœºæ–¹å‘
         Camera mainCamera = Camera.main;
         if (mainCamera != null)
         {
-            // »ñÈ¡Ïà»úµÄÇ°ÏòºÍÓÒÏò£¨ºöÂÔYÖá£©
             Vector3 cameraForward = mainCamera.transform.forward;
             Vector3 cameraRight = mainCamera.transform.right;
 
             cameraForward.y = 0;
             cameraRight.y = 0;
 
-            // ±ê×¼»¯
             cameraForward.Normalize();
             cameraRight.Normalize();
 
-            // ¸ù¾İÏà»ú·½Ïò¼ÆËãÒÆ¶¯
             move = cameraForward * vertical + cameraRight * horizontal;
         }
 
-        // ÅĞ¶ÏÊÇ·ñÓĞÒÆ¶¯ÊäÈë
+        // åˆ¤æ–­æ˜¯å¦æœ‰ç§»åŠ¨è¾“å…¥
         bool isMoving = move.magnitude > 0.1f;
 
-        // ¼ÆËãËÙ¶È
-        if (isMoving)
+        // è®¡ç®—é€Ÿåº¦ - è·³è·ƒæœŸé—´ä¿æŒå½“å‰é€Ÿåº¦
+        if (!isJumping)
         {
-            // È·¶¨Ä¿±êËÙ¶È£¨ĞĞ×ß»òÅÜ²½£©
-            float targetSpeed = runInput ? runSpeed : walkSpeed;
-
-            // Æ½»¬¹ı¶Éµ½Ä¿±êËÙ¶È
-            currentSpeed = Mathf.Lerp(currentSpeed, targetSpeed, Time.deltaTime * 5f);
-
-            // ±ê×¼»¯ÒÆ¶¯·½Ïò
-            move.Normalize();
-
-            // Ó¦ÓÃË®Æ½ÒÆ¶¯
-            moveDirection.x = move.x * currentSpeed;
-            moveDirection.z = move.z * currentSpeed;
-
-            // ÖØÒª£ºĞı×ª¿ØÖÆÆ÷¶ÔÏó£¬¶ø²»ÊÇÄ£ĞÍ
-            if (move != Vector3.zero)
+            if (isMoving)
             {
-                Quaternion targetRotation = Quaternion.LookRotation(new Vector3(move.x, 0, move.z));
-                transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
+                float targetSpeed = runInput ? runSpeed : walkSpeed;
+                currentSpeed = Mathf.Lerp(currentSpeed, targetSpeed, Time.deltaTime * 5f);
+
+                move.Normalize();
+                moveDirection.x = move.x * currentSpeed;
+                moveDirection.z = move.z * currentSpeed;
+
+                // æ—‹è½¬æ§åˆ¶å™¨å¯¹è±¡
+                if (move != Vector3.zero)
+                {
+                    Quaternion targetRotation = Quaternion.LookRotation(new Vector3(move.x, 0, move.z));
+                    transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
+                }
+            }
+            else
+            {
+                currentSpeed = Mathf.Lerp(currentSpeed, 0f, Time.deltaTime * 10f);
+                moveDirection.x = 0;
+                moveDirection.z = 0;
             }
         }
         else
         {
-            // Æ½»¬Í£Ö¹
-            currentSpeed = Mathf.Lerp(currentSpeed, 0f, Time.deltaTime * 10f);
-            moveDirection.x = 0;
-            moveDirection.z = 0;
+            // è·³è·ƒæœŸé—´ä¿æŒæ°´å¹³ç§»åŠ¨åŠ¨é‡
+            moveDirection.x = moveDirection.x * 0.99f; // è½»å¾®å‡é€Ÿ
+            moveDirection.z = moveDirection.z * 0.99f;
         }
 
-        // ÌøÔ¾´¦Àí
-        if (isGrounded && jumpTriggered)
+        // è·³è·ƒå¤„ç† - ä¿®å¤ï¼šç¡®ä¿åœ¨åœ°é¢ä¸”æœªè·³è·ƒæ—¶è§¦å‘
+        if (isGrounded && jumpTriggered && !isJumping)
         {
             moveDirection.y = Mathf.Sqrt(jumpForce * -2f * Physics.gravity.y);
+            isJumping = true;
+            wasJumping = true;
+            lastJumpTime = Time.time;
+
+            // è§¦å‘è·³è·ƒåŠ¨ç”» - ä½¿ç”¨å¤šç§æ–¹æ³•ç¡®ä¿è§¦å‘
             if (animator != null)
             {
+                // æ–¹æ³•1: ä½¿ç”¨è§¦å‘å™¨
+                animator.ResetTrigger(jumpParam);
                 animator.SetTrigger(jumpParam);
-                if (showDebugInfo) Debug.Log($"ºüÀê({gameObject.name})´¥·¢ÌøÔ¾¶¯»­");
+
+                // æ–¹æ³•2: å¼ºåˆ¶åˆ‡æ¢çŠ¶æ€ï¼ˆå¦‚æœè§¦å‘å™¨ä¸èµ·ä½œç”¨ï¼‰
+                if (forceJumpTransition)
+                {
+                    StartCoroutine(ForceJumpState());
+                }
+
+                if (showDebugInfo)
+                {
+                    Debug.Log($"è§¦å‘è·³è·ƒåŠ¨ç”»ï¼Œè§¦å‘å™¨: {jumpParam}");
+                    Debug.Log($"è·³è·ƒé€Ÿåº¦: {moveDirection.y:F2}");
+                    Debug.Log($"å½“å‰çŠ¶æ€: {GetCurrentStateName()}");
+                }
             }
             jumpTriggered = false;
         }
 
-        // Ó¦ÓÃÖØÁ¦
-        moveDirection.y += Physics.gravity.y * Time.deltaTime;
+        // åº”ç”¨é‡åŠ›
+        if (!isGrounded)
+        {
+            moveDirection.y += Physics.gravity.y * Time.deltaTime;
+        }
 
-        // Ó¦ÓÃÒÆ¶¯
+        // åº”ç”¨ç§»åŠ¨
         if (controller.enabled)
         {
             controller.Move(moveDirection * Time.deltaTime);
+        }
+    }
+
+    // å¼ºåˆ¶åˆ‡æ¢è·³è·ƒçŠ¶æ€çš„åç¨‹
+    IEnumerator ForceJumpState()
+    {
+        if (animator == null) yield break;
+
+        // ç­‰å¾…ä¸€å¸§ç¡®ä¿è§¦å‘å™¨è¢«å¤„ç†
+        yield return null;
+
+        // æ£€æŸ¥å½“å‰çŠ¶æ€
+        AnimatorStateInfo stateInfo = animator.GetCurrentAnimatorStateInfo(0);
+        if (!stateInfo.IsName("Jump"))
+        {
+            Debug.LogWarning("è§¦å‘å™¨æœªåˆ‡æ¢åˆ°JumpçŠ¶æ€ï¼Œå°è¯•å¼ºåˆ¶åˆ‡æ¢...");
+
+            // æ–¹æ³•1: ç›´æ¥æ’­æ”¾JumpçŠ¶æ€
+            animator.Play("Jump", 0, 0f);
+
+            // ç­‰å¾…ä¸€å¸§æ£€æŸ¥ç»“æœ
+            yield return null;
+
+            stateInfo = animator.GetCurrentAnimatorStateInfo(0);
+            if (stateInfo.IsName("Jump"))
+            {
+                Debug.Log("âœ“ æˆåŠŸå¼ºåˆ¶åˆ‡æ¢åˆ°JumpçŠ¶æ€");
+            }
+            else
+            {
+                Debug.LogError("âœ— å¼ºåˆ¶åˆ‡æ¢å¤±è´¥ï¼Œå½“å‰çŠ¶æ€: " + GetCurrentStateName());
+
+                // æ–¹æ³•2: å°è¯•å…¶ä»–å¯èƒ½çš„çŠ¶æ€å
+                string[] possibleJumpStateNames = { "Jump", "JUMP", "jump", "Jumping", "JUMPING", "jumping" };
+                foreach (string stateName in possibleJumpStateNames)
+                {
+                    if (animator.HasState(0, Animator.StringToHash("Base Layer." + stateName)))
+                    {
+                        animator.Play(stateName, 0, 0f);
+                        Debug.Log($"å°è¯•åˆ‡æ¢åˆ°çŠ¶æ€: {stateName}");
+                        break;
+                    }
+                }
+            }
         }
     }
 
@@ -370,17 +486,41 @@ public class FoxController : MonoBehaviour, IPossessable
     {
         if (animator == null) return;
 
-        // ¸üĞÂËÙ¶È²ÎÊı£¨¹éÒ»»¯µ½0-1·¶Î§£©
-        float normalizedSpeed = currentSpeed / runSpeed;
-        animator.SetFloat(speedParam, normalizedSpeed);
+        // è®¡ç®—å½’ä¸€åŒ–é€Ÿåº¦ - è·³è·ƒæœŸé—´ä¸æ›´æ–°é€Ÿåº¦å‚æ•°
+        if (!isJumping)
+        {
+            float normalizedSpeed = Mathf.Clamp01(currentSpeed / runSpeed);
+            animator.SetFloat(speedParam, normalizedSpeed);
+        }
+        else
+        {
+            // è·³è·ƒæœŸé—´å°†é€Ÿåº¦å‚æ•°è®¾ä¸º0ï¼Œé¿å…é€Ÿåº¦å‚æ•°å½±å“è·³è·ƒçŠ¶æ€
+            animator.SetFloat(speedParam, 0f);
+        }
 
-        // ¸üĞÂÊÇ·ñÔÚµØÃæ²ÎÊı
+        // è®¾ç½®åœ°é¢å‚æ•°
         animator.SetBool(isGroundedParam, isGrounded);
 
-        // È·±£ÌøÔ¾´¥·¢Æ÷±»ÖØÖÃ
-        if (isGrounded && !jumpTriggered)
+        // ç¡®ä¿è·³è·ƒè§¦å‘å™¨è¢«é‡ç½®ï¼ˆåœ¨åœ°é¢æ—¶ï¼‰
+        if (isGrounded && wasJumping)
         {
             animator.ResetTrigger(jumpParam);
+            wasJumping = false;
+
+            // å¼ºåˆ¶å›åˆ°IdleçŠ¶æ€ï¼Œé˜²æ­¢å¡åœ¨JumpçŠ¶æ€
+            if (isJumping)
+            {
+                animator.Play("Idle", 0, 0f);
+            }
+        }
+    }
+
+    void CheckJumpState()
+    {
+        if (isJumping && isGrounded)
+        {
+            isJumping = false;
+            if (showDebugInfo) Debug.Log("è·³è·ƒç»“æŸï¼Œå›åˆ°åœ°é¢");
         }
     }
 
@@ -388,11 +528,10 @@ public class FoxController : MonoBehaviour, IPossessable
     {
         if (controller == null) return;
 
-        // Ê¹ÓÃCharacterControllerµÄisGroundedºÍÉäÏß¼ì²âË«ÖØ¼ì²é
         bool wasGroundedBefore = isGrounded;
         isGrounded = controller.isGrounded;
 
-        // ¶îÍâµÄÉäÏß¼ì²âÈ·±£×¼È·ĞÔ
+        // é¢å¤–çš„å°„çº¿æ£€æµ‹
         if (!isGrounded)
         {
             RaycastHit hit;
@@ -403,25 +542,61 @@ public class FoxController : MonoBehaviour, IPossessable
             }
         }
 
-        // ¸üĞÂ¶¯»­²ÎÊı
-        if (animator != null && wasGroundedBefore != isGrounded)
+        // çŠ¶æ€å˜åŒ–æ—¶çš„å¤„ç†
+        if (wasGroundedBefore != isGrounded)
         {
-            animator.SetBool(isGroundedParam, isGrounded);
+            if (isGrounded && isJumping)
+            {
+                isJumping = false;
+                if (showDebugInfo) Debug.Log("è·³è·ƒç»“æŸï¼Œå›åˆ°åœ°é¢");
+            }
         }
+    }
+
+    void DebugAnimations()
+    {
+        if (!logAnimationState || animator == null) return;
+
+        if (Time.frameCount % 30 == 0 || showRealTimeState) // æ¯30å¸§è¾“å‡ºä¸€æ¬¡ï¼Œæˆ–å®æ—¶è¾“å‡º
+        {
+            float speedValue = animator.GetFloat(speedParam);
+            bool groundedValue = animator.GetBool(isGroundedParam);
+            string currentState = GetCurrentStateName();
+
+            Debug.Log($"åŠ¨ç”»çŠ¶æ€: {currentState}, Speed={speedValue:F2}, Grounded={groundedValue}, Jumping={isJumping}, Triggered={jumpTriggered}");
+        }
+    }
+
+    string GetCurrentStateName()
+    {
+        if (animator == null) return "No Animator";
+
+        AnimatorStateInfo stateInfo = animator.GetCurrentAnimatorStateInfo(0);
+
+        if (stateInfo.IsName("Idle")) return "Idle";
+        if (stateInfo.IsName("Walk")) return "Walk";
+        if (stateInfo.IsName("Run")) return "Run";
+        if (stateInfo.IsName("Jump")) return "Jump";
+
+        // å°è¯•é€šè¿‡å“ˆå¸Œå€¼åˆ¤æ–­
+        if (stateInfo.fullPathHash == Animator.StringToHash("Base Layer.Idle")) return "Idle";
+        if (stateInfo.fullPathHash == Animator.StringToHash("Base Layer.Walk")) return "Walk";
+        if (stateInfo.fullPathHash == Animator.StringToHash("Base Layer.Run")) return "Run";
+        if (stateInfo.fullPathHash == Animator.StringToHash("Base Layer.Jump")) return "Jump";
+
+        return $"Unknown ({stateInfo.fullPathHash})";
     }
 
     void UpdateIdleBehavior()
     {
-        // ·Ç¸½Éí×´Ì¬ÏÂµÄ¿ÕÏĞĞĞÎª
+        // éé™„èº«çŠ¶æ€ä¸‹çš„ç©ºé—²è¡Œä¸º
         if (animator != null)
         {
-            // È·±£ÔÚ´ı»ú×´Ì¬
             if (animator.GetFloat(speedParam) > 0.1f)
             {
                 animator.SetFloat(speedParam, 0f);
             }
 
-            // È·±£ÔÚµØÃæ
             if (!isGrounded && controller != null)
             {
                 isGrounded = controller.isGrounded;
@@ -430,95 +605,204 @@ public class FoxController : MonoBehaviour, IPossessable
         }
     }
 
-    // ===== µ÷ÊÔ·½·¨ =====
-    [ContextMenu("²âÊÔIPossessable½Ó¿Ú")]
-    public void TestInterface()
+    // ===== è°ƒè¯•æ–¹æ³• =====
+    [ContextMenu("æµ‹è¯•åŠ¨ç”»çŠ¶æ€")]
+    public void TestAnimationStates()
     {
-        Debug.Log($"=== ºüÀê({gameObject.name})½Ó¿Ú²âÊÔ ===");
-        Debug.Log($"1. ½Å±¾ÀàĞÍ: {GetType().FullName}");
-        Debug.Log($"2. ÊµÏÖÁËIPossessable? {this is IPossessable}");
-        Debug.Log($"3. ÄÜÁ¦ÃèÊö: {GetAbilityDescription()}");
-        Debug.Log($"4. ÓÎÏ·¶ÔÏó: {gameObject.name}");
-        Debug.Log($"5. ¶ÔÏóÂ·¾¶: {GetTransformPath(transform)}");
-        Debug.Log($"6. ²ã: {LayerMask.LayerToName(gameObject.layer)} ({gameObject.layer})");
-        Debug.Log($"7. ±êÇ©: {gameObject.tag}");
-        Debug.Log($"8. Åö×²Ìå: {GetComponent<Collider>() != null}");
-        Debug.Log($"9. µ±Ç°ÊÇ·ñ±»¸½Éí: {isPossessed}");
-    }
-
-    [ContextMenu("¼ì²é²ã¼¶½á¹¹")]
-    public void CheckHierarchy()
-    {
-        Debug.Log($"=== ºüÀê²ã¼¶½á¹¹¼ì²é ===");
-        Debug.Log($"¸ù¶ÔÏó: {gameObject.name}");
-        Debug.Log($"Î»ÖÃ: {transform.position}");
-        Debug.Log($"Ğı×ª: {transform.rotation.eulerAngles}");
-
-        if (foxModel != null)
+        if (animator == null)
         {
-            Debug.Log($"Ä£ĞÍ¶ÔÏó: {foxModel.name}");
-            Debug.Log($"Ä£ĞÍÎ»ÖÃ(±¾µØ): {foxModel.localPosition}");
-            Debug.Log($"Ä£ĞÍĞı×ª(±¾µØ): {foxModel.localRotation.eulerAngles}");
-            Debug.Log($"Ä£ĞÍÎ»ÖÃ(ÊÀ½ç): {foxModel.position}");
-            Debug.Log($"Ä£ĞÍĞı×ª(ÊÀ½ç): {foxModel.rotation.eulerAngles}");
+            Debug.LogError("æ²¡æœ‰Animatorç»„ä»¶ï¼");
+            return;
         }
 
-        Debug.Log($"AnimatorÎ»ÖÃ: {(animator != null ? animator.transform.name : "ÎŞ")}");
-        Debug.Log($"CharacterController: {controller != null}");
+        StartCoroutine(TestAnimations());
     }
 
-    [ContextMenu("ÖØÖÃµ½Ô­Ê¼Î»ÖÃ")]
-    public void ResetToOriginalPosition()
+    IEnumerator TestAnimations()
     {
-        if (controller != null)
+        Debug.Log("=== å¼€å§‹æµ‹è¯•åŠ¨ç”»çŠ¶æ€ ===");
+
+        // æµ‹è¯•Idle
+        Debug.Log("1. æµ‹è¯•IdleçŠ¶æ€");
+        animator.SetFloat(speedParam, 0f);
+        animator.SetBool(isGroundedParam, true);
+        yield return new WaitForSeconds(1f);
+
+        // æµ‹è¯•Walk
+        Debug.Log("2. æµ‹è¯•WalkçŠ¶æ€");
+        animator.SetFloat(speedParam, 0.3f);
+        yield return new WaitForSeconds(1f);
+
+        // æµ‹è¯•Run
+        Debug.Log("3. æµ‹è¯•RunçŠ¶æ€");
+        animator.SetFloat(speedParam, 0.8f);
+        yield return new WaitForSeconds(1f);
+
+        // æµ‹è¯•Jump
+        Debug.Log("4. æµ‹è¯•JumpçŠ¶æ€ - ä½¿ç”¨è§¦å‘å™¨");
+        animator.ResetTrigger(jumpParam);
+        animator.SetTrigger(jumpParam);
+        animator.SetBool(isGroundedParam, false);
+
+        // ç­‰å¾…å¹¶æ£€æŸ¥çŠ¶æ€
+        yield return new WaitForSeconds(0.1f);
+        Debug.Log($"è·³è·ƒåçŠ¶æ€: {GetCurrentStateName()}");
+
+        yield return new WaitForSeconds(0.7f);
+
+        // å›åˆ°Idle
+        Debug.Log("5. å›åˆ°IdleçŠ¶æ€");
+        animator.SetFloat(speedParam, 0f);
+        animator.SetBool(isGroundedParam, true);
+
+        Debug.Log("=== æµ‹è¯•å®Œæˆ ===");
+    }
+
+    [ContextMenu("å¼ºåˆ¶æµ‹è¯•è·³è·ƒ")]
+    public void ForceTestJump()
+    {
+        if (animator == null)
         {
-            controller.enabled = false;
-            transform.position = originalPosition;
-            transform.rotation = originalRotation;
-            controller.enabled = true;
-            if (showDebugInfo) Debug.Log($"ºüÀê({gameObject.name})ÖØÖÃµ½Ô­Ê¼Î»ÖÃ: {originalPosition}");
+            Debug.LogError("æ²¡æœ‰Animatorç»„ä»¶ï¼");
+            return;
         }
+
+        StartCoroutine(ForceJumpTest());
     }
 
-    [ContextMenu("¼ì²é×é¼ş×´Ì¬")]
-    public void CheckComponentStatus()
+    IEnumerator ForceJumpTest()
     {
-        Debug.Log($"=== ºüÀê({gameObject.name})×é¼ş×´Ì¬ ===");
-        Debug.Log($"- Animator: {animator != null} {(animator != null ? animator.isActiveAndEnabled.ToString() : "N/A")}");
-        Debug.Log($"- CharacterController: {controller != null} {(controller != null ? controller.enabled.ToString() : "N/A")}");
-        Debug.Log($"- Collider: {GetComponent<Collider>() != null}");
-        Debug.Log($"- Î»ÖÃ: {transform.position}");
-        Debug.Log($"- Ğı×ª: {transform.rotation.eulerAngles}");
-        Debug.Log($"- ÊÇ·ñ¼¤»î: {gameObject.activeInHierarchy}");
+        Debug.Log("=== å¼ºåˆ¶æµ‹è¯•è·³è·ƒ ===");
+
+        // å…ˆç¡®ä¿åœ¨åœ°é¢
+        animator.SetBool(isGroundedParam, true);
+        animator.SetFloat(speedParam, 0f);
+        yield return new WaitForSeconds(0.5f);
+
+        // å¼ºåˆ¶åˆ‡æ¢åˆ°JumpçŠ¶æ€
+        animator.Play("Jump", 0, 0f);
+        animator.SetBool(isGroundedParam, false);
+
+        yield return new WaitForSeconds(0.1f);
+
+        Debug.Log($"å¼ºåˆ¶åˆ‡æ¢åçŠ¶æ€: {GetCurrentStateName()}");
+
+        // ç­‰å¾…è·³è·ƒåŠ¨ç”»æ’­æ”¾
+        AnimatorStateInfo stateInfo = animator.GetCurrentAnimatorStateInfo(0);
+        if (stateInfo.IsName("Jump"))
+        {
+            Debug.Log($"è·³è·ƒåŠ¨ç”»é•¿åº¦: {stateInfo.length:F2}ç§’");
+            yield return new WaitForSeconds(stateInfo.length * 0.8f);
+
+            // å›åˆ°åœ°é¢
+            animator.SetBool(isGroundedParam, true);
+            animator.Play("Idle", 0, 0f);
+        }
+
+        Debug.Log("=== å¼ºåˆ¶æµ‹è¯•å®Œæˆ ===");
     }
 
-    // ¸¨Öú·½·¨£º»ñÈ¡±ä»»Â·¾¶
-    private string GetTransformPath(Transform tr)
+    [ContextMenu("æ£€æŸ¥Animatorå‚æ•°")]
+    public void CheckAnimatorParameters()
     {
-        if (tr.parent == null)
-            return tr.name;
-        return GetTransformPath(tr.parent) + "/" + tr.name;
+        if (animator == null)
+        {
+            Debug.LogError("æ²¡æœ‰Animatorç»„ä»¶ï¼");
+            return;
+        }
+
+        Debug.Log("=== Animatorå‚æ•°æ£€æŸ¥ ===");
+        Debug.Log($"å‚æ•°æ•°é‡: {animator.parameterCount}");
+
+        foreach (AnimatorControllerParameter param in animator.parameters)
+        {
+            Debug.Log($"- {param.name} ({param.type})");
+        }
+
+        Debug.Log($"å½“å‰ä½¿ç”¨çš„å‚æ•°:");
+        Debug.Log($"  Speed: {speedParam}, å€¼: {animator.GetFloat(speedParam):F2}");
+        Debug.Log($"  Grounded: {isGroundedParam}, å€¼: {animator.GetBool(isGroundedParam)}");
+        Debug.Log($"  Jump: {jumpParam}");
+
+        // æ£€æŸ¥çŠ¶æ€æ˜¯å¦å­˜åœ¨
+        Debug.Log($"çŠ¶æ€å­˜åœ¨æ£€æŸ¥:");
+        Debug.Log($"  IdleçŠ¶æ€: {animator.HasState(0, Animator.StringToHash("Base Layer.Idle"))}");
+        Debug.Log($"  WalkçŠ¶æ€: {animator.HasState(0, Animator.StringToHash("Base Layer.Walk"))}");
+        Debug.Log($"  RunçŠ¶æ€: {animator.HasState(0, Animator.StringToHash("Base Layer.Run"))}");
+        Debug.Log($"  JumpçŠ¶æ€: {animator.HasState(0, Animator.StringToHash("Base Layer.Jump"))}");
+    }
+
+    [ContextMenu("ä¿®å¤Animatorè®¾ç½®")]
+    public void FixAnimatorSetup()
+    {
+        if (animator == null) return;
+
+        Debug.Log("ä¿®å¤Animatorè®¾ç½®...");
+
+        // ç¦ç”¨Root Motion
+        animator.applyRootMotion = false;
+
+        // é‡ç½®æ‰€æœ‰å‚æ•°
+        animator.SetFloat(speedParam, 0f);
+        animator.SetBool(isGroundedParam, true);
+        animator.ResetTrigger(jumpParam);
+
+        // å¼ºåˆ¶åˆ‡æ¢åˆ°IdleçŠ¶æ€
+        animator.Play("Idle", 0, 0f);
+
+        Debug.Log("Animatorè®¾ç½®ä¿®å¤å®Œæˆ");
+    }
+
+    [ContextMenu("å½“å‰çŠ¶æ€è¯¦æƒ…")]
+    public void ShowCurrentStateDetails()
+    {
+        if (animator == null)
+        {
+            Debug.LogError("æ²¡æœ‰Animatorç»„ä»¶ï¼");
+            return;
+        }
+
+        AnimatorStateInfo stateInfo = animator.GetCurrentAnimatorStateInfo(0);
+
+        Debug.Log("=== å½“å‰çŠ¶æ€è¯¦æƒ… ===");
+        Debug.Log($"çŠ¶æ€åç§°: {GetCurrentStateName()}");
+        Debug.Log($"çŠ¶æ€å“ˆå¸Œ: {stateInfo.fullPathHash}");
+        Debug.Log($"çŠ¶æ€é•¿åº¦: {stateInfo.length:F2}ç§’");
+        Debug.Log($"æ ‡å‡†åŒ–æ—¶é—´: {stateInfo.normalizedTime:F2}");
+        Debug.Log($"æ˜¯å¦å¾ªç¯: {stateInfo.loop}");
+        Debug.Log($"é€Ÿåº¦å€æ•°: {stateInfo.speed}");
+        Debug.Log($"æ˜¯å¦åœ¨è¿‡æ¸¡: {animator.IsInTransition(0)}");
+
+        if (animator.IsInTransition(0))
+        {
+            AnimatorTransitionInfo transInfo = animator.GetAnimatorTransitionInfo(0);
+            Debug.Log($"è¿‡æ¸¡æŒç»­æ—¶é—´: {transInfo.duration:F2}");
+            Debug.Log($"è¿‡æ¸¡æ ‡å‡†åŒ–æ—¶é—´: {transInfo.normalizedTime:F2}");
+        }
     }
 
     void OnDrawGizmosSelected()
     {
         if (!drawDebugGizmos) return;
 
-        // »æÖÆ¿ØÖÆÆ÷Î»ÖÃ
+        // ç»˜åˆ¶æ§åˆ¶å™¨ä½ç½®
         Gizmos.color = Color.green;
         Gizmos.DrawWireSphere(transform.position, 0.5f);
 
-        // »æÖÆÄ£ĞÍÎ»ÖÃ
-        if (foxModel != null && foxModel != transform)
-        {
-            Gizmos.color = Color.blue;
-            Gizmos.DrawWireSphere(foxModel.position, 0.3f);
-            Gizmos.DrawLine(transform.position, foxModel.position);
-        }
-
-        // »æÖÆµØÃæ¼ì²âÏß
+        // ç»˜åˆ¶åœ°é¢æ£€æµ‹çº¿
         Gizmos.color = isGrounded ? Color.green : Color.red;
         Vector3 rayStart = transform.position + Vector3.up * 0.1f;
         Gizmos.DrawLine(rayStart, rayStart + Vector3.down * (groundCheckDistance + 0.1f));
+
+        // ç»˜åˆ¶ç§»åŠ¨æ–¹å‘
+        if (Application.isPlaying)
+        {
+            Gizmos.color = Color.blue;
+            Vector3 horizontalMove = new Vector3(moveDirection.x, 0, moveDirection.z);
+            if (horizontalMove.magnitude > 0.1f)
+            {
+                Gizmos.DrawLine(transform.position, transform.position + horizontalMove.normalized * 2f);
+            }
+        }
     }
 }
