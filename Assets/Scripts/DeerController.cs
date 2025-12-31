@@ -1,78 +1,78 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 
 public class DeerController : MonoBehaviour, IPossessable
 {
-    [Header("ÒÆ¶¯ÉèÖÃ")]
+    [Header("ç§»åŠ¨è®¾ç½®")]
     public float walkSpeed = 3f;
     public float runSpeed = 7f;
     public float rotationSpeed = 10f;
     public float jumpForce = 5f;
-    public float groundCheckDistance = 0.5f; // Ôö¼Ó¼ì²â¾àÀë
+    public float groundCheckDistance = 0.5f; // å¢åŠ æ£€æµ‹è·ç¦»
     public LayerMask groundLayer = -1;
 
-    [Header("¶¯»­²ÎÊı")]
+    [Header("åŠ¨ç”»å‚æ•°")]
     public string speedParam = "Speed";
     public string isGroundedParam = "IsGrounded";
     public string jumpParam = "Jump";
 
-    [Header("ÄÜÁ¦ÃèÊö")]
-    public string abilityDescription = "¿ÉÒÔÔÚÂ½µØÉÏ±¼ÅÜºÍÌøÔ¾µÄÂ¹";
+    [Header("èƒ½åŠ›æè¿°")]
+    public string abilityDescription = "å¯ä»¥åœ¨é™†åœ°ä¸Šå¥”è·‘å’Œè·³è·ƒçš„é¹¿";
 
-    [Header("×´Ì¬")]
+    [Header("çŠ¶æ€")]
     public bool isPossessed = false;
     private bool isGrounded = true;
     private bool isRunning = false;
 
-    [Header("×é¼şÒıÓÃ")]
+    [Header("ç»„ä»¶å¼•ç”¨")]
     private Animator animator;
     private CharacterController controller;
     private Vector3 moveDirection = Vector3.zero;
     private float verticalVelocity;
     private float groundCheckTimer = 0f;
 
-    [Header("ÖØÁ¦ÉèÖÃ")]
+    [Header("é‡åŠ›è®¾ç½®")]
     public float gravity = -9.81f;
-    public float extraGravity = -5f; // ¶îÍâµÄÏòÏÂµÄÁ¦
+    public float extraGravity = -5f; // é¢å¤–çš„å‘ä¸‹çš„åŠ›
 
-    [Header("µ÷ÊÔ")]
+    [Header("è°ƒè¯•")]
     public bool showDebugInfo = true;
 
     void Start()
     {
-        // »ñÈ¡×é¼şÒıÓÃ
+        // è·å–ç»„ä»¶å¼•ç”¨
         animator = GetComponentInChildren<Animator>();
         controller = GetComponent<CharacterController>();
 
         if (animator == null)
         {
             animator = GetComponent<Animator>();
-            Debug.LogWarning("´Ó×Ó¶ÔÏóÖĞÎ´ÕÒµ½Animator£¬³¢ÊÔ´Óµ±Ç°¶ÔÏó»ñÈ¡");
+            Debug.LogWarning("ä»å­å¯¹è±¡ä¸­æœªæ‰¾åˆ°Animatorï¼Œå°è¯•ä»å½“å‰å¯¹è±¡è·å–");
         }
 
         if (animator == null)
         {
-            Debug.LogError("Â¹¿ØÖÆÆ÷ĞèÒªAnimator×é¼ş£¡");
+            Debug.LogError("é¹¿æ§åˆ¶å™¨éœ€è¦Animatorç»„ä»¶ï¼");
         }
 
         if (controller == null)
         {
             controller = gameObject.AddComponent<CharacterController>();
-            Debug.Log("×Ô¶¯Ìí¼ÓCharacterController×é¼ş");
+            Debug.Log("è‡ªåŠ¨æ·»åŠ CharacterControllerç»„ä»¶");
 
-            // ÉèÖÃCharacter ControllerÄ¬ÈÏ²ÎÊı - ÖØÒª£¡
-            controller.height = 1.5f;      // ¸ù¾İÂ¹µÄ¸ß¶Èµ÷Õû
-            controller.radius = 0.3f;       // ¸ù¾İÂ¹µÄ¿í¶Èµ÷Õû
-            controller.center = new Vector3(0, 0.75f, 0); // ÖĞĞÄµã¸ß¶ÈÊÇ¸ß¶ÈµÄÒ»°ë
-            controller.stepOffset = 0.3f;   // ¿ÉÒÔ¿çÔ½µÄ¸ß¶È
-            controller.slopeLimit = 45f;    // ×î´óÆÂ¶È
-            controller.minMoveDistance = 0.001f; // ×îĞ¡ÒÆ¶¯¾àÀë
+            // è®¾ç½®Character Controlleré»˜è®¤å‚æ•° - é‡è¦ï¼
+            controller.height = 1.5f;      // æ ¹æ®é¹¿çš„é«˜åº¦è°ƒæ•´
+            controller.radius = 0.3f;       // æ ¹æ®é¹¿çš„å®½åº¦è°ƒæ•´
+            controller.center = new Vector3(0, 0.75f, 0); // ä¸­å¿ƒç‚¹é«˜åº¦æ˜¯é«˜åº¦çš„ä¸€åŠ
+            controller.stepOffset = 0.3f;   // å¯ä»¥è·¨è¶Šçš„é«˜åº¦
+            controller.slopeLimit = 45f;    // æœ€å¤§å¡åº¦
+            controller.minMoveDistance = 0.001f; // æœ€å°ç§»åŠ¨è·ç¦»
         }
         else
         {
-            // ¼ì²éÏÖÓĞCharacter ControllerÉèÖÃ
+            // æ£€æŸ¥ç°æœ‰Character Controllerè®¾ç½®
             if (showDebugInfo)
             {
-                Debug.Log($"Character ControllerÉèÖÃ:");
+                Debug.Log($"Character Controllerè®¾ç½®:");
                 Debug.Log($"  Height: {controller.height}");
                 Debug.Log($"  Radius: {controller.radius}");
                 Debug.Log($"  Center: {controller.center}");
@@ -80,20 +80,20 @@ public class DeerController : MonoBehaviour, IPossessable
             }
         }
 
-        // ³õÊ¼ÉèÖÃÎª´ı»ú×´Ì¬
+        // åˆå§‹è®¾ç½®ä¸ºå¾…æœºçŠ¶æ€
         if (animator != null)
         {
             animator.SetFloat(speedParam, 0f);
             animator.SetBool(isGroundedParam, true);
         }
 
-        // Ç¿ÖÆµ÷Õûµ½µØÃæÎ»ÖÃ
+        // å¼ºåˆ¶è°ƒæ•´åˆ°åœ°é¢ä½ç½®
         ForceGroundPosition();
     }
 
     void ForceGroundPosition()
     {
-        // Ê¹ÓÃÉäÏß¼ì²âÕÒµ½µØÃæÎ»ÖÃ
+        // ä½¿ç”¨å°„çº¿æ£€æµ‹æ‰¾åˆ°åœ°é¢ä½ç½®
         RaycastHit hit;
         if (Physics.Raycast(transform.position + Vector3.up * 1f, Vector3.down, out hit, 10f, groundLayer))
         {
@@ -101,11 +101,11 @@ public class DeerController : MonoBehaviour, IPossessable
             transform.position = new Vector3(transform.position.x, targetY, transform.position.z);
 
             if (showDebugInfo)
-                Debug.Log($"Ç¿ÖÆµ÷ÕûÂ¹µ½µØÃæ: ´Ó {transform.position.y} µ÷Õûµ½ {targetY}");
+                Debug.Log($"å¼ºåˆ¶è°ƒæ•´é¹¿åˆ°åœ°é¢: ä» {transform.position.y} è°ƒæ•´åˆ° {targetY}");
         }
         else
         {
-            // Èç¹ûÃ»ÓĞ¼ì²âµ½µØÃæ£¬ÏòÏÂÒÆ¶¯Ö±µ½Åö×²
+            // å¦‚æœæ²¡æœ‰æ£€æµ‹åˆ°åœ°é¢ï¼Œå‘ä¸‹ç§»åŠ¨ç›´åˆ°ç¢°æ’
             if (Physics.Raycast(transform.position, Vector3.down, out hit, 100f))
             {
                 float targetY = hit.point.y + controller.height * 0.5f + controller.skinWidth;
@@ -113,64 +113,64 @@ public class DeerController : MonoBehaviour, IPossessable
             }
         }
 
-        // È·±£´¹Ö±ËÙ¶È¹éÁã
-        verticalVelocity = -0.5f; // Ğ¡Öµ±£³ÖµØÃæ½Ó´¥
+        // ç¡®ä¿å‚ç›´é€Ÿåº¦å½’é›¶
+        verticalVelocity = -0.5f; // å°å€¼ä¿æŒåœ°é¢æ¥è§¦
     }
 
-    // ===== ÊµÏÖ IPossessable ½Ó¿Ú =====
+    // ===== å®ç° IPossessable æ¥å£ =====
 
     public void OnPossess()
     {
-        // ¼ÇÂ¼¸½ÉíÇ°µÄÎ»ÖÃºÍĞı×ª
+        // è®°å½•é™„èº«å‰çš„ä½ç½®å’Œæ—‹è½¬
         Vector3 positionBefore = transform.position;
         Quaternion rotationBefore = transform.rotation;
 
         if (showDebugInfo)
-            Debug.Log($"Â¹±»¸½Éí£¡Î»ÖÃ: {positionBefore}, Y={positionBefore.y:F2}");
+            Debug.Log($"é¹¿è¢«é™„èº«ï¼ä½ç½®: {positionBefore}, Y={positionBefore.y:F2}");
 
         isPossessed = true;
 
-        // ÖØÒª£ºÏÈ½ûÓÃÈÎºÎ¿ÉÄÜµ¼ÖÂÎ»ÖÃ¸Ä±äµÄ×é¼ş
+        // é‡è¦ï¼šå…ˆç¦ç”¨ä»»ä½•å¯èƒ½å¯¼è‡´ä½ç½®æ”¹å˜çš„ç»„ä»¶
         if (animator != null)
         {
-            // ½ûÓÃ¸ùÔË¶¯£¬·ÀÖ¹¶¯»­¸Ä±äÎ»ÖÃ
+            // ç¦ç”¨æ ¹è¿åŠ¨ï¼Œé˜²æ­¢åŠ¨ç”»æ”¹å˜ä½ç½®
             animator.applyRootMotion = false;
         }
 
-        // È·±£¿ØÖÆÆ÷ÆôÓÃ
+        // ç¡®ä¿æ§åˆ¶å™¨å¯ç”¨
         if (controller != null)
         {
-            // ¼ÇÂ¼ÆôÓÃÇ°µÄ×´Ì¬
+            // è®°å½•å¯ç”¨å‰çš„çŠ¶æ€
             bool wasEnabled = controller.enabled;
 
             if (!wasEnabled)
             {
                 controller.enabled = true;
 
-                // ¼ì²éÆôÓÃºóÎ»ÖÃÊÇ·ñ¸Ä±ä
+                // æ£€æŸ¥å¯ç”¨åä½ç½®æ˜¯å¦æ”¹å˜
                 if (showDebugInfo && Vector3.Distance(transform.position, positionBefore) > 0.01f)
                 {
-                    Debug.LogWarning($"ÆôÓÃCharacterControllerºóÎ»ÖÃ¸Ä±ä£¡´Ó {positionBefore.y:F2} µ½ {transform.position.y:F2}");
+                    Debug.LogWarning($"å¯ç”¨CharacterControlleråä½ç½®æ”¹å˜ï¼ä» {positionBefore.y:F2} åˆ° {transform.position.y:F2}");
                 }
             }
         }
 
-        // ÉèÖÃ¶¯»­×´Ì¬ - Ê¹ÓÃCrossFade±ÜÃâÍ»È»µÄÎ»ÖÃ±ä»¯
+        // è®¾ç½®åŠ¨ç”»çŠ¶æ€ - ä½¿ç”¨CrossFadeé¿å…çªç„¶çš„ä½ç½®å˜åŒ–
         if (animator != null)
         {
             animator.SetFloat(speedParam, 0f);
             animator.SetBool(isGroundedParam, true);
 
-            // Ê¹ÓÃCrossFade¶ø²»ÊÇPlay£¬±ÜÃâ¶¯»­ÖØÖÃµ¼ÖÂµÄÎ»ÖÃ±ä»¯
+            // ä½¿ç”¨CrossFadeè€Œä¸æ˜¯Playï¼Œé¿å…åŠ¨ç”»é‡ç½®å¯¼è‡´çš„ä½ç½®å˜åŒ–
             animator.CrossFade("Idle", 0.2f);
         }
 
-        // ÖØÒª£ºÔÚ¸½ÉíºóÇ¿ÖÆ±£³ÖÔ­Î»ÖÃºÍĞı×ª
+        // é‡è¦ï¼šåœ¨é™„èº«åå¼ºåˆ¶ä¿æŒåŸä½ç½®å’Œæ—‹è½¬
         transform.position = positionBefore;
         transform.rotation = rotationBefore;
 
         if (showDebugInfo)
-            Debug.Log($"OnPossessÍê³É£¬È·±£Î»ÖÃ±£³ÖÔÚY={transform.position.y:F2}");
+            Debug.Log($"OnPossesså®Œæˆï¼Œç¡®ä¿ä½ç½®ä¿æŒåœ¨Y={transform.position.y:F2}");
     }
 
     public void OnRelease()
@@ -183,12 +183,12 @@ public class DeerController : MonoBehaviour, IPossessable
             animator.SetBool(isGroundedParam, true);
         }
 
-        // ÖØÖÃÒÆ¶¯·½Ïò
+        // é‡ç½®ç§»åŠ¨æ–¹å‘
         moveDirection = Vector3.zero;
         verticalVelocity = -0.5f;
         isRunning = false;
 
-        if (showDebugInfo) Debug.Log("Â¹ÍÑÀë¸½Éí£¡");
+        if (showDebugInfo) Debug.Log("é¹¿è„±ç¦»é™„èº«ï¼");
     }
 
     public string GetAbilityDescription()
@@ -204,22 +204,22 @@ public class DeerController : MonoBehaviour, IPossessable
         UpdateAnimations();
         CheckGroundStatus();
     }
-    // ===== ½Ó¿ÚÊµÏÖ½áÊø =====
+    // ===== æ¥å£å®ç°ç»“æŸ =====
 
     void HandleMovement()
     {
         if (controller == null)
         {
-            Debug.LogError("CharacterControllerÎª¿Õ£¡");
+            Debug.LogError("CharacterControllerä¸ºç©ºï¼");
             return;
         }
 
-        // »ñÈ¡ÊäÈë
+        // è·å–è¾“å…¥
         float horizontal = Input.GetAxis("Horizontal");
         float vertical = Input.GetAxis("Vertical");
         bool jump = Input.GetButtonDown("Jump");
 
-        // ¸Ä½øµÄµØÃæ¼ì²â - Ã¿0.1Ãë¼ì²éÒ»´Î£¬¼õÉÙ¼ÆËã
+        // æ”¹è¿›çš„åœ°é¢æ£€æµ‹ - æ¯0.1ç§’æ£€æŸ¥ä¸€æ¬¡ï¼Œå‡å°‘è®¡ç®—
         groundCheckTimer -= Time.deltaTime;
         if (groundCheckTimer <= 0)
         {
@@ -227,10 +227,10 @@ public class DeerController : MonoBehaviour, IPossessable
             groundCheckTimer = 0.1f;
         }
 
-        // »ù´¡ÒÆ¶¯·½Ïò
+        // åŸºç¡€ç§»åŠ¨æ–¹å‘
         Vector3 move = new Vector3(horizontal, 0, vertical);
 
-        // »ñÈ¡Ïà»ú·½Ïò£¨µÚÈıÈË³ÆÊÓ½Ç£©
+        // è·å–ç›¸æœºæ–¹å‘ï¼ˆç¬¬ä¸‰äººç§°è§†è§’ï¼‰
         Camera mainCamera = Camera.main;
         if (mainCamera != null && move.magnitude > 0.1f)
         {
@@ -245,19 +245,19 @@ public class DeerController : MonoBehaviour, IPossessable
             move = cameraForward * vertical + cameraRight * horizontal;
         }
 
-        // ¼ÆËãÒÆ¶¯ËÙ¶È
+        // è®¡ç®—ç§»åŠ¨é€Ÿåº¦
         float currentSpeed = 0f;
 
         if (move.magnitude > 0.1f)
         {
-            // ¼ì²éÊÇ·ñÔÚÅÜ²½
+            // æ£€æŸ¥æ˜¯å¦åœ¨è·‘æ­¥
             isRunning = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
             currentSpeed = isRunning ? runSpeed : walkSpeed;
 
-            // Ó¦ÓÃÒÆ¶¯
+            // åº”ç”¨ç§»åŠ¨
             controller.Move(move.normalized * currentSpeed * Time.deltaTime);
 
-            // Ğı×ª³¯ÏòÒÆ¶¯·½Ïò
+            // æ—‹è½¬æœå‘ç§»åŠ¨æ–¹å‘
             if (move != Vector3.zero)
             {
                 Quaternion targetRotation = Quaternion.LookRotation(move);
@@ -270,13 +270,13 @@ public class DeerController : MonoBehaviour, IPossessable
             currentSpeed = 0f;
         }
 
-        // ÖØÁ¦¼ÆËã
+        // é‡åŠ›è®¡ç®—
         if (!isGrounded)
         {
-            // ÔÚ¿ÕÖĞÊ±Ó¦ÓÃÖØÁ¦
+            // åœ¨ç©ºä¸­æ—¶åº”ç”¨é‡åŠ›
             verticalVelocity += gravity * Time.deltaTime;
 
-            // ¶îÍâµÄÏòÏÂÁ¦£¬È·±£¾¡¿ìÂäµØ
+            // é¢å¤–çš„å‘ä¸‹åŠ›ï¼Œç¡®ä¿å°½å¿«è½åœ°
             if (verticalVelocity < 0)
             {
                 verticalVelocity += extraGravity * Time.deltaTime;
@@ -284,10 +284,10 @@ public class DeerController : MonoBehaviour, IPossessable
         }
         else
         {
-            // ÔÚµØÃæÊ±£¬Ê©¼ÓÒ»¸öĞ¡µÄÏòÏÂÁ¦±£³ÖµØÃæ½Ó´¥
+            // åœ¨åœ°é¢æ—¶ï¼Œæ–½åŠ ä¸€ä¸ªå°çš„å‘ä¸‹åŠ›ä¿æŒåœ°é¢æ¥è§¦
             verticalVelocity = -0.5f;
 
-            // ÌøÔ¾
+            // è·³è·ƒ
             if (jump)
             {
                 verticalVelocity = Mathf.Sqrt(jumpForce * -2f * gravity);
@@ -296,17 +296,17 @@ public class DeerController : MonoBehaviour, IPossessable
                     animator.SetTrigger(jumpParam);
                 }
 
-                if (showDebugInfo) Debug.Log("Â¹ÌøÔ¾£¡");
+                if (showDebugInfo) Debug.Log("é¹¿è·³è·ƒï¼");
             }
         }
 
-        // ´¹Ö±ÒÆ¶¯
+        // å‚ç›´ç§»åŠ¨
         Vector3 verticalMove = new Vector3(0, verticalVelocity, 0) * Time.deltaTime;
 
-        // Ó¦ÓÃËùÓĞÒÆ¶¯
+        // åº”ç”¨æ‰€æœ‰ç§»åŠ¨
         controller.Move(verticalMove);
 
-        // ¸üĞÂ¶¯»­ËÙ¶È²ÎÊı
+        // æ›´æ–°åŠ¨ç”»é€Ÿåº¦å‚æ•°
         if (animator != null)
         {
             float animSpeed = Mathf.Lerp(animator.GetFloat(speedParam), currentSpeed, Time.deltaTime * 5f);
@@ -318,13 +318,13 @@ public class DeerController : MonoBehaviour, IPossessable
     {
         if (animator == null) return;
 
-        // ¸üĞÂµØÃæ×´Ì¬
+        // æ›´æ–°åœ°é¢çŠ¶æ€
         animator.SetBool(isGroundedParam, isGrounded);
 
-        // µ÷ÊÔĞÅÏ¢
-        if (showDebugInfo && Time.frameCount % 60 == 0) // Ã¿ÃëÒ»´Î
+        // è°ƒè¯•ä¿¡æ¯
+        if (showDebugInfo && Time.frameCount % 60 == 0) // æ¯ç§’ä¸€æ¬¡
         {
-            Debug.Log($"Â¹×´Ì¬: ÔÚµØÃæ={isGrounded}, ´¹Ö±ËÙ¶È={verticalVelocity:F2}, ¿ØÖÆÆ÷ÔÚµØÃæ={controller.isGrounded}");
+            Debug.Log($"é¹¿çŠ¶æ€: åœ¨åœ°é¢={isGrounded}, å‚ç›´é€Ÿåº¦={verticalVelocity:F2}, æ§åˆ¶å™¨åœ¨åœ°é¢={controller.isGrounded}");
         }
     }
 
@@ -332,10 +332,10 @@ public class DeerController : MonoBehaviour, IPossessable
     {
         if (controller == null) return;
 
-        // ·½·¨1: Ê¹ÓÃCharacterControllerµÄisGrounded
+        // æ–¹æ³•1: ä½¿ç”¨CharacterControllerçš„isGrounded
         bool controllerGrounded = controller.isGrounded;
 
-        // ·½·¨2: Ê¹ÓÃÉäÏß¼ì²â
+        // æ–¹æ³•2: ä½¿ç”¨å°„çº¿æ£€æµ‹
         RaycastHit hit;
         bool raycastGrounded = Physics.Raycast(
             transform.position + Vector3.up * 0.1f,
@@ -345,7 +345,7 @@ public class DeerController : MonoBehaviour, IPossessable
             groundLayer
         );
 
-        // ·½·¨3: Ê¹ÓÃÇòÌå¼ì²â£¨¸ü¿É¿¿£©
+        // æ–¹æ³•3: ä½¿ç”¨çƒä½“æ£€æµ‹ï¼ˆæ›´å¯é ï¼‰
         bool sphereCastGrounded = Physics.SphereCast(
             transform.position + Vector3.up * 0.2f,
             controller.radius * 0.9f,
@@ -355,40 +355,40 @@ public class DeerController : MonoBehaviour, IPossessable
             groundLayer
         );
 
-        // ×ÛºÏÅĞ¶Ï
+        // ç»¼åˆåˆ¤æ–­
         isGrounded = controllerGrounded || raycastGrounded || sphereCastGrounded;
 
-        // Èç¹û¼ì²âµ½µØÃæ£¬µ÷ÕûÎ»ÖÃÈ·±£½Ó´¥
+        // å¦‚æœæ£€æµ‹åˆ°åœ°é¢ï¼Œè°ƒæ•´ä½ç½®ç¡®ä¿æ¥è§¦
         if (isGrounded && hit.collider != null)
         {
-            // ÇáÎ¢µ÷ÕûÎ»ÖÃÈ·±£½Ó´¥
+            // è½»å¾®è°ƒæ•´ä½ç½®ç¡®ä¿æ¥è§¦
             float groundHeight = hit.point.y;
             float currentBottom = transform.position.y - controller.height * 0.5f;
 
-            if (currentBottom > groundHeight + 0.05f) // Èç¹ûµ×²¿¸ßÓÚµØÃæ
+            if (currentBottom > groundHeight + 0.05f) // å¦‚æœåº•éƒ¨é«˜äºåœ°é¢
             {
                 float adjustY = groundHeight + controller.height * 0.5f + controller.skinWidth;
                 transform.position = new Vector3(transform.position.x, adjustY, transform.position.z);
 
                 if (showDebugInfo)
-                    Debug.Log($"µ÷ÕûÂ¹Î»ÖÃÈ·±£µØÃæ½Ó´¥: {adjustY}");
+                    Debug.Log($"è°ƒæ•´é¹¿ä½ç½®ç¡®ä¿åœ°é¢æ¥è§¦: {adjustY}");
             }
         }
     }
 
-    // µ÷ÊÔĞÅÏ¢
+    // è°ƒè¯•ä¿¡æ¯
     void OnDrawGizmosSelected()
     {
         if (showDebugInfo)
         {
-            // »æÖÆµØÃæ¼ì²âÏß
+            // ç»˜åˆ¶åœ°é¢æ£€æµ‹çº¿
             Gizmos.color = isGrounded ? Color.green : Color.red;
             Gizmos.DrawLine(
                 transform.position + Vector3.up * 0.1f,
                 transform.position + Vector3.up * 0.1f + Vector3.down * groundCheckDistance
             );
 
-            // »æÖÆCharacter Controller·¶Î§
+            // ç»˜åˆ¶Character ControllerèŒƒå›´
             Gizmos.color = Color.cyan;
             if (controller != null)
             {
@@ -400,7 +400,7 @@ public class DeerController : MonoBehaviour, IPossessable
                 );
             }
 
-            // »æÖÆÒÆ¶¯·½Ïò
+            // ç»˜åˆ¶ç§»åŠ¨æ–¹å‘
             if (Application.isPlaying && moveDirection.magnitude > 0.1f)
             {
                 Gizmos.color = Color.yellow;
@@ -409,15 +409,15 @@ public class DeerController : MonoBehaviour, IPossessable
         }
     }
 
-/*    // ÁÙÊ±µ÷ÊÔUI
-    void OnGUI()
-    {
-        if (showDebugInfo)
+    /*    // ä¸´æ—¶è°ƒè¯•UI
+        void OnGUI()
         {
-            GUI.Label(new Rect(10, 50, 300, 20), $"Â¹ÔÚµØÃæ: {isGrounded}");
-            GUI.Label(new Rect(10, 70, 300, 20), $"´¹Ö±ËÙ¶È: {verticalVelocity:F2}");
-            GUI.Label(new Rect(10, 90, 300, 20), $"¿ØÖÆÆ÷ÔÚµØÃæ: {controller?.isGrounded}");
-            GUI.Label(new Rect(10, 110, 300, 20), $"Î»ÖÃY: {transform.position.y:F2}");
-        }
-    }*/
+            if (showDebugInfo)
+            {
+                GUI.Label(new Rect(10, 50, 300, 20), $"é¹¿åœ¨åœ°é¢: {isGrounded}");
+                GUI.Label(new Rect(10, 70, 300, 20), $"å‚ç›´é€Ÿåº¦: {verticalVelocity:F2}");
+                GUI.Label(new Rect(10, 90, 300, 20), $"æ§åˆ¶å™¨åœ¨åœ°é¢: {controller?.isGrounded}");
+                GUI.Label(new Rect(10, 110, 300, 20), $"ä½ç½®Y: {transform.position.y:F2}");
+            }
+        }*/
 }

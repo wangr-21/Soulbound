@@ -4,10 +4,10 @@ public class LeopardController : MonoBehaviour, IPossessable
 {
     [Header("移动设置")]
     public float walkSpeed = 3f;
-    public float runSpeed = 6f;
-    public float rotationSpeed = 8f;
+    public float runSpeed = 7f;
+    public float rotationSpeed = 10f;
     public float jumpForce = 5f;
-    public float groundCheckDistance = 0.3f;
+    public float groundCheckDistance = 0.5f;
     public LayerMask groundLayer = -1;
 
     [Header("动画参数")]
@@ -21,216 +21,221 @@ public class LeopardController : MonoBehaviour, IPossessable
     [Header("状态")]
     public bool isPossessed = false;
     private bool isGrounded = true;
-    private bool isJumping = false;
+    private bool isRunning = false;
 
     [Header("组件引用")]
     private Animator animator;
     private CharacterController controller;
     private Vector3 moveDirection = Vector3.zero;
+    private float verticalVelocity;
+    private float groundCheckTimer = 0f;
+
+    [Header("重力设置")]
+    public float gravity = -9.81f;
+    public float extraGravity = -5f;
+
+    [Header("碰撞体设置")]
+    public bool addCapsuleCollider = true; // 是否添加用于检测的碰撞体
+    private CapsuleCollider detectionCollider;
 
     [Header("调试")]
     public bool showDebugInfo = true;
 
-    // 移动相关
-    private float currentSpeed = 0f;
-    private Vector3 currentMovementInput = Vector3.zero;
-    private float verticalVelocity = 0f;
-    private const float GRAVITY = -9.81f;
-
     void Start()
     {
-        Debug.Log($"=== 豹子初始化开始 ===");
-        Debug.Log($"豹子对象: {gameObject.name}");
-
-        // 检查并确保脚本只在正确的对象上运行
-        if (transform.parent != null)
-        {
-            Debug.Log($"父对象: {transform.parent.name}");
-        }
+        if (showDebugInfo)
+            Debug.Log($"=== 豹子控制器初始化开始: {gameObject.name} ===");
 
         // 获取组件引用
-        animator = GetComponent<Animator>();
+        animator = GetComponentInChildren<Animator>();
         controller = GetComponent<CharacterController>();
+
+        if (animator == null)
+        {
+            animator = GetComponent<Animator>();
+            if (showDebugInfo) Debug.LogWarning("从子对象中未找到Animator，尝试从当前对象获取");
+        }
 
         if (animator == null)
         {
             Debug.LogError("豹子控制器需要Animator组件！");
         }
 
+        // 确保有CharacterController
         if (controller == null)
         {
-            Debug.LogError("豹子控制器需要CharacterController组件！");
+            controller = gameObject.AddComponent<CharacterController>();
+            if (showDebugInfo) Debug.Log("自动添加CharacterController组件");
+
+            // 设置Character Controller默认参数
+            controller.height = 1.5f;
+            controller.radius = 0.4f; // 豹子比鹿宽一点
+            controller.center = new Vector3(0, 0.75f, 0);
+            controller.stepOffset = 0.3f;
+            controller.slopeLimit = 45f;
+            controller.minMoveDistance = 0.001f;
+            controller.skinWidth = 0.08f;
+        }
+        else
+        {
+            // 确保CharacterController设置正确
+            controller.height = Mathf.Max(controller.height, 1.0f);
+            controller.radius = Mathf.Max(controller.radius, 0.3f);
+            controller.center = new Vector3(0, controller.height * 0.5f, 0);
         }
 
-        // 初始设置为待机状态
+        // 添加或配置用于检测的碰撞体
+        SetupDetectionCollider();
+
+        // 初始动画状态
         if (animator != null)
         {
             animator.SetFloat(speedParam, 0f);
             animator.SetBool(isGroundedParam, true);
         }
 
-        // 确保有合适的碰撞体用于检测
-        SetupColliderForDetection();
+        // 强制调整到地面位置
+        ForceGroundPosition();
 
-        // 修正CharacterController设置
-        FixCharacterController();
-
-        // 接口验证
-        TestInterfaceImplementation();
-
-        Debug.Log($"=== 豹子初始化完成 ===");
+        if (showDebugInfo)
+        {
+            Debug.Log($"豹子初始化完成:");
+            Debug.Log($"  CharacterController: {controller != null}");
+            Debug.Log($"  Animator: {animator != null}");
+            Debug.Log($"  检测碰撞体: {detectionCollider != null}");
+            Debug.Log($"  位置Y: {transform.position.y:F2}");
+        }
     }
 
-    void TestInterfaceImplementation()
+    void SetupDetectionCollider()
     {
-        Debug.Log("=== 豹子接口验证 ===");
-        Debug.Log($"脚本类型: {GetType().FullName}");
+        // 检查是否已经有合适的碰撞体
+        detectionCollider = GetComponent<CapsuleCollider>();
 
-        // 检查是否实现了IPossessable接口
-        System.Type[] interfaces = GetType().GetInterfaces();
-        Debug.Log($"实现的接口数量: {interfaces.Length}");
-
-        foreach (System.Type iface in interfaces)
+        if (detectionCollider == null && addCapsuleCollider)
         {
-            Debug.Log($"接口: {iface.FullName}");
-            if (iface.Name == "IPossessable")
+            // 添加用于检测的碰撞体
+            detectionCollider = gameObject.AddComponent<CapsuleCollider>();
+
+            // 设置碰撞体参数
+            if (controller != null)
             {
-                Debug.Log($"✓ 确认实现了IPossessable接口！");
-
-                // 检查接口方法是否都存在
-                var methods = iface.GetMethods();
-                Debug.Log($"接口方法数量: {methods.Length}");
-                foreach (var method in methods)
-                {
-                    Debug.Log($"  方法: {method.Name}");
-                }
+                // 使用与CharacterController相似的参数
+                detectionCollider.center = controller.center;
+                detectionCollider.height = controller.height;
+                detectionCollider.radius = controller.radius + 0.1f; // 稍微大一点，便于检测
             }
-        }
+            else
+            {
+                // 默认参数
+                detectionCollider.center = new Vector3(0, 1f, 0);
+                detectionCollider.height = 2f;
+                detectionCollider.radius = 0.5f;
+            }
 
-        // 直接检查
-        if (this is IPossessable)
+            detectionCollider.isTrigger = false; // 必须是非触发器才能被Physics检测到
+
+            if (showDebugInfo)
+                Debug.Log("添加用于检测的CapsuleCollider");
+        }
+        else if (detectionCollider != null)
         {
-            Debug.Log("✓ this is IPossessable 返回 true");
-            Debug.Log($"能力描述: {GetAbilityDescription()}");
+            // 确保现有的碰撞体不是触发器
+            detectionCollider.isTrigger = false;
+
+            if (showDebugInfo)
+                Debug.Log("使用现有的CapsuleCollider进行检测");
+        }
+    }
+
+    void ForceGroundPosition()
+    {
+        if (controller == null) return;
+
+        // 使用射线检测找到地面位置
+        RaycastHit hit;
+        Vector3 raycastStart = transform.position + Vector3.up * 2f; // 从较高的位置开始
+
+        if (Physics.Raycast(raycastStart, Vector3.down, out hit, 10f, groundLayer))
+        {
+            float targetY = hit.point.y + controller.height * 0.5f + controller.skinWidth;
+            transform.position = new Vector3(transform.position.x, targetY, transform.position.z);
+
+            if (showDebugInfo)
+                Debug.Log($"强制调整豹子到地面: 从 {transform.position.y} 调整到 {targetY}");
         }
         else
         {
-            Debug.LogError("✗ this is IPossessable 返回 false");
-        }
+            // 如果没有检测到地面，使用CharacterController的碰撞检测
+            if (showDebugInfo)
+                Debug.LogWarning("无法检测到地面，尝试使用CharacterController碰撞");
 
-        Debug.Log("=== 接口验证结束 ===");
-    }
-
-    void SetupColliderForDetection()
-    {
-        // 添加一个额外的CapsuleCollider用于检测（不作为触发器）
-        // 这样灵魂控制器可以检测到豹子，但不会影响物理碰撞
-        CapsuleCollider detectionCollider = GetComponent<CapsuleCollider>();
-
-        if (detectionCollider == null)
-        {
-            detectionCollider = gameObject.AddComponent<CapsuleCollider>();
-            Debug.Log("添加了CapsuleCollider用于附身检测");
-        }
-
-        // 设置合理的碰撞体大小
-        detectionCollider.center = new Vector3(0, 1, 0);
-        detectionCollider.height = 2f;
-        detectionCollider.radius = 0.5f;
-        detectionCollider.isTrigger = false; // 不要设为触发器，否则不会被Physics.OverlapSphere检测到
-
-        Debug.Log($"CapsuleCollider设置: Center={detectionCollider.center}, Height={detectionCollider.height}, Radius={detectionCollider.radius}");
-    }
-
-    void FixCharacterController()
-    {
-        if (controller == null)
-        {
-            controller = GetComponent<CharacterController>();
-            if (controller == null)
+            // 向下移动直到碰撞
+            Vector3 downMove = Vector3.down * 20f;
+            if (controller.Move(downMove * Time.deltaTime) != CollisionFlags.None)
             {
-                controller = gameObject.AddComponent<CharacterController>();
-                Debug.Log("添加了CharacterController组件");
+                // 碰撞后稍微向上调整
+                transform.position += Vector3.up * 0.1f;
             }
         }
 
-        // 强制重置CharacterController到合理值
-        controller.center = new Vector3(0, 1, 0);
-        controller.height = 2.0f;
-        controller.radius = 0.5f;
-        controller.slopeLimit = 45f;
-        controller.stepOffset = 0.3f;
-        controller.skinWidth = 0.08f;
-        controller.minMoveDistance = 0.001f;
-
-        Debug.Log($"CharacterController重置:");
-        Debug.Log($"  Center: {controller.center}");
-        Debug.Log($"  Height: {controller.height}");
-        Debug.Log($"  Radius: {controller.radius}");
-    }
-
-    void OnDestroy()
-    {
-        // 清理重复的脚本
-        CleanUpDuplicateScripts();
-    }
-
-    void CleanUpDuplicateScripts()
-    {
-        // 如果这是子对象上的脚本，自动销毁它
-        if (gameObject.name == "Leopard_Hybrid" && transform.parent != null)
-        {
-            if (transform.parent.GetComponent<LeopardController>() != null)
-            {
-                Debug.LogWarning($"检测到重复的LeopardController脚本在 {gameObject.name} 上，自动移除");
-                Destroy(this);
-            }
-        }
-    }
-
-    void Update()
-    {
-        // 非附身状态下的逻辑（如果有的话）
-        if (!isPossessed)
-        {
-            // 可以添加一些AI行为或空闲动画
-            UpdateIdleAnimations();
-            return;
-        }
+        // 确保垂直速度归零
+        verticalVelocity = -0.5f; // 小值保持地面接触
     }
 
     // ===== 实现 IPossessable 接口 =====
 
     public void OnPossess()
     {
-        isPossessed = true;
-        Debug.Log("豹子被附身了！");
+        if (showDebugInfo)
+            Debug.Log($"豹子OnPossess开始 - 当前Y位置: {transform.position.y:F2}");
 
-        // 确保控制器启用
+        // 记录附身前的位置和旋转
+        Vector3 positionBefore = transform.position;
+        Quaternion rotationBefore = transform.rotation;
+
+        isPossessed = true;
+
+        // 重要：确保控制器启用
         if (controller != null)
         {
-            controller.enabled = true;
-        }
-        else
-        {
-            controller = GetComponent<CharacterController>();
-            if (controller == null)
+            // 记录启用前的状态
+            bool wasEnabled = controller.enabled;
+
+            if (!wasEnabled)
             {
-                Debug.LogError("豹子的CharacterController组件丢失！");
+                controller.enabled = true;
+
+                if (showDebugInfo)
+                    Debug.Log($"启用CharacterController，之前状态: {wasEnabled}");
             }
         }
 
-        // 设置初始动画状态
+        // 禁用动画根运动
+        if (animator != null)
+        {
+            animator.applyRootMotion = false;
+        }
+
+        // 设置动画状态
         if (animator != null)
         {
             animator.SetFloat(speedParam, 0f);
             animator.SetBool(isGroundedParam, true);
+            animator.CrossFade("Idle", 0.2f); // 使用CrossFade避免突然的位置变化
         }
 
-        // 重置状态
-        isJumping = false;
-        currentSpeed = 0f;
-        moveDirection = Vector3.zero;
+        // 重要：在附身后强制保持原位置和旋转
+        transform.position = positionBefore;
+        transform.rotation = rotationBefore;
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"豹子被附身！");
+            Debug.Log($"  最终位置Y: {transform.position.y:F2}");
+            Debug.Log($"  控制器启用: {controller != null && controller.enabled}");
+            Debug.Log($"  动画器: {animator != null}");
+        }
     }
 
     public void OnRelease()
@@ -243,12 +248,13 @@ public class LeopardController : MonoBehaviour, IPossessable
             animator.SetBool(isGroundedParam, true);
         }
 
-        // 重置移动方向
+        // 重置移动状态
         moveDirection = Vector3.zero;
-        currentSpeed = 0f;
-        isJumping = false;
+        verticalVelocity = -0.5f;
+        isRunning = false;
 
-        Debug.Log("豹子脱离附身！");
+        if (showDebugInfo)
+            Debug.Log("豹子脱离附身！");
     }
 
     public string GetAbilityDescription()
@@ -268,129 +274,123 @@ public class LeopardController : MonoBehaviour, IPossessable
 
     void HandleMovement()
     {
-        if (controller == null)
+        if (controller == null || !controller.enabled)
         {
-            Debug.LogError("CharacterController为空！");
+            Debug.LogError("CharacterController为空或未启用！");
             return;
         }
 
+        // 获取输入
         float horizontal = Input.GetAxis("Horizontal");
         float vertical = Input.GetAxis("Vertical");
-        bool sprint = Input.GetKey(KeyCode.LeftShift);
-        bool jumpPressed = Input.GetButtonDown("Jump");
+        bool jump = Input.GetButtonDown("Jump");
 
-        if (showDebugInfo)
+        // 改进的地面检测 - 每0.1秒检查一次
+        groundCheckTimer -= Time.deltaTime;
+        if (groundCheckTimer <= 0)
         {
-            Debug.Log($"豹子移动输入: H={horizontal:F2}, V={vertical:F2}, Sprint={sprint}, Jump={jumpPressed}");
+            CheckGroundStatus();
+            groundCheckTimer = 0.1f;
         }
 
-        // 基础移动方向（基于世界坐标）
+        // 基础移动方向
         Vector3 move = new Vector3(horizontal, 0, vertical);
 
-        // 获取相机方向（如果使用了相机控制器）
+        // 获取相机方向（第三人称视角）
         Camera mainCamera = Camera.main;
-        if (mainCamera != null)
+        if (mainCamera != null && move.magnitude > 0.1f)
         {
-            // 获取相机的前向和右向（忽略Y轴）
             Vector3 cameraForward = mainCamera.transform.forward;
             Vector3 cameraRight = mainCamera.transform.right;
 
             cameraForward.y = 0;
             cameraRight.y = 0;
-
-            // 标准化
             cameraForward.Normalize();
             cameraRight.Normalize();
 
-            // 根据相机方向计算移动
             move = cameraForward * vertical + cameraRight * horizontal;
         }
 
-        // 计算移动速度（考虑冲刺）
-        float targetSpeed = 0f;
+        // 计算移动速度
+        float currentSpeed = 0f;
+
         if (move.magnitude > 0.1f)
         {
-            if (sprint)
+            // 检查是否在跑步
+            isRunning = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+            currentSpeed = isRunning ? runSpeed : walkSpeed;
+
+            // 水平移动
+            Vector3 horizontalMove = move.normalized * currentSpeed * Time.deltaTime;
+            controller.Move(horizontalMove);
+
+            // 旋转朝向移动方向
+            if (move != Vector3.zero)
             {
-                targetSpeed = runSpeed;
-            }
-            else
-            {
-                targetSpeed = walkSpeed;
+                Quaternion targetRotation = Quaternion.LookRotation(move);
+                transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
             }
         }
-
-        // 平滑速度变化
-        currentSpeed = Mathf.Lerp(currentSpeed, targetSpeed, Time.deltaTime * 5f);
-
-        // 设置移动方向
-        moveDirection = move * currentSpeed;
-
-        // 处理跳跃
-        if (jumpPressed && isGrounded && !isJumping)
+        else
         {
-            Jump();
+            isRunning = false;
+            currentSpeed = 0f;
         }
 
-        // 应用重力
+        // 重力计算
         if (!isGrounded)
         {
-            verticalVelocity += GRAVITY * Time.deltaTime;
+            // 在空中时应用重力
+            verticalVelocity += gravity * Time.deltaTime;
+
+            // 额外的向下力，确保尽快落地
+            if (verticalVelocity < 0)
+            {
+                verticalVelocity += extraGravity * Time.deltaTime;
+            }
         }
-        else if (verticalVelocity < 0)
+        else
         {
-            verticalVelocity = -0.5f; // 轻微向下的力，确保贴地
+            // 在地面时，施加一个小的向下力保持地面接触
+            verticalVelocity = -0.5f;
+
+            // 跳跃
+            if (jump)
+            {
+                verticalVelocity = Mathf.Sqrt(jumpForce * -2f * gravity);
+                if (animator != null && !string.IsNullOrEmpty(jumpParam))
+                {
+                    animator.SetTrigger(jumpParam);
+                }
+
+                if (showDebugInfo)
+                    Debug.Log("豹子跳跃！");
+            }
         }
 
-        // 应用移动
-        Vector3 finalMove = new Vector3(moveDirection.x, verticalVelocity, moveDirection.z);
-        controller.Move(finalMove * Time.deltaTime);
+        // 垂直移动
+        Vector3 verticalMove = new Vector3(0, verticalVelocity, 0) * Time.deltaTime;
+        controller.Move(verticalMove);
 
-        // 旋转控制 - 只有在移动时才旋转
-        if (move.magnitude > 0.1f)
-        {
-            Quaternion targetRotation = Quaternion.LookRotation(new Vector3(move.x, 0, move.z));
-            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
-        }
-    }
-
-    void Jump()
-    {
-        isJumping = true;
-        verticalVelocity = Mathf.Sqrt(jumpForce * -2f * GRAVITY);
-
+        // 更新动画速度参数
         if (animator != null)
         {
-            animator.SetTrigger(jumpParam);
+            float animSpeed = Mathf.Lerp(animator.GetFloat(speedParam), currentSpeed, Time.deltaTime * 5f);
+            animator.SetFloat(speedParam, animSpeed);
         }
-
-        if (showDebugInfo) Debug.Log("豹子跳跃！");
     }
 
     void UpdateAnimations()
     {
         if (animator == null) return;
 
-        // 更新速度参数
-        animator.SetFloat(speedParam, currentSpeed);
-
         // 更新地面状态
         animator.SetBool(isGroundedParam, isGrounded);
 
-        // 如果跳跃后落地，重置跳跃状态
-        if (isGrounded && isJumping)
+        // 调试信息
+        if (showDebugInfo && Time.frameCount % 120 == 0) // 每2秒一次
         {
-            isJumping = false;
-        }
-    }
-
-    void UpdateIdleAnimations()
-    {
-        // 非附身状态下的简单动画处理
-        // 可以随机切换Idle1和Idle2，增加自然感
-        if (animator != null && isGrounded)
-        {
-            // 这里可以添加一些随机的待机动画切换
+            Debug.Log($"豹子状态: 在地面={isGrounded}, 垂直速度={verticalVelocity:F2}, 速度={animator.GetFloat(speedParam):F2}");
         }
     }
 
@@ -398,47 +398,67 @@ public class LeopardController : MonoBehaviour, IPossessable
     {
         if (controller == null) return;
 
-        // 使用CharacterController的isGrounded和射线检测双重检查
-        bool wasGrounded = isGrounded;
-        isGrounded = controller.isGrounded;
+        // 方法1: 使用CharacterController的isGrounded
+        bool controllerGrounded = controller.isGrounded;
 
-        // 额外的射线检测确保准确性
-        if (!isGrounded)
+        // 方法2: 使用射线检测
+        RaycastHit hit;
+        bool raycastGrounded = Physics.Raycast(
+            transform.position + Vector3.up * 0.1f,
+            Vector3.down,
+            out hit,
+            groundCheckDistance,
+            groundLayer
+        );
+
+        // 方法3: 使用球体检测（更可靠）
+        bool sphereCastGrounded = Physics.SphereCast(
+            transform.position + Vector3.up * 0.2f,
+            controller.radius * 0.9f,
+            Vector3.down,
+            out hit,
+            groundCheckDistance,
+            groundLayer
+        );
+
+        // 综合判断
+        isGrounded = controllerGrounded || raycastGrounded || sphereCastGrounded;
+
+        // 如果检测到地面，调整位置确保接触
+        if (isGrounded && hit.collider != null)
         {
-            RaycastHit hit;
-            if (Physics.Raycast(transform.position, Vector3.down, out hit, groundCheckDistance, groundLayer))
+            // 轻微调整位置确保接触
+            float groundHeight = hit.point.y;
+            float currentBottom = transform.position.y - controller.height * 0.5f;
+
+            if (currentBottom > groundHeight + 0.05f) // 如果底部高于地面
             {
-                isGrounded = true;
+                float adjustY = groundHeight + controller.height * 0.5f + controller.skinWidth;
+                transform.position = new Vector3(transform.position.x, adjustY, transform.position.z);
+
+                if (showDebugInfo)
+                    Debug.Log($"调整豹子位置确保地面接触: {adjustY}");
             }
         }
+    }
 
-        // 状态变化时的额外处理
-        if (wasGrounded != isGrounded)
+    void Update()
+    {
+        // 如果不是被附身状态，可以添加一些AI行为
+        if (!isPossessed)
         {
-            if (isGrounded && showDebugInfo)
-                Debug.Log("豹子已落地");
-            else if (!isGrounded && showDebugInfo)
-                Debug.Log("豹子已离地");
+            UpdateIdleBehavior();
         }
     }
 
-    // 添加一些辅助方法供外部调用
-    public void ForceIdle()
+    void UpdateIdleBehavior()
     {
-        if (animator != null)
+        // 这里可以添加一些空闲时的行为，比如随机移动或动画
+        if (animator != null && isGrounded)
         {
-            animator.SetFloat(speedParam, 0f);
+            // 可以随机播放一些空闲动画
+            // 例如：animator.SetTrigger("IdleBlink");
         }
-        currentSpeed = 0f;
-    }
-
-    public void ForceRun()
-    {
-        if (animator != null)
-        {
-            animator.SetFloat(speedParam, runSpeed);
-        }
-        currentSpeed = runSpeed;
     }
 
     // 调试信息
@@ -447,35 +467,39 @@ public class LeopardController : MonoBehaviour, IPossessable
         if (showDebugInfo)
         {
             // 绘制地面检测线
-            Gizmos.color = Color.yellow;
-            Gizmos.DrawLine(transform.position, transform.position + Vector3.down * groundCheckDistance);
+            Gizmos.color = isGrounded ? Color.green : Color.red;
+            Vector3 rayStart = transform.position + Vector3.up * 0.1f;
+            Vector3 rayEnd = rayStart + Vector3.down * groundCheckDistance;
+            Gizmos.DrawLine(rayStart, rayEnd);
+            Gizmos.DrawSphere(rayEnd, 0.1f);
 
-            // 绘制CharacterController胶囊体
+            // 绘制Character Controller范围
+            Gizmos.color = Color.cyan;
             if (controller != null)
             {
-                Gizmos.color = Color.green;
-                Vector3 center = transform.TransformPoint(controller.center);
+                Vector3 center = transform.position + controller.center;
                 Gizmos.DrawWireSphere(center, controller.radius);
-                Gizmos.DrawWireSphere(center + Vector3.up * (controller.height * 0.5f - controller.radius), controller.radius);
-                Gizmos.DrawWireSphere(center - Vector3.up * (controller.height * 0.5f - controller.radius), controller.radius);
+                Gizmos.DrawLine(
+                    center + Vector3.up * (controller.height * 0.5f - controller.radius),
+                    center + Vector3.down * (controller.height * 0.5f - controller.radius)
+                );
             }
 
             // 绘制移动方向
-            if (Application.isPlaying)
+            if (Application.isPlaying && moveDirection.magnitude > 0.1f)
             {
-                Gizmos.color = Color.blue;
+                Gizmos.color = Color.yellow;
                 Gizmos.DrawLine(transform.position, transform.position + moveDirection.normalized * 2f);
             }
-        }
-    }
 
-    void OnDrawGizmos()
-    {
-        if (showDebugInfo)
-        {
-            // 绘制豹子的检测范围
-            Gizmos.color = new Color(0, 1, 0, 0.1f);
-            Gizmos.DrawSphere(transform.position, 2f);
+            // 绘制检测碰撞体
+            if (detectionCollider != null)
+            {
+                Gizmos.color = new Color(0, 1, 1, 0.3f);
+                Vector3 colliderCenter = transform.TransformPoint(detectionCollider.center);
+                Gizmos.DrawWireSphere(colliderCenter + Vector3.up * (detectionCollider.height * 0.5f - detectionCollider.radius), detectionCollider.radius);
+                Gizmos.DrawWireSphere(colliderCenter - Vector3.up * (detectionCollider.height * 0.5f - detectionCollider.radius), detectionCollider.radius);
+            }
         }
     }
 }

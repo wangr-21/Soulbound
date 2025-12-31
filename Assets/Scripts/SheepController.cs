@@ -3,10 +3,10 @@ using UnityEngine;
 public class SheepController : MonoBehaviour, IPossessable
 {
     [Header("移动设置")]
-    public float walkSpeed = 2f;           // 绵羊走得慢一点
-    public float runSpeed = 4f;            // 绵羊跑得也慢一点
-    public float rotationSpeed = 8f;       // 旋转速度
-    public float jumpForce = 5f;           // 跳跃力
+    public float walkSpeed = 2f;
+    public float runSpeed = 4f;
+    public float rotationSpeed = 8f;
+    public float jumpForce = 5f;
     public float groundCheckDistance = 0.2f;
     public LayerMask groundLayer = -1;
 
@@ -36,7 +36,7 @@ public class SheepController : MonoBehaviour, IPossessable
 
     [Header("重力设置")]
     public float gravity = -9.81f;
-    public float extraGravity = -2f; // 绵羊不需要太大的额外重力
+    public float extraGravity = -2f;
 
     [Header("调试")]
     public bool showDebugInfo = true;
@@ -46,13 +46,16 @@ public class SheepController : MonoBehaviour, IPossessable
     private float targetSpeed = 0f;
     private bool isRunning = false;
 
-    // 跳跃相关
+    // 跳跃相关 - 修复版
     private bool isJumping = false;
     private float jumpCooldown = 0.2f;
     private float jumpCooldownTimer = 0f;
     private float lastJumpTime = -1f;
-    private float coyoteTime = 0.1f; // 离地后还能跳跃的短暂时间
+    private float coyoteTime = 0.15f; // Coyote Time缓冲时间
     private float coyoteTimeCounter = 0f;
+    private float jumpBufferTime = 0.15f; // 跳跃输入缓冲时间
+    private float jumpBufferTimer = 0f;
+    private bool jumpRequested = false; // 标记是否有跳跃请求
 
     void Start()
     {
@@ -75,13 +78,10 @@ public class SheepController : MonoBehaviour, IPossessable
         {
             controller = gameObject.AddComponent<CharacterController>();
             Debug.Log("自动添加CharacterController组件");
-
-            // 根据绵羊大小调整CharacterController参数
             SetupCharacterController();
         }
         else
         {
-            // 验证现有设置
             ValidateCharacterControllerSettings();
         }
 
@@ -94,12 +94,10 @@ public class SheepController : MonoBehaviour, IPossessable
 
     void SetupCharacterController()
     {
-        // 绵羊的CharacterController设置（根据模型大小调整）
-        // 建议：先运行一次游戏，查看绵羊大小，然后调整这些值
-        controller.height = 1.0f;      // 绵羊高度约1米
-        controller.radius = 0.3f;       // 绵羊宽度
-        controller.center = new Vector3(0, 0.5f, 0); // 中心点高度是高度的一半
-        controller.stepOffset = 0.2f;   // 可以跨越的高度
+        controller.height = 1.0f;
+        controller.radius = 0.3f;
+        controller.center = new Vector3(0, 0.5f, 0);
+        controller.stepOffset = 0.2f;
         controller.slopeLimit = 45f;
         controller.minMoveDistance = 0.001f;
         controller.skinWidth = 0.01f;
@@ -117,7 +115,6 @@ public class SheepController : MonoBehaviour, IPossessable
             Debug.Log($"  SkinWidth: {controller.skinWidth}");
         }
 
-        // 确保有足够的skinWidth
         if (controller.skinWidth < 0.01f)
         {
             controller.skinWidth = 0.01f;
@@ -133,17 +130,40 @@ public class SheepController : MonoBehaviour, IPossessable
             return;
         }
 
-        // 确保应用根运动被禁用
         animator.applyRootMotion = false;
-
-        // 设置初始动画参数
         animator.SetFloat(speedParam, 0f);
         animator.SetBool(isGroundParam, true);
+
+        // 检查动画参数是否存在
+        CheckAnimatorParameters();
+    }
+
+    void CheckAnimatorParameters()
+    {
+        if (animator == null) return;
+
+        bool hasSpeedParam = false;
+        bool hasGroundParam = false;
+        bool hasJumpParam = false;
+
+        foreach (AnimatorControllerParameter param in animator.parameters)
+        {
+            if (param.name == speedParam) hasSpeedParam = true;
+            if (param.name == isGroundParam) hasGroundParam = true;
+            if (param.name == jumpParam) hasJumpParam = true;
+        }
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"动画参数检查:");
+            Debug.Log($"  {speedParam}: {hasSpeedParam}");
+            Debug.Log($"  {isGroundParam}: {hasGroundParam}");
+            Debug.Log($"  {jumpParam}: {hasJumpParam}");
+        }
     }
 
     void ForceGroundPosition()
     {
-        // 使用射线检测找到地面位置
         RaycastHit hit;
         float raycastDistance = 5f;
 
@@ -155,18 +175,7 @@ public class SheepController : MonoBehaviour, IPossessable
             if (showDebugInfo)
                 Debug.Log($"强制调整绵羊到地面: Y={targetY}");
         }
-        else
-        {
-            // 如果没检测到地面，尝试向下移动
-            Debug.LogWarning("没有检测到地面，尝试向下寻找");
-            if (Physics.Raycast(transform.position, Vector3.down, out hit, 100f))
-            {
-                float targetY = hit.point.y + controller.height * 0.5f + controller.skinWidth;
-                transform.position = new Vector3(transform.position.x, targetY, transform.position.z);
-            }
-        }
 
-        // 重置垂直速度
         verticalVelocity = -0.5f;
     }
 
@@ -179,29 +188,16 @@ public class SheepController : MonoBehaviour, IPossessable
 
         isPossessed = true;
 
-        // 确保组件启用
         if (controller != null && !controller.enabled)
         {
             controller.enabled = true;
         }
 
-        // 确保禁用根运动
         if (animator != null)
         {
             animator.applyRootMotion = false;
-        }
-
-        // 设置动画到待机状态
-        if (animator != null)
-        {
             animator.SetFloat(speedParam, 0f);
             animator.SetBool(isGroundParam, true);
-
-            // 如果有特定的待机动画，使用CrossFade平滑过渡
-            if (!string.IsNullOrEmpty(idleStateName))
-            {
-                animator.CrossFade(idleStateName, 0.2f);
-            }
         }
 
         // 重置状态
@@ -211,6 +207,9 @@ public class SheepController : MonoBehaviour, IPossessable
         isRunning = false;
         isJumping = false;
         jumpCooldownTimer = 0f;
+        coyoteTimeCounter = coyoteTime;
+        jumpBufferTimer = 0f;
+        jumpRequested = false;
     }
 
     public void OnRelease()
@@ -221,12 +220,6 @@ public class SheepController : MonoBehaviour, IPossessable
         {
             animator.SetFloat(speedParam, 0f);
             animator.SetBool(isGroundParam, true);
-
-            // 回到待机状态
-            if (!string.IsNullOrEmpty(idleStateName))
-            {
-                animator.CrossFade(idleStateName, 0.3f);
-            }
         }
 
         // 重置移动
@@ -237,6 +230,8 @@ public class SheepController : MonoBehaviour, IPossessable
         isRunning = false;
         isJumping = false;
         jumpCooldownTimer = 0f;
+        jumpBufferTimer = 0f;
+        jumpRequested = false;
 
         if (showDebugInfo)
             Debug.Log("绵羊脱离附身！");
@@ -252,24 +247,62 @@ public class SheepController : MonoBehaviour, IPossessable
         if (!isPossessed || controller == null)
             return;
 
+        // 更新计时器
+        UpdateTimers();
+
+        // 检测跳跃输入
+        CheckJumpInput();
+
         HandleMovement();
         UpdateAnimations();
         CheckGroundStatus();
-
-        // 更新Coyote Time
-        UpdateCoyoteTime();
     }
     // ===== 接口实现结束 =====
+
+    void UpdateTimers()
+    {
+        // 更新跳跃冷却计时
+        if (jumpCooldownTimer > 0)
+        {
+            jumpCooldownTimer -= Time.deltaTime;
+        }
+
+        // 更新跳跃缓冲计时
+        if (jumpBufferTimer > 0)
+        {
+            jumpBufferTimer -= Time.deltaTime;
+        }
+
+        // 更新Coyote Time
+        if (isGrounded && !isJumping)
+        {
+            coyoteTimeCounter = coyoteTime;
+        }
+        else if (!isGrounded && coyoteTimeCounter > 0)
+        {
+            coyoteTimeCounter -= Time.deltaTime;
+        }
+    }
+
+    void CheckJumpInput()
+    {
+        // 检测跳跃输入，使用缓冲系统
+        if (Input.GetButtonDown("Jump"))
+        {
+            jumpRequested = true;
+            jumpBufferTimer = jumpBufferTime; // 开始缓冲计时
+            if (showDebugInfo) Debug.Log("跳跃输入检测到，开始缓冲");
+        }
+    }
 
     void HandleMovement()
     {
         // 获取输入
         float horizontal = Input.GetAxis("Horizontal");
         float vertical = Input.GetAxis("Vertical");
-        bool jumpInput = Input.GetButtonDown("Jump");
         bool runInput = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
 
-        // 地面检测（优化性能）
+        // 地面检测
         groundCheckTimer -= Time.deltaTime;
         if (groundCheckTimer <= 0)
         {
@@ -277,10 +310,10 @@ public class SheepController : MonoBehaviour, IPossessable
             groundCheckTimer = 0.1f;
         }
 
-        // 计算移动方向（基于相机）
-        Vector3 move = new Vector3(horizontal, 0, vertical).normalized;
+        // 计算移动方向
+        Vector3 move = new Vector3(horizontal, 0, vertical);
 
-        // 如果有输入，则基于相机方向转换
+        // 基于相机方向转换
         if (move.magnitude > 0.1f)
         {
             Camera mainCamera = Camera.main;
@@ -295,18 +328,16 @@ public class SheepController : MonoBehaviour, IPossessable
                 cameraRight.Normalize();
 
                 move = cameraForward * vertical + cameraRight * horizontal;
-                move = move.normalized;
             }
 
-            // 确定速度和是否跑步
-            isRunning = runInput && move.magnitude > 0.3f;
+            // 确定速度和是否跑步 - 修复跑步检测逻辑
+            isRunning = runInput && move.magnitude > 0.1f; // 降低阈值
             targetSpeed = isRunning ? runSpeed : walkSpeed;
 
             // 应用移动
-            Vector3 horizontalMove = move * targetSpeed;
-            controller.Move(horizontalMove * Time.deltaTime);
+            controller.Move(move.normalized * targetSpeed * Time.deltaTime);
 
-            // 平滑旋转朝向移动方向
+            // 旋转朝向移动方向
             if (move != Vector3.zero)
             {
                 Quaternion targetRotation = Quaternion.LookRotation(move);
@@ -323,18 +354,64 @@ public class SheepController : MonoBehaviour, IPossessable
         // 平滑速度变化（用于动画）
         currentSpeed = Mathf.Lerp(currentSpeed, targetSpeed, Time.deltaTime * 5f);
 
-        // 重力处理
-        ApplyGravity(jumpInput);
-    }
-
-    void ApplyGravity(bool jumpInput)
-    {
-        // 跳跃冷却计时
-        if (jumpCooldownTimer > 0)
+        // 跳跃处理 - 使用缓冲系统
+        if (jumpRequested && jumpCooldownTimer <= 0 && CanJump())
         {
-            jumpCooldownTimer -= Time.deltaTime;
+            PerformJump();
         }
 
+        // 重力处理
+        ApplyGravity();
+    }
+
+    bool CanJump()
+    {
+        // 检查是否可以跳跃：在地面、Coyote Time内或跳跃缓冲期内
+        return (isGrounded || coyoteTimeCounter > 0) && jumpBufferTimer > 0;
+    }
+
+    void PerformJump()
+    {
+        verticalVelocity = Mathf.Sqrt(jumpForce * -2f * gravity);
+        isJumping = true;
+        jumpCooldownTimer = jumpCooldown;
+        coyoteTimeCounter = 0f;
+        jumpBufferTimer = 0f;
+        jumpRequested = false;
+
+        // 触发跳跃动画
+        if (animator != null)
+        {
+            // 检查跳跃参数是否存在
+            bool hasJumpParam = false;
+            foreach (AnimatorControllerParameter param in animator.parameters)
+            {
+                if (param.name == jumpParam)
+                {
+                    hasJumpParam = true;
+                    break;
+                }
+            }
+
+            if (hasJumpParam)
+            {
+                animator.SetTrigger(jumpParam);
+                if (showDebugInfo) Debug.Log($"触发跳跃动画: {jumpParam}");
+            }
+            else
+            {
+                // 如果没有跳跃参数，通过Speed参数模拟
+                animator.SetFloat(speedParam, 1.0f);
+                if (showDebugInfo) Debug.Log("没有跳跃参数，使用Speed参数模拟跳跃");
+            }
+        }
+
+        if (showDebugInfo)
+            Debug.Log($"绵羊跳跃！垂直速度: {verticalVelocity:F2}, 缓冲时间: {jumpBufferTimer:F2}");
+    }
+
+    void ApplyGravity()
+    {
         if (!isGrounded)
         {
             // 在空中时应用重力
@@ -349,25 +426,12 @@ public class SheepController : MonoBehaviour, IPossessable
         else
         {
             // 在地面时，施加一个小的向下力保持地面接触
-            verticalVelocity = -0.5f;
+            verticalVelocity = Mathf.Max(verticalVelocity, -0.5f);
 
-            // 跳跃 - 允许Coyote Time内跳跃
-            if (jumpInput && jumpForce > 0 && jumpCooldownTimer <= 0 &&
-                (isGrounded || coyoteTimeCounter > 0))
+            // 如果在地面，重置跳跃状态
+            if (isJumping && verticalVelocity <= 0)
             {
-                verticalVelocity = Mathf.Sqrt(jumpForce * -2f * gravity);
-                isJumping = true;
-                jumpCooldownTimer = jumpCooldown;
-                lastJumpTime = Time.time;
-                coyoteTimeCounter = 0f; // 使用Coyote Time后重置
-
-                if (animator != null && !string.IsNullOrEmpty(jumpParam))
-                {
-                    animator.SetTrigger(jumpParam);
-                }
-
-                if (showDebugInfo)
-                    Debug.Log("绵羊跳跃！垂直速度: " + verticalVelocity);
+                isJumping = false;
             }
         }
 
@@ -376,50 +440,28 @@ public class SheepController : MonoBehaviour, IPossessable
         controller.Move(verticalMove);
     }
 
-    void UpdateCoyoteTime()
-    {
-        // 更新Coyote Time计数器
-        if (isGrounded && !isJumping)
-        {
-            coyoteTimeCounter = coyoteTime;
-        }
-        else if (!isGrounded && coyoteTimeCounter > 0)
-        {
-            coyoteTimeCounter -= Time.deltaTime;
-        }
-
-        // 如果刚刚离开地面一小段时间，仍可以跳跃
-        if (coyoteTimeCounter <= 0 && !isGrounded)
-        {
-            isJumping = true;
-        }
-    }
-
     void UpdateAnimations()
     {
         if (animator == null)
             return;
 
-        // 更新速度参数 - 修复跑步动画问题
-        // 这里需要根据当前速度映射到动画参数
+        // 更新速度参数 - 修复跑步动画触发逻辑
         float animSpeedValue = 0f;
 
         if (currentSpeed > 0)
         {
-            if (isRunning && currentSpeed >= runSpeed * 0.8f)
+            if (isRunning && currentSpeed >= walkSpeed * 1.1f) // 降低跑步触发阈值
             {
-                // 跑步状态：映射到0.7-1.0范围
-                animSpeedValue = Mathf.Lerp(0.7f, 1.0f, (currentSpeed - walkSpeed) / (runSpeed - walkSpeed));
-                animSpeedValue = Mathf.Clamp(animSpeedValue, 0.7f, 1.0f);
+                // 跑步状态：直接映射到0.8-1.0
+                animSpeedValue = Mathf.Clamp(currentSpeed / runSpeed, 0.8f, 1.0f);
 
-                if (showDebugInfo && Time.frameCount % 60 == 0)
-                    Debug.Log($"跑步状态: 速度={currentSpeed:F2}, 动画值={animSpeedValue:F2}");
+                if (showDebugInfo && Time.frameCount % 120 == 0)
+                    Debug.Log($"跑步状态: 速度={currentSpeed:F2}, 动画值={animSpeedValue:F2}, isRunning={isRunning}");
             }
             else
             {
-                // 行走状态：映射到0.1-0.6范围
-                animSpeedValue = Mathf.Lerp(0.1f, 0.6f, currentSpeed / walkSpeed);
-                animSpeedValue = Mathf.Clamp(animSpeedValue, 0.1f, 0.6f);
+                // 行走状态：映射到0.1-0.7
+                animSpeedValue = Mathf.Clamp(currentSpeed / walkSpeed, 0.1f, 0.7f);
             }
         }
 
@@ -431,7 +473,9 @@ public class SheepController : MonoBehaviour, IPossessable
         // 调试信息
         if (showDebugInfo && Time.frameCount % 120 == 0)
         {
-            Debug.Log($"绵羊状态: Speed={currentSpeed:F2}, isGrounded={isGrounded}, isRunning={isRunning}, CoyoteTime={coyoteTimeCounter:F2}");
+            Debug.Log($"绵羊动画状态: Speed={animSpeedValue:F2}, isGrounded={isGrounded}, " +
+                     $"isRunning={isRunning}, CoyoteTime={coyoteTimeCounter:F2}, " +
+                     $"JumpBuff={jumpBufferTimer:F2}, JumpReq={jumpRequested}");
         }
     }
 
@@ -459,21 +503,29 @@ public class SheepController : MonoBehaviour, IPossessable
         // 方法3: 使用球体检测（更可靠）
         bool sphereCastGrounded = Physics.SphereCast(
             transform.position + Vector3.up * 0.2f,
-            controller.radius * 0.9f,
+            controller.radius * 0.8f, // 稍微小一点
             Vector3.down,
             out hit,
-            groundCheckDistance,
+            groundCheckDistance + 0.1f, // 增加检测距离
             groundLayer
         );
 
-        // 综合判断 - 只要有一种方法检测到地面就算在地面
+        // 综合判断
         bool newGrounded = controllerGrounded || raycastGrounded || sphereCastGrounded;
 
-        // 如果从空中落地，重置跳跃状态
+        // 处理落地逻辑
         if (newGrounded && !isGrounded)
         {
             isJumping = false;
-            coyoteTimeCounter = coyoteTime; // 重置Coyote Time
+            coyoteTimeCounter = coyoteTime;
+            if (showDebugInfo) Debug.Log("绵羊落地");
+        }
+
+        // 处理离地逻辑
+        if (!newGrounded && isGrounded)
+        {
+            coyoteTimeCounter = coyoteTime;
+            if (showDebugInfo) Debug.Log("绵羊离地，开始Coyote Time");
         }
 
         isGrounded = newGrounded;
@@ -484,19 +536,14 @@ public class SheepController : MonoBehaviour, IPossessable
             float groundHeight = hit.point.y;
             float currentBottom = transform.position.y - controller.height * 0.5f;
 
-            // 如果底部高于地面一点，调整位置
-            if (currentBottom > groundHeight + 0.1f) // 增加容差
+            if (currentBottom > groundHeight + 0.05f)
             {
                 float adjustY = groundHeight + controller.height * 0.5f + controller.skinWidth;
                 transform.position = new Vector3(transform.position.x, adjustY, transform.position.z);
-
-                if (showDebugInfo)
-                    Debug.Log($"调整绵羊位置确保地面接触: {adjustY}");
             }
         }
     }
 
-    // 调试可视化
     void OnDrawGizmosSelected()
     {
         if (!showDebugInfo || controller == null)
@@ -508,15 +555,15 @@ public class SheepController : MonoBehaviour, IPossessable
         float rayLength = (controller.height * 0.5f) + groundCheckDistance;
         Gizmos.DrawLine(rayStart, rayStart + Vector3.down * rayLength);
 
+        // Coyote Time指示器
+        if (coyoteTimeCounter > 0 && !isGrounded)
+        {
+            Gizmos.color = Color.yellow;
+            Gizmos.DrawWireSphere(transform.position, 0.5f);
+        }
+
         // CharacterController范围
         Gizmos.color = Color.cyan;
         Gizmos.DrawWireSphere(rayStart, controller.radius);
-
-        // 移动方向
-        if (Application.isPlaying && moveDirection.magnitude > 0.1f)
-        {
-            Gizmos.color = Color.yellow;
-            Gizmos.DrawLine(transform.position, transform.position + moveDirection.normalized * 2f);
-        }
     }
 }

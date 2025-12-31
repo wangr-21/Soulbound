@@ -1,302 +1,266 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 
-public class BirdController : MonoBehaviour, IPossessable  // Ìí¼Ó½Ó¿ÚÊµÏÖ
+public class BirdController : MonoBehaviour, IPossessable
 {
-    [Header("ÒÆ¶¯ÉèÖÃ")]
+    [Header("ç§»åŠ¨è®¾ç½®")]
     public float flySpeed = 5f;
     public float glideSpeed = 8f;
     public float rotationSpeed = 2f;
-    public float ascendSpeed = 3f;
-    public float descendSpeed = 2f;
-    public float groundCheckDistance = 0.2f;
-    public LayerMask groundLayer = -1; // Ä¬ÈÏËùÓĞ²ã
+    public float ascendSpeed = 4f;
+    public float descendSpeed = 8f;
+    public float gravity = 15f;
+    public float idleDrag = 0.3f;
+    public float groundCheckDistance = 0.4f;
 
-    [Header("¶¯»­²ÎÊı")]
+    [Header("åŠ¨ç”»å‚æ•°")]
     public string flyParam = "IsFlying";
     public string glideParam = "IsGliding";
 
-    [Header("ÄÜÁ¦ÃèÊö")]
-    public string abilityDescription = "¿ÉÒÔ·ÉĞĞºÍ»¬ÏèµÄÄñ";
+    [Header("èƒ½åŠ›æè¿°")]
+    public string abilityDescription = "å¯ä»¥é£è¡Œå’Œæ»‘ç¿”çš„é¸Ÿ";
 
-    [Header("×´Ì¬")]
-    public bool isPossessed = false;  // ÊÇ·ñ±»¸½Éí
+    [Header("çŠ¶æ€")]
+    public bool isPossessed = false;
     private bool isGrounded = true;
     private bool isGliding = false;
-    private bool wasGrounded = true;
+    private float verticalVelocity = 0f;
+    private Vector3 groundPosition = Vector3.zero;
 
-    [Header("×é¼şÒıÓÃ")]
+    [Header("è¾“å…¥çŠ¶æ€")]
+    private bool hasHorizontalInput;
+    private bool isAscending;
+    private bool isDescending;
+
+    [Header("ç»„ä»¶å¼•ç”¨")]
     private Animator animator;
     private CharacterController controller;
-    private Vector3 moveDirection = Vector3.zero;
+    private Vector3 horizontalMoveDirection = Vector3.zero;
 
-    [Header("µ÷ÊÔ")]
+    [Header("è°ƒè¯•")]
     public bool showDebugInfo = true;
+    public LayerMask groundLayer = -1;
 
+    // ===============================================================
+    // Start
+    // ===============================================================
     void Start()
     {
-        // »ñÈ¡×é¼şÒıÓÃ
         animator = GetComponent<Animator>();
         controller = GetComponent<CharacterController>();
 
-        if (animator == null)
-        {
-            Debug.LogError("Äñ¿ØÖÆÆ÷ĞèÒªAnimator×é¼ş£¡");
-        }
+        if (!animator) Debug.LogError("ç¼ºå°‘ Animator !");
+        if (!controller) Debug.LogError("ç¼ºå°‘ CharacterController !");
 
-        if (controller == null)
-        {
-            Debug.LogError("Äñ¿ØÖÆÆ÷ĞèÒªCharacterController×é¼ş£¡");
-        }
-
-        // ³õÊ¼ÉèÖÃÎª´ı»ú×´Ì¬
-        if (animator != null)
+        if (animator)
         {
             animator.SetBool(flyParam, false);
             animator.SetBool(glideParam, false);
         }
+
+        FindGroundPosition(); // â˜… åˆå§‹åŒ–è´´åœ°
     }
 
-    void Update()
-    {
-        // ·Ç¸½Éí×´Ì¬ÏÂµÄÂß¼­£¨Èç¹ûÓĞµÄ»°£©
-        if (!isPossessed)
-        {
-            // ¿ÉÒÔÌí¼ÓÒ»Ğ©AIĞĞÎª»ò¿ÕÏĞ¶¯»­
-            UpdateAnimations();
-            return;
-        }
-    }
-
-    // ===== ÊµÏÖ IPossessable ½Ó¿Ú =====
-
+    // ===============================================================
+    // IPossessable
+    // ===============================================================
     public void OnPossess()
     {
         isPossessed = true;
-        Debug.Log("Äñ±»¸½ÉíÁË£¡");
+        if (controller) controller.enabled = true;
 
-        // È·±£¿ØÖÆÆ÷ÆôÓÃ
-        if (controller != null)
-        {
-            controller.enabled = true;
-        }
-        else
-        {
-            controller = GetComponent<CharacterController>();
-            if (controller == null)
-            {
-                Debug.LogError("ÄñµÄCharacterController×é¼ş¶ªÊ§£¡");
-            }
-        }
+        verticalVelocity = 0f;
+        isGliding = false;
 
-        // ÉèÖÃ³õÊ¼¶¯»­×´Ì¬
-        if (animator != null)
-        {
-            animator.SetBool(flyParam, false);
-            animator.SetBool(glideParam, false);
-        }
+        // â˜… â˜… â˜… é™„èº«ç¬é—´å¼ºåˆ¶æ ¡å‡†åœ°é¢å¯¹é½
+        FindGroundPosition();
+        SnapToGround();
+        isGrounded = true;
+
+        Debug.Log("é¸Ÿè¢«é™„èº«å¹¶æ ¡æ­£ä½ç½®ï¼");
     }
 
     public void OnRelease()
     {
         isPossessed = false;
+        verticalVelocity = 0;
+        isGliding = false;
 
-        if (animator != null)
+        if (animator)
         {
             animator.SetBool(flyParam, false);
             animator.SetBool(glideParam, false);
         }
 
-        // ÖØÖÃÒÆ¶¯·½Ïò
-        moveDirection = Vector3.zero;
-        isGliding = false;
-
-        Debug.Log("ÄñÍÑÀë¸½Éí£¡");
+        Debug.Log("é¸Ÿè„±ç¦»é™„èº«ï¼");
     }
 
-    public string GetAbilityDescription()
-    {
-        return abilityDescription;
-    }
+    public string GetAbilityDescription() => abilityDescription;
 
     public void PossessedUpdate()
     {
         if (!isPossessed) return;
 
+        GetInput();
         HandleMovement();
         UpdateAnimations();
         CheckGroundStatus();
     }
-    // ===== ½Ó¿ÚÊµÏÖ½áÊø =====
 
+    // ===============================================================
+    // è¾“å…¥æ£€æµ‹
+    // ===============================================================
+    void GetInput()
+    {
+        float h = Input.GetAxis("Horizontal");
+        float v = Input.GetAxis("Vertical");
+
+        hasHorizontalInput = Mathf.Abs(h) > 0.1f || Mathf.Abs(v) > 0.1f;
+        isAscending = Input.GetKey(KeyCode.Space);
+        isDescending = Input.GetKey(KeyCode.LeftControl);
+    }
+
+    // ===============================================================
+    // æ ¸å¿ƒç§»åŠ¨é€»è¾‘ï¼ˆå·²ä¿®å¤ï¼‰
+    // ===============================================================
     void HandleMovement()
     {
-        if (controller == null)
+        if (!controller) return;
+
+        float h = Input.GetAxis("Horizontal");
+        float v = Input.GetAxis("Vertical");
+
+        // è·å–ç›¸æœºæ–¹å‘ â†’ è½¬ä¸ºä¸–ç•Œç©ºé—´è¿åŠ¨å‘é‡
+        Vector3 move = new Vector3(h, 0, v);
+        if (Camera.main)
         {
-            Debug.LogError("CharacterControllerÎª¿Õ£¡");
-            return;
+            Vector3 fwd = Camera.main.transform.forward; fwd.y = 0; fwd.Normalize();
+            Vector3 right = Camera.main.transform.right; right.y = 0; right.Normalize();
+            move = fwd * v + right * h;
         }
 
-        float horizontal = Input.GetAxis("Horizontal");
-        float vertical = Input.GetAxis("Vertical");
-        bool ascend = Input.GetKey(KeyCode.Space);
-        bool descend = Input.GetKey(KeyCode.LeftControl);
-
-        if (showDebugInfo)
-        {
-            Debug.Log($"ÄñÒÆ¶¯ÊäÈë: H={horizontal:F2}, V={vertical:F2}, Ascend={ascend}, Descend={descend}");
-        }
-
-        // »ù´¡ÒÆ¶¯·½Ïò£¨»ùÓÚÊÀ½ç×ø±ê£©
-        Vector3 move = new Vector3(horizontal, 0, vertical);
-
-        // »ñÈ¡Ïà»ú·½Ïò£¨Èç¹ûÊ¹ÓÃÁËÏà»ú¿ØÖÆÆ÷£©
-        Camera mainCamera = Camera.main;
-        if (mainCamera != null)
-        {
-            // »ñÈ¡Ïà»úµÄÇ°ÏòºÍÓÒÏò£¨ºöÂÔYÖá£©
-            Vector3 cameraForward = mainCamera.transform.forward;
-            Vector3 cameraRight = mainCamera.transform.right;
-
-            cameraForward.y = 0;
-            cameraRight.y = 0;
-
-            // ±ê×¼»¯
-            cameraForward.Normalize();
-            cameraRight.Normalize();
-
-            // ¸ù¾İÏà»ú·½Ïò¼ÆËãÒÆ¶¯
-            move = cameraForward * vertical + cameraRight * horizontal;
-        }
-
-        // ´¹Ö±ÒÆ¶¯£¨ÉÏÉı/ÏÂ½µ£©
-        if (ascend)
-            moveDirection.y = ascendSpeed;
-        else if (descend)
-            moveDirection.y = -descendSpeed;
-        else if (!controller.isGrounded)
-            moveDirection.y += Physics.gravity.y * Time.deltaTime;
+        // æ°´å¹³å¹³æ»‘
+        if (!hasHorizontalInput)
+            horizontalMoveDirection = Vector3.Lerp(horizontalMoveDirection, Vector3.zero, idleDrag * Time.deltaTime);
         else
-            moveDirection.y = 0;
+            horizontalMoveDirection = move.normalized;
 
-        // Ó¦ÓÃÒÆ¶¯
-        if (isGliding)
-            controller.Move((move * glideSpeed + moveDirection) * Time.deltaTime);
-        else
-            controller.Move((move * flySpeed + moveDirection) * Time.deltaTime);
-
-        // Ğı×ª¿ØÖÆ
-        if (move.magnitude > 0.1f)
+        // â­ é‡åŠ›/é£è¡Œå‚ç›´é€Ÿåº¦æ§åˆ¶
+        if (isGrounded)
         {
-            Quaternion targetRotation = Quaternion.LookRotation(new Vector3(move.x, 0, move.z));
-            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
+            verticalVelocity = 0;
+        }
+        else if (isAscending)
+        {
+            verticalVelocity = Mathf.Lerp(verticalVelocity, ascendSpeed, 8f * Time.deltaTime);
+        }
+        else if (isDescending)
+        {
+            verticalVelocity = Mathf.Lerp(verticalVelocity, -descendSpeed, 10f * Time.deltaTime);
+        }
+        else if (isGliding)
+        {
+            verticalVelocity = Mathf.Lerp(verticalVelocity, -descendSpeed * 0.3f, 5f * Time.deltaTime);
+        }
+        else
+        {
+            verticalVelocity -= gravity * Time.deltaTime;
+            verticalVelocity = Mathf.Max(verticalVelocity, -descendSpeed * 2f);
+        }
+
+        // æœ€ç»ˆç§»åŠ¨
+        Vector3 finalMove = horizontalMoveDirection * (isGliding ? glideSpeed : flySpeed);
+        finalMove.y = verticalVelocity;
+
+        controller.Move(finalMove * Time.deltaTime);
+
+        // æ—‹è½¬ï¼ˆåªæœ‰ç§»åŠ¨æ‰è½¬ï¼‰
+        if (horizontalMoveDirection.magnitude > 0.1f)
+        {
+            Quaternion targetRot = Quaternion.LookRotation(horizontalMoveDirection);
+            transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, rotationSpeed * Time.deltaTime);
+        }
+
+        if (showDebugInfo && Time.frameCount % 30 == 0)
+            Debug.Log($"é¸ŸçŠ¶æ€: pos={transform.position:F2}, vY={verticalVelocity:F2}, grounded={isGrounded}");
+    }
+
+    // ===============================================================
+    // åœ°é¢æ£€æµ‹ï¼ˆå·²ä¿®å¤ â†’ åŸºäºCharacterControlleråº•éƒ¨ï¼‰
+    // ===============================================================
+    void CheckGroundStatus()
+    {
+        if (!controller) return;
+
+        float controllerBottom = controller.height / 2f - controller.radius;
+        Vector3 rayStart = transform.position + Vector3.down * controllerBottom + Vector3.up * 0.05f;
+
+        if (Physics.Raycast(rayStart, Vector3.down, out var hit, groundCheckDistance + 0.2f, groundLayer))
+        {
+            if (hit.distance < 0.3f && verticalVelocity <= 0)
+            {
+                isGrounded = true;
+                groundPosition = hit.point;
+                SnapToGround();
+                return;
+            }
+        }
+
+        isGrounded = false;
+    }
+
+    // ===============================================================
+    // ä¿è¯è„šè´´åœ°
+    // ===============================================================
+    void SnapToGround()
+    {
+        float controllerBottom = controller.height / 2f - controller.radius;
+        Vector3 pos = transform.position;
+        pos.y = groundPosition.y + controllerBottom;
+        transform.position = pos;
+    }
+
+    // ===============================================================
+    // å¯»æ‰¾åœ°é¢ï¼ˆåˆå§‹åŒ–/å¼ºåˆ¶æ ¡å‡†ç”¨ï¼‰
+    // ===============================================================
+    void FindGroundPosition()
+    {
+        if (Physics.Raycast(transform.position + Vector3.up * 5f, Vector3.down, out var hit, 50f, groundLayer))
+        {
+            groundPosition = hit.point;
+        }
+        else
+        {
+            groundPosition = transform.position;
         }
     }
 
+    // ===============================================================
+    // åŠ¨ç”»
+    // ===============================================================
     void UpdateAnimations()
     {
-        if (animator == null) return;
+        if (!animator) return;
 
-        // ¼ì²éÊÇ·ñ¿ªÊ¼·ÉĞĞ
-        if (!isGrounded && !animator.GetBool(flyParam))
-        {
-            animator.SetBool(flyParam, true);
-            if (showDebugInfo) Debug.Log("ÇĞ»»µ½·ÉĞĞ×´Ì¬");
-        }
-
-        // »¬Ïè¿ØÖÆ£¨°´Shift¼ü»¬Ïè£©
+        // Shiftæ§åˆ¶æ»‘ç¿”
         if (Input.GetKeyDown(KeyCode.LeftShift) && !isGrounded)
         {
             isGliding = true;
             animator.SetBool(glideParam, true);
-            if (showDebugInfo) Debug.Log("ÇĞ»»µ½»¬Ïè×´Ì¬");
         }
         if (Input.GetKeyUp(KeyCode.LeftShift))
         {
             isGliding = false;
             animator.SetBool(glideParam, false);
-            if (showDebugInfo) Debug.Log("ÍË³ö»¬Ïè×´Ì¬");
         }
 
-        // ÂäµØ¼ì²â
-        if (isGrounded && animator.GetBool(flyParam))
-        {
-            animator.SetBool(flyParam, false);
-            animator.SetBool(glideParam, false);
-            isGliding = false;
-            if (showDebugInfo) Debug.Log("ÇĞ»»µ½´ı»ú×´Ì¬");
-        }
-    }
-
-    void CheckGroundStatus()
-    {
-        if (controller == null) return;
-
-        // Ê¹ÓÃCharacterControllerµÄisGroundedºÍÉäÏß¼ì²âË«ÖØ¼ì²é
-        bool wasGroundedBefore = isGrounded;
-        isGrounded = controller.isGrounded;
-
-        // ¶îÍâµÄÉäÏß¼ì²âÈ·±£×¼È·ĞÔ
-        if (!isGrounded)
-        {
-            RaycastHit hit;
-            if (Physics.Raycast(transform.position, Vector3.down, out hit, groundCheckDistance, groundLayer))
-            {
-                isGrounded = true;
-            }
-        }
-
-        // ×´Ì¬±ä»¯Ê±µÄ¶îÍâ´¦Àí
-        if (wasGroundedBefore != isGrounded)
-        {
-            if (isGrounded && showDebugInfo)
-                Debug.Log("ÄñÒÑÂäµØ");
-            else if (!isGrounded && showDebugInfo)
-                Debug.Log("ÄñÒÑÆğ·É");
-        }
-    }
-
-    // Ìí¼ÓÒ»Ğ©¸¨Öú·½·¨¹©Íâ²¿µ÷ÓÃ
-    public void ForceLand()
-    {
-        if (animator != null)
+        if (isGrounded)
         {
             animator.SetBool(flyParam, false);
             animator.SetBool(glideParam, false);
         }
-        isGliding = false;
-    }
-
-    public void ForceTakeoff()
-    {
-        if (animator != null)
+        else
         {
-            animator.SetBool(flyParam, true);
+            animator.SetBool(flyParam, hasHorizontalInput || isAscending);
         }
-        isGrounded = false;
-    }
-
-    // µ÷ÊÔĞÅÏ¢
-    void OnDrawGizmosSelected()
-    {
-        if (showDebugInfo)
-        {
-            // »æÖÆµØÃæ¼ì²âÏß
-            Gizmos.color = Color.yellow;
-            Gizmos.DrawLine(transform.position, transform.position + Vector3.down * groundCheckDistance);
-
-            // »æÖÆÒÆ¶¯·½Ïò
-            if (Application.isPlaying)
-            {
-                Gizmos.color = Color.blue;
-                Gizmos.DrawLine(transform.position, transform.position + moveDirection.normalized * 2f);
-            }
-        }
-    }
-
-    // Ìí¼ÓÒ»¸ö²âÊÔ·½·¨£¬È·±£½Ó¿ÚÕı³£¹¤×÷
-    void TestInterface()
-    {
-        Debug.Log($"Õâ¸ö¶ÔÏóÊµÏÖÁËIPossessable: {this is IPossessable}");
-        Debug.Log($"ÄÜÁ¦ÃèÊö: {GetAbilityDescription()}");
     }
 }
