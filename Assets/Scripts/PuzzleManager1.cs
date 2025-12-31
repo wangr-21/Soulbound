@@ -15,6 +15,8 @@ public class PuzzleManager1 : MonoBehaviour
     private CountdownTimer timer;
     private PuzzlePiece firstSelectedPiece; // 第一个选中的拼图块（用于交换）
     private Coroutine hideErrorCoroutine; // 错误提示隐藏协程
+    public TextMeshProUGUI successHintText;
+    private Coroutine hideSuccessCoroutine;
 
     void Awake()
     {
@@ -115,7 +117,10 @@ public class PuzzleManager1 : MonoBehaviour
 
         if (isCompleted)
         {
-            Debug.Log("拼图完成！获得碎片！");
+            Debug.Log("拼图完成，获得1个碎片！");
+            // 关键：拼图谜题解决后，碎片数量+1
+            FragmentManager.Instance.AddFragment();
+            ShowSuccessThenHide(2f); // 显示成功提示
             GiveFragmentReward(); // 发放碎片奖励
             ClosePuzzlePanel(); // 关闭面板
         }
@@ -125,6 +130,23 @@ public class PuzzleManager1 : MonoBehaviour
             errorText.text = "拼图未完成！请继续调整！";
             ShowErrorThenHide(1f);
         }
+    }
+
+    // 添加显示和隐藏成功提示的方法（同PuzzleManager）
+    private void ShowSuccessThenHide(float delay)
+    {
+        successHintText.gameObject.SetActive(true);
+        successHintText.text = "恭喜你获得1块碎片！";
+        if (hideSuccessCoroutine != null)
+            StopCoroutine(hideSuccessCoroutine);
+        hideSuccessCoroutine = StartCoroutine(HideSuccessCoroutine(delay));
+    }
+
+    private IEnumerator HideSuccessCoroutine(float delay)
+    {
+        yield return new WaitForSecondsRealtime(delay);
+        successHintText.gameObject.SetActive(false);
+        hideSuccessCoroutine = null;
     }
 
     // 发放碎片奖励（示例：在宝箱位置生成碎片预制体）

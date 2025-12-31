@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections; // 新增：协程必需的命名空间
 using System.Collections.Generic;
 using TMPro; // 若用UI显示倒计时，需引入TextMeshPro
 
@@ -13,7 +14,8 @@ public class StonePuzzleManager : MonoBehaviour
     private int currentStoneIndex = 0;
     private float currentCountdown;
     private bool isCountingDown = false;
-
+    public TextMeshProUGUI successHintText;
+    private Coroutine hideSuccessCoroutine;
 
     void Start()
     {
@@ -69,7 +71,9 @@ public class StonePuzzleManager : MonoBehaviour
         else
         {
             // 3. 所有石头完成：获得碎片 + 保留石头作为方向提示
-            Debug.Log("石头阵完成！获得碎片");
+            Debug.Log("石头谜题完成，获得1个碎片！");
+            FragmentManager.Instance.AddFragment();
+            ShowSuccessThenHide(2f); // 显示成功提示
             isCountingDown = false; // 确保Update不再更新倒计时
             UpdateCountdownUI(false); // 隐藏倒计时UI（关键新增代码）
             // 这里写“获得碎片”的逻辑（比如调用物品系统）
@@ -77,6 +81,22 @@ public class StonePuzzleManager : MonoBehaviour
         }
     }
 
+    // 添加显示和隐藏成功提示的方法
+    private void ShowSuccessThenHide(float delay)
+    {
+        successHintText.gameObject.SetActive(true);
+        successHintText.text = "恭喜你获得1块碎片！";
+        if (hideSuccessCoroutine != null)
+            StopCoroutine(hideSuccessCoroutine);
+        hideSuccessCoroutine = StartCoroutine(HideSuccessCoroutine(delay));
+    }
+
+    private IEnumerator HideSuccessCoroutine(float delay)
+    {
+        yield return new WaitForSecondsRealtime(delay);
+        successHintText.gameObject.SetActive(false);
+        hideSuccessCoroutine = null;
+    }
 
     // 切换石头的发光状态
     private void ToggleStoneLight(GameObject stone, bool isOn)
