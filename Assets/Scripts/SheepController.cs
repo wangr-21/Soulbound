@@ -23,6 +23,10 @@ public class SheepController : MonoBehaviour, IPossessable
     [Header("能力描述")]
     public string abilityDescription = "温顺的绵羊，可以行走和奔跑";
 
+    [Header("AI 协调")]
+    public SheepAI sheepAI; // 引用AI组件
+    public bool enableAIWhenNotPossessed = true;
+
     [Header("状态")]
     public bool isPossessed = false;
     private bool isGrounded = true;
@@ -83,6 +87,18 @@ public class SheepController : MonoBehaviour, IPossessable
         else
         {
             ValidateCharacterControllerSettings();
+        }
+
+        // 获取SheepAI组件
+        if (sheepAI == null)
+        {
+            sheepAI = GetComponent<SheepAI>();
+            if (sheepAI == null && enableAIWhenNotPossessed)
+            {
+                // 如果没有AI组件但需要AI，自动添加
+                sheepAI = gameObject.AddComponent<SheepAI>();
+                Debug.Log("自动添加SheepAI组件");
+            }
         }
 
         // 初始化动画状态
@@ -188,6 +204,13 @@ public class SheepController : MonoBehaviour, IPossessable
 
         isPossessed = true;
 
+        // 禁用AI控制
+        if (sheepAI != null)
+        {
+            sheepAI.enableAI = false;
+            if (showDebugInfo) Debug.Log("禁用绵羊AI");
+        }
+
         if (controller != null && !controller.enabled)
         {
             controller.enabled = true;
@@ -215,6 +238,13 @@ public class SheepController : MonoBehaviour, IPossessable
     public void OnRelease()
     {
         isPossessed = false;
+
+        // 启用AI控制（如果设置了）
+        if (sheepAI != null && enableAIWhenNotPossessed)
+        {
+            sheepAI.enableAI = true;
+            if (showDebugInfo) Debug.Log("启用绵羊AI");
+        }
 
         if (animator != null)
         {

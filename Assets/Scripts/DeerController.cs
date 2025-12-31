@@ -18,6 +18,10 @@ public class DeerController : MonoBehaviour, IPossessable
     [Header("能力描述")]
     public string abilityDescription = "可以在陆地上奔跑和跳跃的鹿";
 
+    [Header("AI 设置")]
+    public DeerAI deerAI;
+    private bool isAIControlled = false;
+
     [Header("状态")]
     public bool isPossessed = false;
     private bool isGrounded = true;
@@ -80,6 +84,17 @@ public class DeerController : MonoBehaviour, IPossessable
             }
         }
 
+        // 获取或添加DeerAI组件
+        deerAI = GetComponent<DeerAI>();
+        if (deerAI == null)
+        {
+            deerAI = gameObject.AddComponent<DeerAI>();
+            Debug.Log("自动添加DeerAI组件");
+        }
+
+        // 初始状态由AI控制（如果没有被附身）
+        isAIControlled = !isPossessed;
+
         // 初始设置为待机状态
         if (animator != null)
         {
@@ -129,12 +144,19 @@ public class DeerController : MonoBehaviour, IPossessable
             Debug.Log($"鹿被附身！位置: {positionBefore}, Y={positionBefore.y:F2}");
 
         isPossessed = true;
+        isAIControlled = false; // 禁用AI控制
 
         // 重要：先禁用任何可能导致位置改变的组件
         if (animator != null)
         {
             // 禁用根运动，防止动画改变位置
             animator.applyRootMotion = false;
+        }
+
+        // 如果存在AI组件，禁用AI
+        if (deerAI != null)
+        {
+            deerAI.enabled = false;
         }
 
         // 确保控制器启用
@@ -176,6 +198,7 @@ public class DeerController : MonoBehaviour, IPossessable
     public void OnRelease()
     {
         isPossessed = false;
+        isAIControlled = true; // 启用AI控制
 
         if (animator != null)
         {
@@ -187,6 +210,12 @@ public class DeerController : MonoBehaviour, IPossessable
         moveDirection = Vector3.zero;
         verticalVelocity = -0.5f;
         isRunning = false;
+
+        // 如果存在AI组件，启用AI
+        if (deerAI != null)
+        {
+            deerAI.enabled = true;
+        }
 
         if (showDebugInfo) Debug.Log("鹿脱离附身！");
     }
@@ -206,8 +235,65 @@ public class DeerController : MonoBehaviour, IPossessable
     }
     // ===== 接口实现结束 =====
 
+    void Update()
+    {
+        // 如果被附身，执行PossessedUpdate
+        if (isPossessed)
+        {
+            PossessedUpdate();
+            return;
+        }
+
+        // 如果没有被附身且AI控制
+        if (isAIControlled && deerAI != null && deerAI.enabled)
+        {
+            // AI会通过DeerAI.Update()自动控制
+            // 但我们仍然需要处理重力和地面检测
+            CheckGroundStatus();
+            ApplyGravity();
+        }
+    }
+
+    // 新增方法：应用重力（用于AI控制时）
+    void ApplyGravity()
+    {
+        if (controller == null) return;
+
+        // 改进的地面检测 - 每0.1秒检查一次，减少计算
+        groundCheckTimer -= Time.deltaTime;
+        if (groundCheckTimer <= 0)
+        {
+            CheckGroundStatus();
+            groundCheckTimer = 0.1f;
+        }
+
+        // 重力计算
+        if (!isGrounded)
+        {
+            // 在空中时应用重力
+            verticalVelocity += gravity * Time.deltaTime;
+
+            // 额外的向下力，确保尽快落地
+            if (verticalVelocity < 0)
+            {
+                verticalVelocity += extraGravity * Time.deltaTime;
+            }
+        }
+        else
+        {
+            // 在地面时，施加一个小的向下力保持地面接触
+            verticalVelocity = -0.5f;
+        }
+
+        // 应用垂直移动
+        Vector3 verticalMove = new Vector3(0, verticalVelocity, 0) * Time.deltaTime;
+        controller.Move(verticalMove);
+    }
+
     void HandleMovement()
     {
+        if (!isPossessed) return; // 确保只有被附身时才处理输入
+
         if (controller == null)
         {
             Debug.LogError("CharacterController为空！");
@@ -311,6 +397,45 @@ public class DeerController : MonoBehaviour, IPossessable
         {
             float animSpeed = Mathf.Lerp(animator.GetFloat(speedParam), currentSpeed, Time.deltaTime * 5f);
             animator.SetFloat(speedParam, animSpeed);
+        }
+    }
+
+    // 修改DeerController.cs中的AIMove方法
+    public void AIMove(Vector3 direction, bool isRunning = false)
+    {
+        if (controller == null || !isAIControlled) return;
+
+        // 保存移动方向，用于调试显示
+        moveDirection = direction;
+
+        // AI移动时，总是使用Walk速度，忽略isRunning参数
+        float currentSpeed = walkSpeed;
+
+        // 如果有方向，应用移动
+        if (direction.magnitude > 0.1f)
+        {
+            // 应用移动
+            controller.Move(direction.normalized * currentSpeed * Time.deltaTime);
+
+            // 旋转朝向移动方向
+            Quaternion targetRotation = Quaternion.LookRotation(direction);
+            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
+
+            // 设置动画速度 - AI状态下只用Walk动画，所以设置为一个较小的固定值
+            if (animator != null)
+            {
+                // AI移动时，设置一个固定值（比如0.5），确保只触发Walk动画
+                float animSpeed = 0.5f; // 固定值，确保在Walk动画范围内
+                animator.SetFloat(speedParam, animSpeed);
+            }
+        }
+        else
+        {
+            // 没有方向，停止移动
+            if (animator != null)
+            {
+                animator.SetFloat(speedParam, 0f);
+            }
         }
     }
 
