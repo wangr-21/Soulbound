@@ -1,7 +1,9 @@
 ﻿using UnityEngine;
+using UnityEngine.UI;
 using UnityEngine.InputSystem;
 using System.Collections.Generic;
 using System.Collections;
+using TMPro; // 添加 TextMeshPro 命名空间
 
 public class PlayerSoulController : MonoBehaviour
 {
@@ -19,6 +21,25 @@ public class PlayerSoulController : MonoBehaviour
 
     [Header("附身设置")]
     public LayerMask possessableLayerMask = -1;
+
+    [Header("灵魂时间限制")]
+    public float maxSoulTime = 60f; // 灵魂最大存活时间
+    public float warningThreshold = 10f; // 警告开始时间（秒）
+    public float soulTimeRemaining = 0f; // 剩余灵魂时间
+    private bool isSoulTimerActive = true; // 灵魂计时器是否激活
+
+    [Header("警告效果")]
+    public Image soulWarningOverlay; // 屏幕边缘红光效果
+    public float warningFlashSpeed = 2f; // 警告闪烁速度
+    private bool isWarningActive = false;
+
+    [Header("UI元素")]
+    public Slider soulTimeSlider; // 灵魂时间条
+    public TextMeshProUGUI soulTimeText; // 灵魂时间文本 - 改为 TextMeshProUGUI
+
+    [Header("游戏结束")]
+    public GameObject gameOverPanel; // 游戏结束UI
+    public TextMeshProUGUI gameOverText; // 游戏结束文本 - 改为 TextMeshProUGUI
 
     // 移动和跳跃相关变量
     private Vector3 playerVelocity;
@@ -46,8 +67,22 @@ public class PlayerSoulController : MonoBehaviour
     private Vector3 deerPositionBeforePossession;
     private Quaternion deerRotationBeforePossession;
 
+    // 单例模式
+    public static PlayerSoulController Instance;
+
     private void Awake()
     {
+        // 设置单例
+        if (Instance == null)
+        {
+            Instance = this;
+        }
+        else
+        {
+            Destroy(gameObject);
+            return;
+        }
+
         characterController = GetComponent<CharacterController>();
         if (characterController == null)
         {
@@ -87,6 +122,22 @@ public class PlayerSoulController : MonoBehaviour
             if (debugMode) Debug.Log($"使用默认LayerMask: {possessableLayerMask.value}");
         }
 
+        // 初始化灵魂时间
+        soulTimeRemaining = maxSoulTime;
+        UpdateSoulTimeUI();
+
+        // 初始化警告效果
+        if (soulWarningOverlay != null)
+        {
+            soulWarningOverlay.gameObject.SetActive(false);
+        }
+
+        // 初始化游戏结束UI
+        if (gameOverPanel != null)
+        {
+            gameOverPanel.SetActive(false);
+        }
+
         if (debugMode) Debug.Log($"灵魂控制器初始化完成 - 位置: {transform.position}");
     }
 
@@ -121,6 +172,7 @@ public class PlayerSoulController : MonoBehaviour
 
     void Update()
     {
+        // 检查输入
         if (Input.GetKeyDown(KeyCode.E))
         {
             if (!isPossessing)
@@ -133,6 +185,13 @@ public class PlayerSoulController : MonoBehaviour
             }
         }
 
+        // 更新灵魂计时器
+        if (isSoulTimerActive && !isPossessing)
+        {
+            UpdateSoulTimer();
+        }
+
+        // 更新附身逻辑
         if (isPossessing && currentPossessable != null)
         {
             currentPossessable.PossessedUpdate();
@@ -141,6 +200,157 @@ public class PlayerSoulController : MonoBehaviour
         {
             HandleMovementAndJump();
         }
+    }
+
+    /// <summary>
+    /// 更新灵魂状态计时器
+    /// </summary>
+    private void UpdateSoulTimer()
+    {
+        if (soulTimeRemaining <= 0) return;
+
+        soulTimeRemaining -= Time.deltaTime;
+
+        // 更新时间UI
+        UpdateSoulTimeUI();
+
+        // 检查是否需要显示警告
+        if (soulTimeRemaining <= warningThreshold && soulTimeRemaining > 0)
+        {
+            if (!isWarningActive)
+            {
+                StartWarningEffect();
+            }
+        }
+        else if (isWarningActive)
+        {
+            StopWarningEffect();
+        }
+
+        // 检查灵魂是否消散
+        if (soulTimeRemaining <= 0)
+        {
+            OnSoulDissipate();
+        }
+    }
+
+    /// <summary>
+    /// 更新灵魂时间UI
+    /// </summary>
+    private void UpdateSoulTimeUI()
+    {
+        if (soulTimeSlider != null)
+        {
+            soulTimeSlider.value = soulTimeRemaining / maxSoulTime;
+        }
+
+        if (soulTimeText != null)
+        {
+            soulTimeText.text = $"灵魂时间: {Mathf.Ceil(soulTimeRemaining)}秒";
+        }
+    }
+
+    /// <summary>
+    /// 开始警告效果（屏幕边缘红光）
+    /// </summary>
+    private void StartWarningEffect()
+    {
+        isWarningActive = true;
+
+        if (soulWarningOverlay != null)
+        {
+            soulWarningOverlay.gameObject.SetActive(true);
+            StartCoroutine(FlashWarningEffect());
+        }
+    }
+
+    /// <summary>
+    /// 停止警告效果
+    /// </summary>
+    private void StopWarningEffect()
+    {
+        isWarningActive = false;
+
+        if (soulWarningOverlay != null)
+        {
+            soulWarningOverlay.gameObject.SetActive(false);
+        }
+    }
+
+    /// <summary>
+    /// 闪烁警告效果协程
+    /// </summary>
+    private IEnumerator FlashWarningEffect()
+    {
+        while (isWarningActive && soulWarningOverlay != null)
+        {
+            // 计算闪烁强度（基于剩余时间）
+            float intensity = 1 - (soulTimeRemaining / warningThreshold);
+
+            // 计算闪烁值（0到1之间）
+            float flashValue = (Mathf.Sin(Time.time * warningFlashSpeed) + 1) * 0.5f;
+
+            // 应用闪烁效果
+            Color color = soulWarningOverlay.color;
+            color.a = intensity * flashValue * 0.5f; // 控制透明度
+            soulWarningOverlay.color = color;
+
+            yield return null;
+        }
+    }
+
+    /// <summary>
+    /// 灵魂消散（游戏结束）
+    /// </summary>
+    private void OnSoulDissipate()
+    {
+        Debug.Log("灵魂消散！游戏结束");
+
+        // 停止所有移动
+        isSoulTimerActive = false;
+        currentMovementInput = Vector2.zero;
+
+        // 显示游戏结束UI
+        if (gameOverPanel != null)
+        {
+            gameOverPanel.SetActive(true);
+            if (gameOverText != null)
+            {
+                gameOverText.text = "灵魂消散\n未能及时找到宿主";
+            }
+        }
+
+        // 禁用玩家输入
+        playerInputActions.Player.Disable();
+
+        // 可以在这里添加其他效果，如粒子效果、声音等
+        if (soulParticles != null)
+        {
+            soulParticles.Stop();
+        }
+
+        // 可选：延迟后重新加载场景
+        // StartCoroutine(RestartGameAfterDelay(3f));
+    }
+
+    /// <summary>
+    /// 重置灵魂计时器（当退出附身时调用）
+    /// </summary>
+    public void ResetSoulTimer()
+    {
+        soulTimeRemaining = maxSoulTime;
+        isSoulTimerActive = true;
+        UpdateSoulTimeUI();
+        StopWarningEffect();
+    }
+
+    /// <summary>
+    /// 暂停灵魂计时器（当开始附身时调用）
+    /// </summary>
+    public void PauseSoulTimer()
+    {
+        isSoulTimerActive = false;
+        StopWarningEffect();
     }
 
     private void HandleMovementAndJump()
@@ -360,6 +570,9 @@ public class PlayerSoulController : MonoBehaviour
         currentPossessable.OnPossess();
         isPossessing = true;
 
+        // 暂停灵魂计时器（因为现在处于附身状态）
+        PauseSoulTimer();
+
         // 隐藏灵魂
         Renderer renderer = GetComponent<Renderer>();
         if (renderer != null) renderer.enabled = false;
@@ -469,6 +682,9 @@ public class PlayerSoulController : MonoBehaviour
             // 显示灵魂粒子效果
             ShowSoulParticles();
 
+            // 重置灵魂计时器（因为重新进入灵魂状态）
+            ResetSoulTimer();
+
             // 切换相机目标回灵魂
             if (cameraController != null)
             {
@@ -542,5 +758,16 @@ public class PlayerSoulController : MonoBehaviour
         {
             ReleasePossession();
         }
+    }
+
+    /// <summary>
+    /// 重启游戏（供UI按钮调用）
+    /// </summary>
+    public void RestartGame()
+    {
+        // 重新加载当前场景
+        UnityEngine.SceneManagement.SceneManager.LoadScene(
+            UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex
+        );
     }
 }
