@@ -26,4 +26,7 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/SoldierScene.unity
     guid: 5bc3b55f4c44d4f4aa80aeb07f7fbc7c
+  - enabled: 1
+    path: Assets/Scenes/KingScene.unity
+    guid: 4ba515030d6a4ae4ab3ed5b9cd9e4647
   m_configObjects: {}
