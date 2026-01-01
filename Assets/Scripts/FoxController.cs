@@ -29,10 +29,6 @@ public class FoxController : MonoBehaviour, IPossessable
     public bool forceJumpTransition = true; // 是否强制切换跳跃状态
     public float jumpTransitionDuration = 0.05f; // 跳跃过渡时间
 
-    [Header("AI 设置")]
-    public FoxAI foxAI;
-    private bool isAIControlled = false;
-
     [Header("能力描述")]
     public string abilityDescription = "敏捷的狐狸，可以行走、奔跑和跳跃";
 
@@ -123,17 +119,6 @@ public class FoxController : MonoBehaviour, IPossessable
             controller.height = 1f;
             controller.radius = 0.3f;
         }
-
-        // 获取或添加FoxAI组件
-        foxAI = GetComponent<FoxAI>();
-        if (foxAI == null)
-        {
-            foxAI = gameObject.AddComponent<FoxAI>();
-            Debug.Log("自动添加FoxAI组件");
-        }
-
-        // 初始状态由AI控制（如果没有被附身）
-        isAIControlled = !isPossessed;
 
         // 自动修复参数名
         if (autoFixParameters && animator != null)
@@ -251,7 +236,6 @@ public class FoxController : MonoBehaviour, IPossessable
     public void OnPossess()
     {
         isPossessed = true;
-        isAIControlled = false; // 禁用AI控制
 
         originalPosition = transform.position;
         originalRotation = transform.rotation;
@@ -262,12 +246,6 @@ public class FoxController : MonoBehaviour, IPossessable
             Debug.Log($"=== 狐狸({gameObject.name})被附身 ===");
             Debug.Log($"- 控制器启用状态: {controllerWasEnabled}");
             Debug.Log($"- 当前动画参数: Speed={speedParam}, Grounded={isGroundedParam}, Jump={jumpParam}");
-        }
-
-        // 如果存在AI组件，禁用AI
-        if (foxAI != null)
-        {
-            foxAI.enabled = false;
         }
 
         // 确保控制器启用
@@ -304,7 +282,6 @@ public class FoxController : MonoBehaviour, IPossessable
     public void OnRelease()
     {
         isPossessed = false;
-        isAIControlled = true; // 启用AI控制
 
         if (animator != null)
         {
@@ -318,12 +295,6 @@ public class FoxController : MonoBehaviour, IPossessable
         jumpTriggered = false;
         isJumping = false;
         wasJumping = false;
-
-        // 如果存在AI组件，启用AI
-        if (foxAI != null)
-        {
-            foxAI.enabled = true;
-        }
 
         if (controller != null)
         {
@@ -349,129 +320,6 @@ public class FoxController : MonoBehaviour, IPossessable
         CheckJumpState();
     }
     // ===== 接口实现结束 =====
-
-    void UpdateIdleBehavior()
-    {
-        // 非附身状态下的空闲行为
-        if (isAIControlled && foxAI != null && foxAI.enabled)
-        {
-            // AI会通过FoxAI.Update()自动控制
-            // 但我们仍然需要处理一些基本逻辑
-            CheckGroundStatus();
-
-            // 确保在地面且下落速度小于0，重置Y速度
-            if (controller != null)
-            {
-                isGrounded = controller.isGrounded;
-                if (isGrounded && moveDirection.y < 0)
-                {
-                    moveDirection.y = -2f;
-                }
-
-                // 应用重力
-                if (!isGrounded)
-                {
-                    moveDirection.y += Physics.gravity.y * Time.deltaTime;
-                }
-
-                // 应用垂直移动
-                controller.Move(new Vector3(0, moveDirection.y, 0) * Time.deltaTime);
-            }
-        }
-        else
-        {
-            if (animator != null)
-            {
-                if (animator.GetFloat(speedParam) > 0.1f)
-                {
-                    animator.SetFloat(speedParam, 0f);
-                }
-
-                if (!isGrounded && controller != null)
-                {
-                    isGrounded = controller.isGrounded;
-                    animator.SetBool(isGroundedParam, isGrounded);
-                }
-            }
-        }
-    }
-
-    // 新增方法：供AI调用移动
-    public void AIMove(Vector3 direction, bool isRunning = false)
-    {
-        if (controller == null || !isAIControlled)
-        {
-            if (showDebugInfo)
-                Debug.LogWarning($"AIMove调用失败: controller={controller != null}, isAIControlled={isAIControlled}");
-            return;
-        }
-
-        // 检查是否在地面
-        isGrounded = controller.isGrounded;
-
-        // 如果在地面且下落速度小于0，重置Y速度
-        if (isGrounded && moveDirection.y < 0)
-        {
-            moveDirection.y = -2f;
-        }
-
-        // AI移动时，根据isRunning参数决定速度
-        float targetSpeed = isRunning ? runSpeed : walkSpeed;
-        currentSpeed = Mathf.Lerp(currentSpeed, targetSpeed, Time.deltaTime * 5f);
-
-        // 应用水平移动
-        if (direction.magnitude > 0.1f)
-        {
-            // 计算移动向量
-            Vector3 move = direction.normalized * currentSpeed;
-            moveDirection.x = move.x;
-            moveDirection.z = move.z;
-
-            // 旋转控制器对象
-            if (direction != Vector3.zero)
-            {
-                Quaternion targetRotation = Quaternion.LookRotation(new Vector3(direction.x, 0, direction.z));
-                transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
-            }
-
-            // 设置动画速度 - 狐狸的Speed参数是归一化的
-            if (animator != null)
-            {
-                float normalizedSpeed = Mathf.Clamp01(currentSpeed / runSpeed);
-                animator.SetFloat(speedParam, normalizedSpeed);
-            }
-
-            if (showDebugInfo && Time.frameCount % 60 == 0)
-            {
-                Debug.Log($"AI移动: 速度={currentSpeed:F1}, 方向={direction}, 移动向量={move}");
-            }
-        }
-        else
-        {
-            // 没有方向，停止移动
-            currentSpeed = Mathf.Lerp(currentSpeed, 0f, Time.deltaTime * 10f);
-            moveDirection.x = 0;
-            moveDirection.z = 0;
-
-            if (animator != null)
-            {
-                float normalizedSpeed = Mathf.Clamp01(currentSpeed / runSpeed);
-                animator.SetFloat(speedParam, normalizedSpeed);
-            }
-        }
-
-        // 应用重力
-        if (!isGrounded)
-        {
-            moveDirection.y += Physics.gravity.y * Time.deltaTime;
-        }
-
-        // 应用所有移动 - 这是关键！
-        if (controller.enabled)
-        {
-            controller.Move(moveDirection * Time.deltaTime);
-        }
-    }
 
     void HandleMovement()
     {
@@ -737,6 +585,24 @@ public class FoxController : MonoBehaviour, IPossessable
         if (stateInfo.fullPathHash == Animator.StringToHash("Base Layer.Jump")) return "Jump";
 
         return $"Unknown ({stateInfo.fullPathHash})";
+    }
+
+    void UpdateIdleBehavior()
+    {
+        // 非附身状态下的空闲行为
+        if (animator != null)
+        {
+            if (animator.GetFloat(speedParam) > 0.1f)
+            {
+                animator.SetFloat(speedParam, 0f);
+            }
+
+            if (!isGrounded && controller != null)
+            {
+                isGrounded = controller.isGrounded;
+                animator.SetBool(isGroundedParam, isGrounded);
+            }
+        }
     }
 
     // ===== 调试方法 =====
