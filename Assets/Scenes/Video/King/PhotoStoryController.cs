@@ -4,171 +4,246 @@ using TMPro;
 using System.Collections;
 using UnityEngine.SceneManagement;
 
-/// <summary>
-/// 照片剧情动画控制器
-/// 核心规则：
-/// 1. 前9张：自动播放+专属音频+专属字幕（固定时长）
-/// 2. 第10张：无字幕、无固定时长，一直显示直到点击按钮
-/// 3. 点击按钮：保留第10张照片，显示结果面板 → 3秒后返回主菜单StartScene
-/// </summary>
 public class PhotoStoryController : MonoBehaviour
 {
+    [Header("==== 音频源分离配置 ====")]
+    [Tooltip("专门播放照片剧情配音的音频源（自动创建）")]
+    private AudioSource photoAudioSource;
+    [Tooltip("专门播放BGM的音频源（可在编辑器拖入，或自动创建）")]
+    public AudioSource bgmAudioSource; // 新增：BGM独立音频源
+    [Tooltip("你的循环BGM音频文件")]
+    public AudioClip bgmClip; // 新增：配置BGM文件
+
     [Header("==== 照片与音频配置 ====")]
-    [Tooltip("按顺序放入第1~10张照片（GameObject）")]
     public GameObject[] photos = new GameObject[10];
-    [Tooltip("按顺序放入第1~10张照片的专属配音（每张对应一个）")]
     public AudioClip[] photoAudios = new AudioClip[10];
-    [Tooltip("仅填写前9张照片的独立字幕（索引0-8）")]
     public string[] photoSubtitles = new string[9];
 
     [Header("==== UI配置 ====")]
-    [Tooltip("前9张照片的字幕面板（半黑背景）")]
     public GameObject subtitlePanel;
-    [Tooltip("字幕面板中的文本组件")]
     public TextMeshProUGUI subtitleText;
-    [Tooltip("第10张照片显示的确认按钮（点击即结束）")]
     public Button finishButton;
-    [Tooltip("点击按钮后弹出的结果面板（半黑背景，可自定义大小）")]
     public GameObject resultPanel;
-    [Tooltip("结果面板中的文本组件（显示最低/中等/最高）")]
     public TextMeshProUGUI resultText;
 
     [Header("==== 时间配置 ====")]
-    [Tooltip("前9张照片显示时长（秒），建议匹配对应配音长度")]
-    public float[] photoDurations = new float[9]; // 仅前9张需要时长
+    public float[] photoDurations = new float[9];
+    public float minWaitTime = 2f;
 
-    [Header("==== 游戏结束配置（已设为返回主菜单） ====")]
-    [Tooltip("主菜单场景名称（已固定为StartScene）")]
+    [Header("==== 游戏结束配置 ====")]
     public string mainMenuSceneName = "StartScene";
-    [Tooltip("显示结果后延迟几秒返回主菜单（默认3秒）")]
     public float endDelay = 3f;
-
-    private AudioSource audioSource;
 
     void Start()
     {
-        // 初始化音频源
-        audioSource = GetComponent<AudioSource>() ?? gameObject.AddComponent<AudioSource>();
-        // 初始化所有UI为隐藏状态
+        // 1. 初始化两个音频源（分离）
+        InitAudioSources();
+
+        // 2. 启动BGM循环播放（你的核心需求）
+        PlayBGM();
+
+        // 3. 校验配置 + 初始化UI + 启动剧情
+        ValidateConfig();
         ResetAllUI();
-        // 开始播放照片剧情
         StartCoroutine(PlayPhotoStory());
     }
 
     /// <summary>
-    /// 重置所有UI到初始隐藏状态
+    /// 初始化分离的音频源：照片音频源 + BGM音频源
     /// </summary>
+    void InitAudioSources()
+    {
+        // 初始化照片音频源（专门播剧情配音，不循环）
+        photoAudioSource = GetComponent<AudioSource>() ?? gameObject.AddComponent<AudioSource>();
+        photoAudioSource.loop = false; // 强制关闭循环（剧情配音只播一次）
+        photoAudioSource.playOnAwake = false;
+
+        // 初始化BGM音频源（专门播循环背景音乐）
+        if (bgmAudioSource == null)
+        {
+            // 如果没手动拖入，自动创建一个子物体挂载BGM音频源（避免和照片音频源冲突）
+            GameObject bgmObj = new GameObject("BGMAudioSource");
+            bgmObj.transform.SetParent(transform); // 挂到当前物体下，方便管理
+            bgmAudioSource = bgmObj.AddComponent<AudioSource>();
+        }
+        bgmAudioSource.loop = true; // BGM强制循环（满足你的需求）
+        bgmAudioSource.playOnAwake = false;
+    }
+
+    /// <summary>
+    /// 播放循环BGM（独立控制，不影响照片音频）
+    /// </summary>
+    void PlayBGM()
+    {
+        if (bgmClip != null && bgmAudioSource != null)
+        {
+            bgmAudioSource.clip = bgmClip;
+            bgmAudioSource.Play();
+        }
+        else
+        {
+            Debug.LogWarning("BGM音频文件未配置，跳过BGM播放", this);
+        }
+    }
+
+    /// <summary>
+    /// 校验配置，输出错误日志
+    /// </summary>
+    void ValidateConfig()
+    {
+        // 校验照片
+        for (int i = 0; i < photos.Length; i++)
+        {
+            if (photos[i] == null)
+            {
+                Debug.LogError($"【配置错误】第{i + 1}张照片未赋值！", this);
+            }
+        }
+
+        // 校验UI组件
+        if (subtitlePanel == null) Debug.LogError("【配置错误】字幕面板未赋值！", this);
+        if (subtitleText == null) Debug.LogError("【配置错误】字幕文本未赋值！", this);
+        if (finishButton == null) Debug.LogError("【配置错误】确认按钮未赋值！", this);
+        if (resultPanel == null) Debug.LogError("【配置错误】结果面板未赋值！", this);
+        if (resultText == null) Debug.LogError("【配置错误】结果文本未赋值！", this);
+    }
+
     void ResetAllUI()
     {
-        // 隐藏所有照片
         foreach (var photo in photos)
         {
             if (photo != null) photo.SetActive(false);
         }
-        // 隐藏字幕面板、按钮、结果面板
-        subtitlePanel.SetActive(false);
-        finishButton.gameObject.SetActive(false);
-        resultPanel.SetActive(false);
+        subtitlePanel?.SetActive(false);
+        finishButton?.gameObject.SetActive(false);
+        resultPanel?.SetActive(false);
     }
 
-    /// <summary>
-    /// 核心协程：按顺序播放10张照片
-    /// </summary>
     IEnumerator PlayPhotoStory()
     {
-        // 播放前9张照片（自动切换，显示字幕）
+        Debug.Log("开始播放前9张照片", this);
+        // 前9张
         for (int i = 0; i < 9; i++)
         {
-            if (photos[i] == null) continue;
-
-            // 显示当前照片
-            photos[i].SetActive(true);
-            // 播放专属音频
-            PlayPhotoAudio(i);
-            // 显示专属字幕
-            ShowSubtitle(i);
-
-            // 等待配置时长（无配置则默认5秒）
-            float waitTime = photoDurations[i] > 0 ? photoDurations[i] : 5f;
-            yield return new WaitForSeconds(waitTime);
-
-            // 等待音频播放完毕再切换
-            if (audioSource.isPlaying)
+            if (photos[i] == null)
             {
-                yield return new WaitUntil(() => !audioSource.isPlaying);
+                Debug.LogWarning($"跳过第{i + 1}张照片（对象为空）", this);
+                continue;
             }
 
-            // 隐藏当前照片和字幕
+            // 显示照片+音频+字幕
+            photos[i].SetActive(true);
+            PlayPhotoAudio(i); // 现在用photoAudioSource播放，和BGM无关
+            ShowSubtitle(i);
+
+            // 等待时长（最小minWaitTime秒）
+            float waitTime = Mathf.Max(photoDurations[i], minWaitTime);
+            Debug.Log($"第{i + 1}张照片等待{waitTime}秒", this);
+            yield return new WaitForSeconds(waitTime);
+
+            // 音频等待（只判断照片音频源，BGM循环不影响）
+            if (photoAudioSource.isPlaying)
+            {
+                Debug.Log($"等待第{i + 1}张照片音频播放完毕", this);
+                float audioWaitTime = 0;
+                while (photoAudioSource.isPlaying && audioWaitTime < 10f)
+                {
+                    audioWaitTime += Time.deltaTime;
+                    yield return null;
+                }
+                if (audioWaitTime >= 10f)
+                {
+                    Debug.LogWarning($"第{i + 1}张照片音频播放超时，强制停止", this);
+                    photoAudioSource.Stop(); // 只停照片音频，BGM继续
+                }
+            }
+
+            // 隐藏当前内容
             photos[i].SetActive(false);
-            subtitlePanel.SetActive(false);
+            subtitlePanel?.SetActive(false);
+            Debug.Log($"第{i + 1}张照片播放完毕，切换下一张", this);
         }
 
-        // 播放第10张照片（无固定时长、无字幕，直到点击按钮）
+        // 第10张
+        Debug.Log("开始播放第10张照片", this);
         if (photos[9] != null)
         {
             photos[9].SetActive(true);
-            PlayPhotoAudio(9); // 播放第10张音频
-            finishButton.gameObject.SetActive(true); // 显示结束按钮
-            // 绑定按钮点击事件：显示结果 + 返回主菜单
+            PlayPhotoAudio(9);
+            finishButton.gameObject.SetActive(true);
             finishButton.onClick.RemoveAllListeners();
             finishButton.onClick.AddListener(OnFinishButtonClick);
         }
-    }
-
-    /// <summary>
-    /// 播放指定索引照片的专属配音
-    /// </summary>
-    void PlayPhotoAudio(int index)
-    {
-        if (photoAudios[index] != null)
+        else
         {
-            audioSource.clip = photoAudios[index];
-            audioSource.Play();
+            Debug.LogError("第10张照片未赋值！", this);
         }
     }
 
     /// <summary>
-    /// 显示指定索引照片的独立字幕（仅前9张调用）
+    /// 播放照片专属音频（只用photoAudioSource，不影响BGM）
     /// </summary>
+    void PlayPhotoAudio(int index)
+    {
+        if (photoAudioSource == null) return;
+
+        // 停止当前照片音频，避免叠加（不影响BGM）
+        if (photoAudioSource.isPlaying) photoAudioSource.Stop();
+
+        if (photoAudios[index] != null)
+        {
+            photoAudioSource.clip = photoAudios[index];
+            photoAudioSource.Play();
+        }
+        else
+        {
+            Debug.LogWarning($"第{index + 1}张照片无音频", this);
+        }
+    }
+
     void ShowSubtitle(int index)
     {
+        if (subtitlePanel == null || subtitleText == null) return;
+
         subtitlePanel.SetActive(true);
         subtitleText.text = !string.IsNullOrEmpty(photoSubtitles[index])
             ? photoSubtitles[index]
             : $"第{index + 1}张照片";
     }
 
-    /// <summary>
-    /// 第10张按钮点击事件：保留照片，显示结果 + 延迟返回主菜单
-    /// </summary>
     void OnFinishButtonClick()
     {
-        // 仅隐藏按钮（核心修改：移除隐藏第10张照片的代码）
+        Debug.Log("点击确认按钮，显示结果面板", this);
+        // 禁用按钮，防止重复点击
+        finishButton.interactable = false;
         finishButton.gameObject.SetActive(false);
-        // 停止所有音频
-        if (audioSource.isPlaying) audioSource.Stop();
 
-        // 显示结果面板（按碎片数显示对应文本）
-        resultPanel.SetActive(true);
+        // 只停止照片音频，BGM可以选择继续播或停止（根据你的需求）
+        if (photoAudioSource != null && photoAudioSource.isPlaying)
+        {
+            photoAudioSource.Stop();
+        }
+        // 可选：如果想在结局时停止BGM，取消下面注释
+        // if (bgmAudioSource != null && bgmAudioSource.isPlaying)
+        // {
+        //     bgmAudioSource.Stop();
+        // }
+
+        resultPanel?.SetActive(true);
         SetResultTextByFragmentCount();
 
-        // 延迟3秒返回主菜单StartScene（让玩家看清结果）
         StartCoroutine(ReturnToMainMenuCoroutine());
     }
 
-    /// <summary>
-    /// 根据碎片数量区间设置结果文本（0-2→最低、3-4→中等、5-6→最高）
-    /// </summary>
     void SetResultTextByFragmentCount()
     {
         int fragmentCount = 0;
-        // 读取碎片数量（兼容FragmentManager为空的情况）
         if (FragmentManager.Instance != null)
         {
             fragmentCount = FragmentManager.Instance.currentFragmentCount;
         }
+        Debug.Log($"当前碎片数：{fragmentCount}", this);
 
-        // 区间判断逻辑
         if (fragmentCount >= 0 && fragmentCount <= 2)
         {
             resultText.text = "在真相面前，你选择了逃避。你的灵魂再次脱离国王的躯体，头也不回地飞离王城，永远在这个静止的世界里徘徊成为一个永恒的旁观者，一个不被任何生灵感知的幽灵。";
@@ -187,22 +262,16 @@ public class PhotoStoryController : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// 延迟返回主菜单协程
-    /// </summary>
     IEnumerator ReturnToMainMenuCoroutine()
     {
-        // 等待指定时间（让玩家看清结果）
         yield return new WaitForSeconds(endDelay);
-        // 跳转到主菜单场景StartScene
+        Debug.Log($"延迟{endDelay}秒后，返回主菜单：{mainMenuSceneName}", this);
         SceneManager.LoadScene(mainMenuSceneName);
     }
 
-    /// <summary>
-    /// 跳过按钮：直接跳转到第10张照片（无字幕）
-    /// </summary>
     public void SkipToLastPhoto()
     {
+        Debug.Log("执行跳过操作，直接显示第10张照片", this);
         StopAllCoroutines();
         ResetAllUI();
 
@@ -214,12 +283,19 @@ public class PhotoStoryController : MonoBehaviour
             finishButton.onClick.RemoveAllListeners();
             finishButton.onClick.AddListener(OnFinishButtonClick);
         }
+        else
+        {
+            Debug.LogError("跳过失败：第10张照片未赋值！", this);
+        }
     }
 
-    // 防呆：检查场景是否存在（编辑器模式下生效）
     private void OnValidate()
     {
-        // 确保主菜单场景名称是StartScene
         mainMenuSceneName = "StartScene";
+        // 确保时长数组长度为9
+        if (photoDurations.Length != 9)
+        {
+            System.Array.Resize(ref photoDurations, 9);
+        }
     }
 }

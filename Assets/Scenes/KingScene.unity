@@ -157,7 +157,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 200, y: 50}
+  m_SizeDelta: {x: 600, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &58323136
 MonoBehaviour:
@@ -857,7 +857,7 @@ RectTransform:
   m_GameObject: {fileID: 752162694}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 1, y: 3, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 646474420}
@@ -865,7 +865,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 200, y: 50}
+  m_SizeDelta: {x: 1000, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &752162696
 MonoBehaviour:
@@ -887,7 +887,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: New Text
+  m_text: 
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: e35893fa0a9a1244785bd5d3e397c6e3, type: 2}
   m_sharedMaterial: {fileID: -7459525850104362581, guid: e35893fa0a9a1244785bd5d3e397c6e3, type: 2}
@@ -1719,6 +1719,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c675eec315baa0c4fa0982433d1deb99, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  bgmAudioSource: {fileID: 2011865528}
+  bgmClip: {fileID: 0}
   photos:
   - {fileID: 1701131565}
   - {fileID: 99265820}
@@ -1740,34 +1742,33 @@ MonoBehaviour:
   - {fileID: 0}
   - {fileID: 0}
   - {fileID: 0}
-  - {fileID: 0}
+  - {fileID: 8300000, guid: 38ee45d59ed48a8439b4e40ede4e8817, type: 3}
   photoSubtitles:
   - "\uFF08\u6B64\u65F6\uFF1A\u8111\u4E2D\u4F20\u51FA\u4E00\u4E2A\u58F0\u97F3\uFF09\u8FD9\u4E2A\u5BAB\u6BBF\u5230\u5E95\u85CF\u7740\u4EC0\u4E48\u79D8\u5BC6\uFF0C\u8FD9\u4E2A\u56FD\u738B\u4E3A\u4EC0\u4E48\u5982\u6B64\u6B8B\u5FCD"
   - "\u5BAB\u6BBF\u4E2D\u592E\u5730\u5B9D\u5EA7\u4E0A\u9762\u662F\u56FD\u738B\u5417\uFF1F\u4ED6\u4E3A\u4EC0\u4E48\u4F1A\u53D8\u6210\u8FD9\u6837\uFF1F"
   - "\u8FD9\u4E2A\u56FD\u738B\u5730\u8BB0\u5FC6\u5417\uFF1F\u4ED6\u770B\u8D77\u6765\u4E0D\u50CF\u662F\u4E00\u4E2A\u6B8B\u66B4\u7684\u660F\u541B\uFF0C\u5230\u5E95\u53D1\u751F\u4E86\u4EC0\u4E48\uFF1F"
   - "\u8FD9\u4E2A\u949F\uFF01\u4E0D\u5C31\u662F\u90A3\u4E2A\u5438\u8D70\u4EBA\u7075\u9B42\u7684\u949F\u5417\uFF1F\u662F\u90BB\u56FD\u4EBA\uFF1F"
-  - "\u9886\u8FC7\u4F7F\u8005\u4ECB\u7ECD\u949F\u7684\u5A01\u529B\uFF0C\u8FD9\u4E2A\u949F\u901A\u8FC7\u5438\u8D70\u4EBA\u7684\u7075\u9B42\u8FDB\u884C\u63A7\u5236\uFF0C\u592A\u53EF\u6015\u4E86"
+  - "\u9886\u56FD\u4F7F\u8005\u4ECB\u7ECD\u949F\u7684\u5A01\u529B\uFF0C\u8FD9\u4E2A\u949F\u901A\u8FC7\u5438\u8D70\u4EBA\u7684\u7075\u9B42\u8FDB\u884C\u63A7\u5236\uFF0C\u592A\u53EF\u6015\u4E86"
   - "\u56FD\u738B\u4F7F\u7528\u949F\u5E76\u4E14\u6307\u6325\u90A3\u7FA4\u602A\u7269\uFF01\u4F46\u4E3A\u4EC0\u4E48\u56FD\u738B\u7684\u7075\u9B42\u4E5F\u6CA1\u4E86"
-  - "\u6211\u7684\u5929\uFF01\u8FD9\u5C45\u7136\u662F\u90BB\u56FD\u7684\u9634\u8C0B"
-  - 1
-  - 1
-  - 1
+  - "\u6211\u7684\u5929\uFF01\u8FD9\u5C45\u7136\u662F\u90BB\u56FD\u7684\u9634\u8C0B\uFF01\u56FD\u738B\u7684\u7075\u9B42\u4E5F\u88AB\u5438\u8D70\u4E86\u3002"
+  - "\u7A81\u7136\uFF0C\u6211\u7684\u7075\u9B42\u9644\u8EAB\u5728\u56FD\u738B\u7684\u8EAF\u4F53\u4E4B\u4E0A\u3002\u6211\u7684\u8BB0\u5FC6\u53D8\u5F97\u6108\u53D1\u6E05\u6670\u3002"
+  - "\u539F\u6765\uFF0C\u6211\u5C31\u662F\u56FD\u738B......"
   subtitlePanel: {fileID: 646474419}
   subtitleText: {fileID: 752162696}
   finishButton: {fileID: 1617291062}
   resultPanel: {fileID: 1395339136}
   resultText: {fileID: 58323136}
   photoDurations:
-  - 10
-  - 10
-  - 10
-  - 10
-  - 10
-  - 10
-  - 10
-  - 10
-  - 10
-  - 30
+  - 5
+  - 5
+  - 5
+  - 5
+  - 5
+  - 5
+  - 5
+  - 5
+  - 5
+  minWaitTime: 2
   mainMenuSceneName: StartScene
   endDelay: 10
 --- !u!82 &1456931809
@@ -1780,11 +1781,11 @@ AudioSource:
   m_Enabled: 1
   serializedVersion: 4
   OutputAudioMixerGroup: {fileID: 0}
-  m_audioClip: {fileID: 8300000, guid: ff037b1aa9cdc054d9c0aef8e8838627, type: 3}
+  m_audioClip: {fileID: 0}
   m_PlayOnAwake: 1
   m_Volume: 1
   m_Pitch: 1
-  Loop: 1
+  Loop: 0
   Mute: 0
   Spatialize: 0
   SpatializePostEffects: 0
@@ -2077,6 +2078,134 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1701131565}
   m_CullTransparentMesh: 1
+--- !u!1 &2011865527
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2011865529}
+  - component: {fileID: 2011865528}
+  m_Layer: 0
+  m_Name: BGMSource
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!82 &2011865528
+AudioSource:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2011865527}
+  m_Enabled: 1
+  serializedVersion: 4
+  OutputAudioMixerGroup: {fileID: 0}
+  m_audioClip: {fileID: 8300000, guid: ff037b1aa9cdc054d9c0aef8e8838627, type: 3}
+  m_PlayOnAwake: 1
+  m_Volume: 0.5
+  m_Pitch: 1
+  Loop: 0
+  Mute: 0
+  Spatialize: 0
+  SpatializePostEffects: 0
+  Priority: 128
+  DopplerLevel: 1
+  MinDistance: 1
+  MaxDistance: 500
+  Pan2D: 0
+  rolloffMode: 0
+  BypassEffects: 0
+  BypassListenerEffects: 0
+  BypassReverbZones: 0
+  rolloffCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  panLevelCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  spreadCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  reverbZoneMixCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+--- !u!4 &2011865529
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2011865527}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 446.25, y: 209.25, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2074010998
 GameObject:
   m_ObjectHideFlags: 0
@@ -2161,3 +2290,4 @@ SceneRoots:
   - {fileID: 1275785173}
   - {fileID: 477539988}
   - {fileID: 1456931810}
+  - {fileID: 2011865529}
