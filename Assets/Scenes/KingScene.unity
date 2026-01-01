@@ -156,8 +156,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 600, y: 50}
+  m_AnchoredPosition: {x: 0, y: 50}
+  m_SizeDelta: {x: 800, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &58323136
 MonoBehaviour:
@@ -213,8 +213,8 @@ MonoBehaviour:
   m_fontSizeMin: 18
   m_fontSizeMax: 72
   m_fontStyle: 0
-  m_HorizontalAlignment: 1
-  m_VerticalAlignment: 256
+  m_HorizontalAlignment: 2
+  m_VerticalAlignment: 512
   m_textAlignment: 65535
   m_characterSpacing: 0
   m_wordSpacing: 0
@@ -629,13 +629,13 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 24
-  m_fontSizeBase: 24
+  m_fontSize: 36
+  m_fontSizeBase: 36
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
   m_fontSizeMax: 72
-  m_fontStyle: 0
+  m_fontStyle: 1
   m_HorizontalAlignment: 2
   m_VerticalAlignment: 512
   m_textAlignment: 65535
@@ -921,7 +921,7 @@ MonoBehaviour:
   m_fontSizeMin: 18
   m_fontSizeMax: 72
   m_fontStyle: 0
-  m_HorizontalAlignment: 1
+  m_HorizontalAlignment: 2
   m_VerticalAlignment: 512
   m_textAlignment: 65535
   m_characterSpacing: 0
@@ -1733,26 +1733,26 @@ MonoBehaviour:
   - {fileID: 2074010998}
   - {fileID: 1162389483}
   photoAudios:
+  - {fileID: 8300000, guid: 1dfc5a663cc3bc541a7f37ad82080a2b, type: 3}
+  - {fileID: 0}
+  - {fileID: 8300000, guid: bd4efe8c0ca5f9140b3b08c3440011c1, type: 3}
+  - {fileID: 8300000, guid: 5c6c65c0298539c49b5cdefba6d37477, type: 3}
   - {fileID: 0}
   - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
+  - {fileID: 8300000, guid: 5116e8dd8041f8b4aa1b12e602b8bd1c, type: 3}
   - {fileID: 0}
   - {fileID: 0}
   - {fileID: 8300000, guid: 38ee45d59ed48a8439b4e40ede4e8817, type: 3}
   photoSubtitles:
-  - "\uFF08\u6B64\u65F6\uFF1A\u8111\u4E2D\u4F20\u51FA\u4E00\u4E2A\u58F0\u97F3\uFF09\u8FD9\u4E2A\u5BAB\u6BBF\u5230\u5E95\u85CF\u7740\u4EC0\u4E48\u79D8\u5BC6\uFF0C\u8FD9\u4E2A\u56FD\u738B\u4E3A\u4EC0\u4E48\u5982\u6B64\u6B8B\u5FCD"
-  - "\u5BAB\u6BBF\u4E2D\u592E\u5730\u5B9D\u5EA7\u4E0A\u9762\u662F\u56FD\u738B\u5417\uFF1F\u4ED6\u4E3A\u4EC0\u4E48\u4F1A\u53D8\u6210\u8FD9\u6837\uFF1F"
-  - "\u8FD9\u4E2A\u56FD\u738B\u5730\u8BB0\u5FC6\u5417\uFF1F\u4ED6\u770B\u8D77\u6765\u4E0D\u50CF\u662F\u4E00\u4E2A\u6B8B\u66B4\u7684\u660F\u541B\uFF0C\u5230\u5E95\u53D1\u751F\u4E86\u4EC0\u4E48\uFF1F"
-  - "\u8FD9\u4E2A\u949F\uFF01\u4E0D\u5C31\u662F\u90A3\u4E2A\u5438\u8D70\u4EBA\u7075\u9B42\u7684\u949F\u5417\uFF1F\u662F\u90BB\u56FD\u4EBA\uFF1F"
-  - "\u9886\u56FD\u4F7F\u8005\u4ECB\u7ECD\u949F\u7684\u5A01\u529B\uFF0C\u8FD9\u4E2A\u949F\u901A\u8FC7\u5438\u8D70\u4EBA\u7684\u7075\u9B42\u8FDB\u884C\u63A7\u5236\uFF0C\u592A\u53EF\u6015\u4E86"
-  - "\u56FD\u738B\u4F7F\u7528\u949F\u5E76\u4E14\u6307\u6325\u90A3\u7FA4\u602A\u7269\uFF01\u4F46\u4E3A\u4EC0\u4E48\u56FD\u738B\u7684\u7075\u9B42\u4E5F\u6CA1\u4E86"
-  - "\u6211\u7684\u5929\uFF01\u8FD9\u5C45\u7136\u662F\u90BB\u56FD\u7684\u9634\u8C0B\uFF01\u56FD\u738B\u7684\u7075\u9B42\u4E5F\u88AB\u5438\u8D70\u4E86\u3002"
-  - "\u7A81\u7136\uFF0C\u6211\u7684\u7075\u9B42\u9644\u8EAB\u5728\u56FD\u738B\u7684\u8EAF\u4F53\u4E4B\u4E0A\u3002\u6211\u7684\u8BB0\u5FC6\u53D8\u5F97\u6108\u53D1\u6E05\u6670\u3002"
-  - "\u539F\u6765\uFF0C\u6211\u5C31\u662F\u56FD\u738B......"
+  - "\u8FD9\u4E2A\u5BAB\u6BBF\u5230\u5E95\u85CF\u7740\u4EC0\u4E48\u79D8\u5BC6\uFF0C\u8FD9\u4E2A\u56FD\u738B\u4E3A\u4EC0\u4E48\u5982\u6B64\u6B8B\u5FCD\uFF1F"
+  - "\u5BAB\u6BBF\u4E2D\u592E\u7684\u5B9D\u5EA7\u4E0A\u9762\u662F\u56FD\u738B\u5417\uFF1F\u4ED6\u7684\u7075\u9B42\u53BB\u54EA\u4E86\uFF1F\u8FD9\u4E00\u5207\u96BE\u9053\u4E0D\u662F\u56FD\u738B\u5BFC\u81F4\u7684\u5417\uFF1F"
+  - "\u8FD9\u4E2A\u56FD\u738B\u7684\u8BB0\u5FC6\uFF1F\u4ED6\u770B\u8D77\u6765\u4E0D\u50CF\u662F\u4E00\u4E2A\u6B8B\u66B4\u7684\u660F\u541B\uFF0C\u4F3C\u4E4E\u5728\u4E3A\u56FD\u5BB6\u7684\u7E41\u8363\u800C\u70E6\u607C\u3002"
+  - "\u8FD9\u4E2A\u949F\uFF01\u4E0D\u5C31\u662F\u90A3\u4E2A\u5438\u8D70\u4EBA\u7075\u9B42\u7684\u949F\u5417\uFF1F\u539F\u6765\u662F\u90BB\u56FD\u4EBA\u5E26\u6765\u7684\u3002"
+  - "\u9886\u56FD\u4F7F\u8005\u4ECB\u7ECD\u949F\u7684\u5A01\u529B\uFF0C\u8FD9\u4E2A\u949F\u901A\u8FC7\u5438\u8D70\u4EBA\u7684\u7075\u9B42\u6765\u5E2E\u52A9\u56FD\u738B\u7EDF\u6CBB\u56FD\u5BB6\uFF0C\u8BA9\u56FD\u5BB6\u53D8\u5F97\u66F4\u597D\u3002\u65E2\u7136\u5982\u6B64\uFF0C\u8FD9\u4E2A\u56FD\u5BB6\u7406\u5E94\u4E0D\u4F1A\u53D8\u6210\u8FD9\u4E2A\uFF0C\u90A3\u3002\u3002\u3002\u96BE\u9053\u8BF4\u53E6\u6709\u9690\u60C5\uFF1F"
+  - "\u56FD\u738B\u4F7F\u7528\u949F\u5E76\u4E14\u6307\u6325\u90A3\u7FA4\u602A\u7269\uFF0C\u5373\u4F7F\u8FD9\u6837\uFF0C\u56FD\u738B\u81EA\u5DF1\u4E5F\u4E0D\u4F1A\u4E22\u4E86\u7075\u9B42\u5440\uFF1F"
+  - "\u8FD9\u5C45\u7136\u662F\u90BB\u56FD\u7684\u9634\u8C0B\uFF01\u56FD\u738B\u7684\u7075\u9B42\u4E5F\u88AB\u5438\u8D70\u4E86\u3002"
+  - "\u56DE\u5FC6\u7ED3\u675F\uFF0C\u6211\u7684\u7075\u9B42\u7A81\u7136\u9644\u8EAB\u5728\u56FD\u738B\u7684\u8EAF\u4F53\u4E4B\u4E0A\u3002\u6211\u7684\u8BB0\u5FC6\u53D8\u5F97\u6108\u53D1\u6E05\u6670\u3002"
+  - "\u539F\u6765\uFF0C\u6211\u5C31\u662F\u56FD\u738B......\u5F53\u65F6\u7075\u9B42\u88AB\u62BD\u8D70\u4E4B\u540E\uFF0C\u53D1\u751F\u4E86\u610F\u5916\uFF0C\u6211\u7684\u7075\u9B42\u98D8\u6563\u5728\u67AF\u4E95\u4E2D\uFF0C\u7075\u9B42\u53D7\u635F\uFF0C\u8BB0\u5FC6\u5C31\u6D88\u5931\u4E86\u3002"
   subtitlePanel: {fileID: 646474419}
   subtitleText: {fileID: 752162696}
   finishButton: {fileID: 1617291062}
@@ -1761,8 +1761,8 @@ MonoBehaviour:
   photoDurations:
   - 5
   - 5
-  - 5
-  - 5
+  - 6
+  - 8
   - 5
   - 5
   - 5
@@ -1783,7 +1783,7 @@ AudioSource:
   OutputAudioMixerGroup: {fileID: 0}
   m_audioClip: {fileID: 0}
   m_PlayOnAwake: 1
-  m_Volume: 1
+  m_Volume: 0.5
   m_Pitch: 1
   Loop: 0
   Mute: 0
@@ -1919,7 +1919,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 160, y: 30}
+  m_SizeDelta: {x: 200, y: 45}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1617291062
 MonoBehaviour:

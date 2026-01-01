@@ -242,6 +242,7 @@ public class PhotoStoryController : MonoBehaviour
         {
             fragmentCount = FragmentManager.Instance.currentFragmentCount;
         }
+
         Debug.Log($"µ±Ç°ËéÆ¬Êý£º{fragmentCount}", this);
 
         if (fragmentCount >= 0 && fragmentCount <= 2)
