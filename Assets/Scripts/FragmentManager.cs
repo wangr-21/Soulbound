@@ -5,11 +5,11 @@ public class FragmentManager : MonoBehaviour
 {
     public static FragmentManager Instance; // 单例实例
 
-    [Header("UI 引用")]
+    [Header("UI 元素")]
     public TextMeshProUGUI fragmentCountText; // 显示碎片数量的文本
 
-    private int currentFragmentCount = 0; // 当前碎片数量
-    private const int maxFragmentCount = 6; // 总碎片数量
+    public int currentFragmentCount { get; private set; } = 0; // 当前碎片数量（改为公共属性）
+    private const int maxFragmentCount = 6; // 最大碎片数量
 
     void Awake()
     {
@@ -17,7 +17,7 @@ public class FragmentManager : MonoBehaviour
         if (Instance == null)
         {
             Instance = this;
-            DontDestroyOnLoad(gameObject); // 跨场景保留
+            DontDestroyOnLoad(gameObject); // 跨场景保存
         }
         else
         {
@@ -48,7 +48,7 @@ public class FragmentManager : MonoBehaviour
         }
         else
         {
-            Debug.LogError("未赋值碎片显示文本（fragmentCountText）");
+            Debug.LogError("未赋值碎片显示文本fragmentCountText！");
         }
     }
 }
