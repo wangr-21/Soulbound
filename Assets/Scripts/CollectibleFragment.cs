@@ -1,7 +1,6 @@
 using UnityEngine;
 using TMPro;
-using System.Collections; // 新增：协程必需的命名空间
-using System.Collections.Generic;
+using System.Collections;
 
 public class CollectibleFragment : MonoBehaviour
 {
@@ -12,15 +11,15 @@ public class CollectibleFragment : MonoBehaviour
     {
         if (other.CompareTag("Player"))
         {
-            Debug.Log("收集到场景碎片，数量+1！");
-            FragmentManager.Instance.AddFragment(); // 场景碎片单独+1
+            Debug.Log("玩家接触到碎片，碎片+1！");
+            FragmentManager.Instance.AddFragment(); // 碎片收集数量+1
             ShowSuccessThenHide(2f);
             gameObject.SetActive(false);
             Destroy(gameObject, 0.1f);
         }
     }
 
-    // 添加显示和隐藏成功提示的方法
+    // 显示成功提示然后隐藏的方法
     private void ShowSuccessThenHide(float delay)
     {
         successHintText.gameObject.SetActive(true);

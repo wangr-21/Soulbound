@@ -9,7 +9,7 @@ public class SoldierSceneReturn : MonoBehaviour
 
     void Awake()
     {
-        // 绑定返回按钮点击事件
+        // 确保返回按钮监听正确
         if (returnButton != null)
         {
             returnButton.onClick.RemoveAllListeners();
@@ -17,32 +17,42 @@ public class SoldierSceneReturn : MonoBehaviour
         }
         else
         {
-            Debug.LogError("SoldierSceneReturn：未分配返回按钮！");
+            Debug.LogError("SoldierSceneReturn：缺少返回按钮引用！");
         }
     }
 
     void ReturnToMainScene()
     {
-        // 1. 重置时间缩放（防止时间异常）
+        // 1. 恢复时间缩放
         Time.timeScale = 1f;
 
-        // 2. 重置光标状态（主界面默认锁定）
+        // 2. 恢复光标锁定
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
 
-        // 3. 淡入背景音乐（恢复主界面音效）
+        // 3. 淡入背景音乐
         MainBGMController.Instance?.FadeIn(1f, 0.5f);
 
-        // 4. 异步卸载SoldierScene（避免卡顿），卸载完成后重置触发状态
+        // 4. 异步卸载SoldierScene，完成后重置状态
         var unloadOp = SceneManager.UnloadSceneAsync("SoldierScene");
-        unloadOp.completed += (op) =>
+        unloadOp.completed += OnSoldierSceneUnloaded;
+    }
+
+    // 场景卸载完成回调
+    private void OnSoldierSceneUnloaded(AsyncOperation operation)
+    {
+        // 重置场景中的SoldierRecallTrigger状态
+        var soldierTriggers = Object.FindObjectsOfType<SoldierRecallTrigger>();
+        foreach (var trigger in soldierTriggers)
         {
-            // 找到主场景的SoldierRecallTrigger并重置状态（解决文本残留）
-            var soldierTriggers = Object.FindObjectsOfType<SoldierRecallTrigger>();
-            foreach (var trigger in soldierTriggers)
-            {
-                trigger.ResetRecallState();
-            }
-        };
+            trigger.ResetRecallState();
+        }
+
+        // 通知PlayerSoulController恢复计时器（使用独立的方法）
+        PlayerSoulController soulController = PlayerSoulController.Instance;
+        if (soulController != null)
+        {
+            soulController.OnReturnFromSoldierScene();
+        }
     }
 }

@@ -3,7 +3,8 @@ using UnityEngine.UI;
 using UnityEngine.InputSystem;
 using System.Collections.Generic;
 using System.Collections;
-using TMPro; // 添加 TextMeshPro 命名空间
+using TMPro;
+using UnityEngine.SceneManagement;
 
 public class PlayerSoulController : MonoBehaviour
 {
@@ -35,11 +36,11 @@ public class PlayerSoulController : MonoBehaviour
 
     [Header("UI元素")]
     public Slider soulTimeSlider; // 灵魂时间条
-    public TextMeshProUGUI soulTimeText; // 灵魂时间文本 - 改为 TextMeshProUGUI
+    public TextMeshProUGUI soulTimeText; // 灵魂时间文本
 
     [Header("游戏结束")]
     public GameObject gameOverPanel; // 游戏结束UI
-    public TextMeshProUGUI gameOverText; // 游戏结束文本 - 改为 TextMeshProUGUI
+    public TextMeshProUGUI gameOverText; // 游戏结束文本
 
     // 移动和跳跃相关变量
     private Vector3 playerVelocity;
@@ -66,6 +67,13 @@ public class PlayerSoulController : MonoBehaviour
     // 新增：位置锁定
     private Vector3 deerPositionBeforePossession;
     private Quaternion deerRotationBeforePossession;
+
+    // 修改：两个独立的回忆场景标志
+    private bool isInDowlScene = false;
+    private bool isInSoldierScene = false;
+
+    // 辅助属性：是否在任何回忆场景中
+    private bool IsInAnyMemoryScene => isInDowlScene || isInSoldierScene;
 
     // 单例模式
     public static PlayerSoulController Instance;
@@ -138,6 +146,13 @@ public class PlayerSoulController : MonoBehaviour
             gameOverPanel.SetActive(false);
         }
 
+        // 添加场景加载监听
+        SceneManager.sceneLoaded += OnSceneLoaded;
+        SceneManager.sceneUnloaded += OnSceneUnloaded;
+
+        // 检查当前是否在回忆场景中
+        CheckCurrentScene();
+
         if (debugMode) Debug.Log($"灵魂控制器初始化完成 - 位置: {transform.position}");
     }
 
@@ -157,6 +172,19 @@ public class PlayerSoulController : MonoBehaviour
         playerInputActions.Player.Disable();
     }
 
+    private void OnDestroy()
+    {
+        // 移除场景事件监听
+        SceneManager.sceneLoaded -= OnSceneLoaded;
+        SceneManager.sceneUnloaded -= OnSceneUnloaded;
+
+        // 确保单例实例被清理
+        if (Instance == this)
+        {
+            Instance = null;
+        }
+    }
+
     private void OnMove(InputAction.CallbackContext context)
     {
         currentMovementInput = context.ReadValue<Vector2>();
@@ -172,6 +200,9 @@ public class PlayerSoulController : MonoBehaviour
 
     void Update()
     {
+        // 如果正在任何回忆场景中，不执行任何更新逻辑
+        if (IsInAnyMemoryScene) return;
+
         // 检查输入
         if (Input.GetKeyDown(KeyCode.E))
         {
@@ -196,9 +227,96 @@ public class PlayerSoulController : MonoBehaviour
         {
             currentPossessable.PossessedUpdate();
         }
-        else
+        else if (!IsInAnyMemoryScene)  // 不在回忆场景中才处理移动
         {
             HandleMovementAndJump();
+        }
+    }
+
+    /// <summary>
+    /// 检查当前是否在回忆场景中
+    /// </summary>
+    private void CheckCurrentScene()
+    {
+        // 检查所有加载的场景
+        int sceneCount = SceneManager.sceneCount;
+        for (int i = 0; i < sceneCount; i++)
+        {
+            Scene scene = SceneManager.GetSceneAt(i);
+
+            if (scene.name == "DowlScene" && scene.isLoaded)
+            {
+                isInDowlScene = true;
+                PauseSoulTimer();
+                if (debugMode) Debug.Log("检测到已在 DowlScene 中，暂停计时器");
+            }
+            else if (scene.name == "SoldierScene" && scene.isLoaded)
+            {
+                isInSoldierScene = true;
+                PauseSoulTimer();
+                if (debugMode) Debug.Log("检测到已在 SoldierScene 中，暂停计时器");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 场景加载事件处理
+    /// </summary>
+    private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        if (scene.name == "DowlScene")
+        {
+            isInDowlScene = true;
+            PauseSoulTimer();
+            if (debugMode) Debug.Log("进入 DowlScene，暂停灵魂计时器");
+        }
+        else if (scene.name == "SoldierScene")
+        {
+            isInSoldierScene = true;
+            PauseSoulTimer();
+            if (debugMode) Debug.Log("进入 SoldierScene，暂停灵魂计时器");
+        }
+    }
+
+    /// <summary>
+    /// 场景卸载事件处理
+    /// </summary>
+    private void OnSceneUnloaded(Scene scene)
+    {
+        if (scene.name == "DowlScene")
+        {
+            isInDowlScene = false;
+            HandleMemorySceneExit();
+        }
+        else if (scene.name == "SoldierScene")
+        {
+            isInSoldierScene = false;
+            HandleMemorySceneExit();
+        }
+    }
+
+    /// <summary>
+    /// 处理回忆场景退出逻辑
+    /// </summary>
+    private void HandleMemorySceneExit()
+    {
+        // 如果不再在任何回忆场景中
+        if (!IsInAnyMemoryScene)
+        {
+            // 只有当不处于附身状态时才恢复计时器
+            if (!isPossessing)
+            {
+                isSoulTimerActive = true;
+                if (debugMode) Debug.Log("离开回忆场景，恢复灵魂计时器");
+            }
+            else
+            {
+                if (debugMode) Debug.Log("离开回忆场景，但处于附身状态，计时器保持暂停");
+            }
+        }
+        else
+        {
+            if (debugMode) Debug.Log("离开一个回忆场景，但仍在另一个回忆场景中，计时器保持暂停");
         }
     }
 
@@ -207,6 +325,9 @@ public class PlayerSoulController : MonoBehaviour
     /// </summary>
     private void UpdateSoulTimer()
     {
+        // 如果正在任何回忆场景中，不更新计时器
+        if (IsInAnyMemoryScene) return;
+
         if (soulTimeRemaining <= 0) return;
 
         soulTimeRemaining -= Time.deltaTime;
@@ -345,12 +466,82 @@ public class PlayerSoulController : MonoBehaviour
     }
 
     /// <summary>
-    /// 暂停灵魂计时器（当开始附身时调用）
+    /// 暂停灵魂计时器（当开始附身或进入回忆场景时调用）
     /// </summary>
     public void PauseSoulTimer()
     {
         isSoulTimerActive = false;
         StopWarningEffect();
+    }
+
+    /// <summary>
+    /// 从 DowlScene 返回时调用（供外部调用）
+    /// </summary>
+    public void OnReturnFromDowlScene()
+    {
+        if (!IsInAnyMemoryScene)
+        {
+            // 如果当前不是附身状态，恢复计时器
+            if (!isPossessing)
+            {
+                isSoulTimerActive = true;
+                if (debugMode) Debug.Log("从 DowlScene 返回，恢复灵魂计时器");
+            }
+        }
+        else
+        {
+            if (debugMode) Debug.Log("从 DowlScene 返回，但仍在 SoldierScene 中，计时器保持暂停");
+        }
+
+        // 更新UI显示
+        UpdateSoulTimeUI();
+    }
+
+    /// <summary>
+    /// 从 SoldierScene 返回时调用（供外部调用）
+    /// </summary>
+    public void OnReturnFromSoldierScene()
+    {
+        if (!IsInAnyMemoryScene)
+        {
+            // 如果当前不是附身状态，恢复计时器
+            if (!isPossessing)
+            {
+                isSoulTimerActive = true;
+                if (debugMode) Debug.Log("从 SoldierScene 返回，恢复灵魂计时器");
+            }
+        }
+        else
+        {
+            if (debugMode) Debug.Log("从 SoldierScene 返回，但仍在 DowlScene 中，计时器保持暂停");
+        }
+
+        // 更新UI显示
+        UpdateSoulTimeUI();
+    }
+
+    /// <summary>
+    /// 检查是否在 DowlScene 中（供外部调用）
+    /// </summary>
+    public bool IsInDowlScene()
+    {
+        return isInDowlScene;
+    }
+
+    /// <summary>
+    /// 检查是否在 SoldierScene 中（供外部调用）
+    /// </summary>
+    public bool IsInSoldierScene()
+    {
+        return isInSoldierScene;
+    }
+
+    /// <summary>
+    /// 检查是否在任何回忆场景中（供外部调用）
+    /// </summary>
+    public bool IsInAnyMemorySceneMethod()
+    {
+        return IsInAnyMemoryScene;
     }
 
     private void HandleMovementAndJump()
@@ -683,7 +874,20 @@ public class PlayerSoulController : MonoBehaviour
             ShowSoulParticles();
 
             // 重置灵魂计时器（因为重新进入灵魂状态）
-            ResetSoulTimer();
+            // 只有在不在任何回忆场景中时才恢复计时器
+            if (!IsInAnyMemoryScene)
+            {
+                ResetSoulTimer();
+            }
+            else
+            {
+                // 在回忆场景中，只重置时间但不激活计时器
+                soulTimeRemaining = maxSoulTime;
+                UpdateSoulTimeUI();
+                StopWarningEffect();
+                isSoulTimerActive = false;
+                if (debugMode) Debug.Log("在回忆场景中脱离附身，计时器保持暂停");
+            }
 
             // 切换相机目标回灵魂
             if (cameraController != null)
@@ -766,8 +970,6 @@ public class PlayerSoulController : MonoBehaviour
     public void RestartGame()
     {
         // 重新加载当前场景
-        UnityEngine.SceneManagement.SceneManager.LoadScene(
-            UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex
-        );
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
 }
