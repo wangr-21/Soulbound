@@ -36,6 +36,20 @@ public class FoxController : MonoBehaviour, IPossessable
     [Header("能力描述")]
     public string abilityDescription = "敏捷的狐狸，可以行走、奔跑和跳跃";
 
+    [Header("附身时间限制")]
+    public float maxPossessionTime = 120f; // 最大附身时间
+    public float possessionTimeRemaining = 0f; // 剩余附身时间
+    private bool isPossessionTimerActive = false; // 附身计时器是否激活
+    private bool isTimeExhausted = false; // 时间是否已耗尽
+
+    [Header("生命值设置")]
+    public float maxHealth = 80f; // 狐狸生命值比鹿少一些
+    public float currentHealth = 0f;
+
+    [Header("死亡效果")]
+    public GameObject deathEffect;
+    public AudioClip deathSound;
+
     [Header("状态")]
     public bool isPossessed = false;
     private bool isGrounded = true;
@@ -62,9 +76,24 @@ public class FoxController : MonoBehaviour, IPossessable
     private Quaternion originalRotation;
     private bool controllerWasEnabled = true;
 
+    // UI管理器引用
+    private UIManager uiManager;
+
     void Start()
     {
         InitializeComponents();
+
+        // 初始化生命值和附身时间
+        currentHealth = maxHealth;
+        possessionTimeRemaining = maxPossessionTime;
+        isTimeExhausted = false;
+
+        // 获取UI管理器
+        uiManager = UIManager.Instance;
+        if (uiManager == null)
+        {
+            Debug.LogWarning("未找到UIManager实例，UI可能无法正常工作");
+        }
 
         if (showDebugInfo)
         {
@@ -74,6 +103,8 @@ public class FoxController : MonoBehaviour, IPossessable
             Debug.Log($"- 模型位置: {(foxModel != null ? foxModel.position.ToString() : "N/A")}");
             Debug.Log($"- 模型旋转: {(foxModel != null ? foxModel.rotation.eulerAngles.ToString() : "N/A")}");
             Debug.Log($"- 组件: Animator={animator != null}, Controller={controller != null}");
+            Debug.Log($"- 生命值: {currentHealth}/{maxHealth}");
+            Debug.Log($"- 附身时间: {possessionTimeRemaining}/{maxPossessionTime}");
         }
     }
 
@@ -159,79 +190,14 @@ public class FoxController : MonoBehaviour, IPossessable
         }
     }
 
-    void AutoFixParameterNames()
-    {
-        if (animator == null) return;
-
-        Debug.Log("=== 自动检查Animator参数 ===");
-
-        // 检查所有参数
-        foreach (AnimatorControllerParameter param in animator.parameters)
-        {
-            Debug.Log($"找到参数: {param.name} ({param.type})");
-        }
-
-        // 检查并修复参数名
-        CheckAndFixParameter(speedParam, "Speed", "speed", "MoveSpeed");
-        CheckAndFixParameter(isGroundedParam, "IsGround", "IsGrounded", "Grounded");
-        CheckAndFixParameter(jumpParam, "Jump", "jump", "JumpTrigger");
-
-        Debug.Log($"最终使用的参数: Speed={speedParam}, Grounded={isGroundedParam}, Jump={jumpParam}");
-    }
-
-    void CheckAndFixParameter(string currentParam, params string[] possibleNames)
-    {
-        if (HasParameter(currentParam)) return;
-
-        foreach (string name in possibleNames)
-        {
-            if (HasParameter(name))
-            {
-                Debug.Log($"参数 '{currentParam}' 不存在，自动改为 '{name}'");
-
-                // 根据参数类型设置正确的字段
-                if (possibleNames[0].Contains("Speed"))
-                    speedParam = name;
-                else if (possibleNames[0].Contains("Ground"))
-                    isGroundedParam = name;
-                else if (possibleNames[0].Contains("Jump"))
-                    jumpParam = name;
-
-                return;
-            }
-        }
-
-        Debug.LogWarning($"未找到参数 '{currentParam}' 的任何变体！");
-    }
-
-    bool HasParameter(string paramName)
-    {
-        if (animator == null) return false;
-
-        foreach (AnimatorControllerParameter param in animator.parameters)
-        {
-            if (param.name == paramName)
-                return true;
-        }
-        return false;
-    }
-
-    void FixModelRotation()
-    {
-        if (foxModel == null) return;
-
-        Vector3 modelEuler = foxModel.localRotation.eulerAngles;
-        if (Mathf.Abs(modelEuler.x + 90) < 1f || Mathf.Abs(modelEuler.x - 270) < 1f)
-        {
-            if (showDebugInfo) Debug.Log($"检测到模型旋转问题: {modelEuler}");
-
-            Quaternion fixedRotation = Quaternion.Euler(0, modelEuler.y, modelEuler.z);
-            foxModel.localRotation = fixedRotation;
-        }
-    }
-
     void Update()
     {
+        // 更新附身计时器
+        if (isPossessionTimerActive && isPossessed)
+        {
+            UpdatePossessionTimer();
+        }
+
         // 检查跳跃输入 - 冷却时间检查
         if (Input.GetButtonDown("Jump") && !jumpTriggered && (Time.time - lastJumpTime) > jumpAnimationCooldown)
         {
@@ -247,6 +213,122 @@ public class FoxController : MonoBehaviour, IPossessable
         }
     }
 
+    /// <summary>
+    /// 更新附身计时器
+    /// </summary>
+    private void UpdatePossessionTimer()
+    {
+        // 如果还有剩余时间，减少时间
+        if (possessionTimeRemaining > 0 && !isTimeExhausted)
+        {
+            possessionTimeRemaining -= Time.deltaTime;
+
+            // 确保时间不会变成负数
+            if (possessionTimeRemaining < 0)
+            {
+                possessionTimeRemaining = 0;
+            }
+
+            // 添加调试信息
+            if (showDebugInfo && Time.frameCount % 60 == 0)
+            {
+                Debug.Log($"狐狸附身剩余时间: {possessionTimeRemaining:F1}s, 生命值: {currentHealth:F1}");
+            }
+
+            // 检查时间是否耗尽
+            if (possessionTimeRemaining <= 0)
+            {
+                isTimeExhausted = true;
+                Debug.Log("狐狸的附身时间耗尽！开始持续扣血");
+            }
+        }
+
+        // 时间耗尽，持续扣血
+        if (isTimeExhausted)
+        {
+            // 每秒扣15点血
+            float damagePerSecond = 15f;
+            float damageThisFrame = damagePerSecond * Time.deltaTime;
+            TakeDamage(damageThisFrame);
+
+            // 添加调试信息
+            if (showDebugInfo && Time.frameCount % 30 == 0)
+            {
+                Debug.Log($"狐狸时间耗尽持续扣血中，当前生命值: {currentHealth:F1}, 本帧伤害: {damageThisFrame:F2}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 受到伤害
+    /// </summary>
+    /// <param name="damage">伤害值</param>
+    public void TakeDamage(float damage)
+    {
+        if (currentHealth <= 0) return; // 如果已经死亡，不再扣血
+
+        currentHealth -= damage;
+
+        // 确保生命值不低于0
+        if (currentHealth < 0) currentHealth = 0;
+
+        // 检查是否死亡
+        if (currentHealth <= 0)
+        {
+            Die();
+        }
+    }
+
+    /// <summary>
+    /// 死亡
+    /// </summary>
+    private void Die()
+    {
+        Debug.Log($"{gameObject.name} 死亡！当前生命值: {currentHealth}");
+
+        // 播放死亡效果
+        if (deathEffect != null)
+        {
+            Instantiate(deathEffect, transform.position, Quaternion.identity);
+        }
+
+        if (deathSound != null)
+        {
+            AudioSource.PlayClipAtPoint(deathSound, transform.position);
+        }
+
+        // 如果当前被附身，强制玩家灵魂脱离
+        if (isPossessed)
+        {
+            PlayerSoulController.Instance.ForceReleasePossession();
+
+            // 如果玩家在动物死亡时没有足够生命值，游戏结束
+            if (PlayerSoulController.Instance.currentHealth <= 0)
+            {
+                StartCoroutine(DelayedGameOver(1f));
+            }
+        }
+
+        // 销毁动物
+        Destroy(gameObject);
+    }
+
+    private IEnumerator DelayedGameOver(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+
+        // 调用玩家灵魂的游戏结束方法
+        PlayerSoulController.Instance.OnSoulDissipate();
+    }
+
+    /// <summary>
+    /// 被净化者攻击
+    /// </summary>
+    public void TakePurifierDamage(float damage)
+    {
+        TakeDamage(damage);
+    }
+
     // ===== 实现 IPossessable 接口 =====
     public void OnPossess()
     {
@@ -257,11 +339,17 @@ public class FoxController : MonoBehaviour, IPossessable
         originalRotation = transform.rotation;
         controllerWasEnabled = controller != null && controller.enabled;
 
+        // 启动附身计时器
+        isPossessionTimerActive = true;
+        isTimeExhausted = false;
+        possessionTimeRemaining = maxPossessionTime;
+
         if (showDebugInfo)
         {
             Debug.Log($"=== 狐狸({gameObject.name})被附身 ===");
             Debug.Log($"- 控制器启用状态: {controllerWasEnabled}");
             Debug.Log($"- 当前动画参数: Speed={speedParam}, Grounded={isGroundedParam}, Jump={jumpParam}");
+            Debug.Log($"- 附身时间重置为: {possessionTimeRemaining}s");
         }
 
         // 如果存在AI组件，禁用AI
@@ -305,6 +393,11 @@ public class FoxController : MonoBehaviour, IPossessable
     {
         isPossessed = false;
         isAIControlled = true; // 启用AI控制
+
+        // 停止附身计时器
+        isPossessionTimerActive = false;
+        isTimeExhausted = false;
+        possessionTimeRemaining = maxPossessionTime;
 
         if (animator != null)
         {
@@ -719,6 +812,8 @@ public class FoxController : MonoBehaviour, IPossessable
         }
     }
 
+    // ===== 以下是原脚本的辅助方法，保持不变 =====
+
     string GetCurrentStateName()
     {
         if (animator == null) return "No Animator";
@@ -739,7 +834,139 @@ public class FoxController : MonoBehaviour, IPossessable
         return $"Unknown ({stateInfo.fullPathHash})";
     }
 
+    void AutoFixParameterNames()
+    {
+        if (animator == null) return;
+
+        Debug.Log("=== 自动检查Animator参数 ===");
+
+        // 检查所有参数
+        foreach (AnimatorControllerParameter param in animator.parameters)
+        {
+            Debug.Log($"找到参数: {param.name} ({param.type})");
+        }
+
+        // 检查并修复参数名
+        CheckAndFixParameter(speedParam, "Speed", "speed", "MoveSpeed");
+        CheckAndFixParameter(isGroundedParam, "IsGround", "IsGrounded", "Grounded");
+        CheckAndFixParameter(jumpParam, "Jump", "jump", "JumpTrigger");
+
+        Debug.Log($"最终使用的参数: Speed={speedParam}, Grounded={isGroundedParam}, Jump={jumpParam}");
+    }
+
+    void CheckAndFixParameter(string currentParam, params string[] possibleNames)
+    {
+        if (HasParameter(currentParam)) return;
+
+        foreach (string name in possibleNames)
+        {
+            if (HasParameter(name))
+            {
+                Debug.Log($"参数 '{currentParam}' 不存在，自动改为 '{name}'");
+
+                // 根据参数类型设置正确的字段
+                if (possibleNames[0].Contains("Speed"))
+                    speedParam = name;
+                else if (possibleNames[0].Contains("Ground"))
+                    isGroundedParam = name;
+                else if (possibleNames[0].Contains("Jump"))
+                    jumpParam = name;
+
+                return;
+            }
+        }
+
+        Debug.LogWarning($"未找到参数 '{currentParam}' 的任何变体！");
+    }
+
+    bool HasParameter(string paramName)
+    {
+        if (animator == null) return false;
+
+        foreach (AnimatorControllerParameter param in animator.parameters)
+        {
+            if (param.name == paramName)
+                return true;
+        }
+        return false;
+    }
+
+    void FixModelRotation()
+    {
+        if (foxModel == null) return;
+
+        Vector3 modelEuler = foxModel.localRotation.eulerAngles;
+        if (Mathf.Abs(modelEuler.x + 90) < 1f || Mathf.Abs(modelEuler.x - 270) < 1f)
+        {
+            if (showDebugInfo) Debug.Log($"检测到模型旋转问题: {modelEuler}");
+
+            Quaternion fixedRotation = Quaternion.Euler(0, modelEuler.y, modelEuler.z);
+            foxModel.localRotation = fixedRotation;
+        }
+    }
+
+    void OnDrawGizmosSelected()
+    {
+        if (!drawDebugGizmos) return;
+
+        // 绘制控制器位置
+        Gizmos.color = Color.green;
+        Gizmos.DrawWireSphere(transform.position, 0.5f);
+
+        // 绘制地面检测线
+        Gizmos.color = isGrounded ? Color.green : Color.red;
+        Vector3 rayStart = transform.position + Vector3.up * 0.1f;
+        Gizmos.DrawLine(rayStart, rayStart + Vector3.down * (groundCheckDistance + 0.1f));
+
+        // 绘制移动方向
+        if (Application.isPlaying)
+        {
+            Gizmos.color = Color.blue;
+            Vector3 horizontalMove = new Vector3(moveDirection.x, 0, moveDirection.z);
+            if (horizontalMove.magnitude > 0.1f)
+            {
+                Gizmos.DrawLine(transform.position, transform.position + horizontalMove.normalized * 2f);
+            }
+        }
+    }
+
     // ===== 调试方法 =====
+    [ContextMenu("测试：立即时间耗尽")]
+    public void TestTimeExhausted()
+    {
+        possessionTimeRemaining = 0.1f; // 设置很少的时间
+        Debug.Log("测试：狐狸的附身时间设置为0.1秒");
+    }
+
+    [ContextMenu("检查当前状态")]
+    public void ShowCurrentStateDetails()
+    {
+        if (animator == null)
+        {
+            Debug.LogError("没有Animator组件！");
+            return;
+        }
+
+        AnimatorStateInfo stateInfo = animator.GetCurrentAnimatorStateInfo(0);
+
+        Debug.Log("=== 当前状态详情 ===");
+        Debug.Log($"状态名称: {GetCurrentStateName()}");
+        Debug.Log($"状态哈希: {stateInfo.fullPathHash}");
+        Debug.Log($"状态长度: {stateInfo.length:F2}秒");
+        Debug.Log($"标准化时间: {stateInfo.normalizedTime:F2}");
+        Debug.Log($"是否循环: {stateInfo.loop}");
+        Debug.Log($"速度倍数: {stateInfo.speed}");
+        Debug.Log($"是否在过渡: {animator.IsInTransition(0)}");
+
+        if (animator.IsInTransition(0))
+        {
+            AnimatorTransitionInfo transInfo = animator.GetAnimatorTransitionInfo(0);
+            Debug.Log($"过渡持续时间: {transInfo.duration:F2}");
+            Debug.Log($"过渡标准化时间: {transInfo.normalizedTime:F2}");
+        }
+    }
+
+    // 其他调试方法保持不变...
     [ContextMenu("测试动画状态")]
     public void TestAnimationStates()
     {
@@ -790,153 +1017,5 @@ public class FoxController : MonoBehaviour, IPossessable
         animator.SetBool(isGroundedParam, true);
 
         Debug.Log("=== 测试完成 ===");
-    }
-
-    [ContextMenu("强制测试跳跃")]
-    public void ForceTestJump()
-    {
-        if (animator == null)
-        {
-            Debug.LogError("没有Animator组件！");
-            return;
-        }
-
-        StartCoroutine(ForceJumpTest());
-    }
-
-    IEnumerator ForceJumpTest()
-    {
-        Debug.Log("=== 强制测试跳跃 ===");
-
-        // 先确保在地面
-        animator.SetBool(isGroundedParam, true);
-        animator.SetFloat(speedParam, 0f);
-        yield return new WaitForSeconds(0.5f);
-
-        // 强制切换到Jump状态
-        animator.Play("Jump", 0, 0f);
-        animator.SetBool(isGroundedParam, false);
-
-        yield return new WaitForSeconds(0.1f);
-
-        Debug.Log($"强制切换后状态: {GetCurrentStateName()}");
-
-        // 等待跳跃动画播放
-        AnimatorStateInfo stateInfo = animator.GetCurrentAnimatorStateInfo(0);
-        if (stateInfo.IsName("Jump"))
-        {
-            Debug.Log($"跳跃动画长度: {stateInfo.length:F2}秒");
-            yield return new WaitForSeconds(stateInfo.length * 0.8f);
-
-            // 回到地面
-            animator.SetBool(isGroundedParam, true);
-            animator.Play("Idle", 0, 0f);
-        }
-
-        Debug.Log("=== 强制测试完成 ===");
-    }
-
-    [ContextMenu("检查Animator参数")]
-    public void CheckAnimatorParameters()
-    {
-        if (animator == null)
-        {
-            Debug.LogError("没有Animator组件！");
-            return;
-        }
-
-        Debug.Log("=== Animator参数检查 ===");
-        Debug.Log($"参数数量: {animator.parameterCount}");
-
-        foreach (AnimatorControllerParameter param in animator.parameters)
-        {
-            Debug.Log($"- {param.name} ({param.type})");
-        }
-
-        Debug.Log($"当前使用的参数:");
-        Debug.Log($"  Speed: {speedParam}, 值: {animator.GetFloat(speedParam):F2}");
-        Debug.Log($"  Grounded: {isGroundedParam}, 值: {animator.GetBool(isGroundedParam)}");
-        Debug.Log($"  Jump: {jumpParam}");
-
-        // 检查状态是否存在
-        Debug.Log($"状态存在检查:");
-        Debug.Log($"  Idle状态: {animator.HasState(0, Animator.StringToHash("Base Layer.Idle"))}");
-        Debug.Log($"  Walk状态: {animator.HasState(0, Animator.StringToHash("Base Layer.Walk"))}");
-        Debug.Log($"  Run状态: {animator.HasState(0, Animator.StringToHash("Base Layer.Run"))}");
-        Debug.Log($"  Jump状态: {animator.HasState(0, Animator.StringToHash("Base Layer.Jump"))}");
-    }
-
-    [ContextMenu("修复Animator设置")]
-    public void FixAnimatorSetup()
-    {
-        if (animator == null) return;
-
-        Debug.Log("修复Animator设置...");
-
-        // 禁用Root Motion
-        animator.applyRootMotion = false;
-
-        // 重置所有参数
-        animator.SetFloat(speedParam, 0f);
-        animator.SetBool(isGroundedParam, true);
-        animator.ResetTrigger(jumpParam);
-
-        // 强制切换到Idle状态
-        animator.Play("Idle", 0, 0f);
-
-        Debug.Log("Animator设置修复完成");
-    }
-
-    [ContextMenu("当前状态详情")]
-    public void ShowCurrentStateDetails()
-    {
-        if (animator == null)
-        {
-            Debug.LogError("没有Animator组件！");
-            return;
-        }
-
-        AnimatorStateInfo stateInfo = animator.GetCurrentAnimatorStateInfo(0);
-
-        Debug.Log("=== 当前状态详情 ===");
-        Debug.Log($"状态名称: {GetCurrentStateName()}");
-        Debug.Log($"状态哈希: {stateInfo.fullPathHash}");
-        Debug.Log($"状态长度: {stateInfo.length:F2}秒");
-        Debug.Log($"标准化时间: {stateInfo.normalizedTime:F2}");
-        Debug.Log($"是否循环: {stateInfo.loop}");
-        Debug.Log($"速度倍数: {stateInfo.speed}");
-        Debug.Log($"是否在过渡: {animator.IsInTransition(0)}");
-
-        if (animator.IsInTransition(0))
-        {
-            AnimatorTransitionInfo transInfo = animator.GetAnimatorTransitionInfo(0);
-            Debug.Log($"过渡持续时间: {transInfo.duration:F2}");
-            Debug.Log($"过渡标准化时间: {transInfo.normalizedTime:F2}");
-        }
-    }
-
-    void OnDrawGizmosSelected()
-    {
-        if (!drawDebugGizmos) return;
-
-        // 绘制控制器位置
-        Gizmos.color = Color.green;
-        Gizmos.DrawWireSphere(transform.position, 0.5f);
-
-        // 绘制地面检测线
-        Gizmos.color = isGrounded ? Color.green : Color.red;
-        Vector3 rayStart = transform.position + Vector3.up * 0.1f;
-        Gizmos.DrawLine(rayStart, rayStart + Vector3.down * (groundCheckDistance + 0.1f));
-
-        // 绘制移动方向
-        if (Application.isPlaying)
-        {
-            Gizmos.color = Color.blue;
-            Vector3 horizontalMove = new Vector3(moveDirection.x, 0, moveDirection.z);
-            if (horizontalMove.magnitude > 0.1f)
-            {
-                Gizmos.DrawLine(transform.position, transform.position + horizontalMove.normalized * 2f);
-            }
-        }
     }
 }

@@ -1,4 +1,7 @@
 ﻿using UnityEngine;
+using UnityEngine.UI;
+using TMPro;
+using System.Collections;
 
 public class DeerController : MonoBehaviour, IPossessable
 {
@@ -7,7 +10,7 @@ public class DeerController : MonoBehaviour, IPossessable
     public float runSpeed = 7f;
     public float rotationSpeed = 10f;
     public float jumpForce = 5f;
-    public float groundCheckDistance = 0.5f; // 增加检测距离
+    public float groundCheckDistance = 0.5f;
     public LayerMask groundLayer = -1;
 
     [Header("动画参数")]
@@ -21,6 +24,20 @@ public class DeerController : MonoBehaviour, IPossessable
     [Header("AI 设置")]
     public DeerAI deerAI;
     private bool isAIControlled = false;
+
+    [Header("附身时间限制")]
+    public float maxPossessionTime = 120f; // 最大附身时间
+    public float possessionTimeRemaining = 0f; // 剩余附身时间
+    private bool isPossessionTimerActive = false; // 附身计时器是否激活
+    private bool isTimeExhausted = false; // 时间是否已耗尽
+
+    [Header("生命值设置")]
+    public float maxHealth = 100f;
+    public float currentHealth = 0f;
+
+    [Header("死亡效果")]
+    public GameObject deathEffect;
+    public AudioClip deathSound;
 
     [Header("状态")]
     public bool isPossessed = false;
@@ -36,10 +53,13 @@ public class DeerController : MonoBehaviour, IPossessable
 
     [Header("重力设置")]
     public float gravity = -9.81f;
-    public float extraGravity = -5f; // 额外的向下的力
+    public float extraGravity = -5f;
 
     [Header("调试")]
     public bool showDebugInfo = true;
+
+    // UI管理器引用
+    private UIManager uiManager;
 
     void Start()
     {
@@ -63,25 +83,21 @@ public class DeerController : MonoBehaviour, IPossessable
             controller = gameObject.AddComponent<CharacterController>();
             Debug.Log("自动添加CharacterController组件");
 
-            // 设置Character Controller默认参数 - 重要！
-            controller.height = 1.5f;      // 根据鹿的高度调整
-            controller.radius = 0.3f;       // 根据鹿的宽度调整
-            controller.center = new Vector3(0, 0.75f, 0); // 中心点高度是高度的一半
-            controller.stepOffset = 0.3f;   // 可以跨越的高度
-            controller.slopeLimit = 45f;    // 最大坡度
-            controller.minMoveDistance = 0.001f; // 最小移动距离
+            // 设置Character Controller默认参数
+            controller.height = 1.5f;
+            controller.radius = 0.3f;
+            controller.center = new Vector3(0, 0.75f, 0);
+            controller.stepOffset = 0.3f;
+            controller.slopeLimit = 45f;
+            controller.minMoveDistance = 0.001f;
         }
-        else
+        else if (showDebugInfo)
         {
-            // 检查现有Character Controller设置
-            if (showDebugInfo)
-            {
-                Debug.Log($"Character Controller设置:");
-                Debug.Log($"  Height: {controller.height}");
-                Debug.Log($"  Radius: {controller.radius}");
-                Debug.Log($"  Center: {controller.center}");
-                Debug.Log($"  StepOffset: {controller.stepOffset}");
-            }
+            Debug.Log($"Character Controller设置:");
+            Debug.Log($"  Height: {controller.height}");
+            Debug.Log($"  Radius: {controller.radius}");
+            Debug.Log($"  Center: {controller.center}");
+            Debug.Log($"  StepOffset: {controller.stepOffset}");
         }
 
         // 获取或添加DeerAI组件
@@ -102,13 +118,165 @@ public class DeerController : MonoBehaviour, IPossessable
             animator.SetBool(isGroundedParam, true);
         }
 
+        // 初始化生命值和附身时间
+        currentHealth = maxHealth;
+        possessionTimeRemaining = maxPossessionTime;
+        isTimeExhausted = false;
+
+        // 获取UI管理器
+        uiManager = UIManager.Instance;
+        if (uiManager == null)
+        {
+            Debug.LogWarning("未找到UIManager实例，UI可能无法正常工作");
+        }
+
         // 强制调整到地面位置
         ForceGroundPosition();
     }
 
+    void Update()
+    {
+        // 更新附身计时器
+        if (isPossessionTimerActive && isPossessed)
+        {
+            UpdatePossessionTimer();
+        }
+
+        // 如果被附身，执行PossessedUpdate
+        if (isPossessed)
+        {
+            PossessedUpdate();
+            return;
+        }
+
+        // 如果没有被附身且AI控制
+        if (isAIControlled && deerAI != null && deerAI.enabled)
+        {
+            // AI会通过DeerAI.Update()自动控制
+            // 但我们仍然需要处理重力和地面检测
+            CheckGroundStatus();
+            ApplyGravity();
+        }
+    }
+
+    /// <summary>
+    /// 更新附身计时器
+    /// </summary>
+    private void UpdatePossessionTimer()
+    {
+        // 如果还有剩余时间，减少时间
+        if (possessionTimeRemaining > 0 && !isTimeExhausted)
+        {
+            possessionTimeRemaining -= Time.deltaTime;
+
+            // 确保时间不会变成负数
+            if (possessionTimeRemaining < 0)
+            {
+                possessionTimeRemaining = 0;
+            }
+
+            // 添加调试信息
+            if (showDebugInfo && Time.frameCount % 60 == 0)
+            {
+                Debug.Log($"鹿附身剩余时间: {possessionTimeRemaining:F1}s, 生命值: {currentHealth:F1}");
+            }
+
+            // 检查时间是否耗尽
+            if (possessionTimeRemaining <= 0)
+            {
+                isTimeExhausted = true;
+                Debug.Log("鹿的附身时间耗尽！开始持续扣血");
+            }
+        }
+
+        // 时间耗尽，持续扣血
+        if (isTimeExhausted)
+        {
+            // 每秒扣20点血
+            float damagePerSecond = 20f;
+            float damageThisFrame = damagePerSecond * Time.deltaTime;
+            TakeDamage(damageThisFrame);
+
+            // 添加调试信息
+            if (showDebugInfo && Time.frameCount % 30 == 0)
+            {
+                Debug.Log($"鹿时间耗尽持续扣血中，当前生命值: {currentHealth:F1}, 本帧伤害: {damageThisFrame:F2}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 受到伤害
+    /// </summary>
+    /// <param name="damage">伤害值</param>
+    public void TakeDamage(float damage)
+    {
+        if (currentHealth <= 0) return; // 如果已经死亡，不再扣血
+
+        currentHealth -= damage;
+
+        // 确保生命值不低于0
+        if (currentHealth < 0) currentHealth = 0;
+
+        // 检查是否死亡
+        if (currentHealth <= 0)
+        {
+            Die();
+        }
+    }
+
+    /// <summary>
+    /// 死亡
+    /// </summary>
+    private void Die()
+    {
+        Debug.Log($"{gameObject.name} 死亡！当前生命值: {currentHealth}");
+
+        // 播放死亡效果
+        if (deathEffect != null)
+        {
+            Instantiate(deathEffect, transform.position, Quaternion.identity);
+        }
+
+        if (deathSound != null)
+        {
+            AudioSource.PlayClipAtPoint(deathSound, transform.position);
+        }
+
+        // 如果当前被附身，强制玩家灵魂脱离
+        if (isPossessed)
+        {
+            PlayerSoulController.Instance.ForceReleasePossession();
+
+            // 如果玩家在动物死亡时没有足够生命值，游戏结束
+            if (PlayerSoulController.Instance.currentHealth <= 0)
+            {
+                StartCoroutine(DelayedGameOver(1f));
+            }
+        }
+
+        // 销毁动物
+        Destroy(gameObject);
+    }
+
+    private IEnumerator DelayedGameOver(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+
+        // 调用玩家灵魂的游戏结束方法
+        PlayerSoulController.Instance.OnSoulDissipate();
+    }
+
+    /// <summary>
+    /// 被净化者攻击
+    /// </summary>
+    public void TakePurifierDamage(float damage)
+    {
+        TakeDamage(damage);
+    }
+
     void ForceGroundPosition()
     {
-        // 使用射线检测找到地面位置
         RaycastHit hit;
         if (Physics.Raycast(transform.position + Vector3.up * 1f, Vector3.down, out hit, 10f, groundLayer))
         {
@@ -118,25 +286,19 @@ public class DeerController : MonoBehaviour, IPossessable
             if (showDebugInfo)
                 Debug.Log($"强制调整鹿到地面: 从 {transform.position.y} 调整到 {targetY}");
         }
-        else
+        else if (Physics.Raycast(transform.position, Vector3.down, out hit, 100f))
         {
-            // 如果没有检测到地面，向下移动直到碰撞
-            if (Physics.Raycast(transform.position, Vector3.down, out hit, 100f))
-            {
-                float targetY = hit.point.y + controller.height * 0.5f + controller.skinWidth;
-                transform.position = new Vector3(transform.position.x, targetY, transform.position.z);
-            }
+            float targetY = hit.point.y + controller.height * 0.5f + controller.skinWidth;
+            transform.position = new Vector3(transform.position.x, targetY, transform.position.z);
         }
 
-        // 确保垂直速度归零
-        verticalVelocity = -0.5f; // 小值保持地面接触
+        verticalVelocity = -0.5f;
     }
 
     // ===== 实现 IPossessable 接口 =====
 
     public void OnPossess()
     {
-        // 记录附身前的位置和旋转
         Vector3 positionBefore = transform.position;
         Quaternion rotationBefore = transform.rotation;
 
@@ -144,50 +306,39 @@ public class DeerController : MonoBehaviour, IPossessable
             Debug.Log($"鹿被附身！位置: {positionBefore}, Y={positionBefore.y:F2}");
 
         isPossessed = true;
-        isAIControlled = false; // 禁用AI控制
+        isAIControlled = false;
 
-        // 重要：先禁用任何可能导致位置改变的组件
+        // 启动附身计时器
+        isPossessionTimerActive = true;
+        isTimeExhausted = false;
+        possessionTimeRemaining = maxPossessionTime;
+
         if (animator != null)
         {
-            // 禁用根运动，防止动画改变位置
             animator.applyRootMotion = false;
         }
 
-        // 如果存在AI组件，禁用AI
         if (deerAI != null)
         {
             deerAI.enabled = false;
         }
 
-        // 确保控制器启用
         if (controller != null)
         {
-            // 记录启用前的状态
             bool wasEnabled = controller.enabled;
-
             if (!wasEnabled)
             {
                 controller.enabled = true;
-
-                // 检查启用后位置是否改变
-                if (showDebugInfo && Vector3.Distance(transform.position, positionBefore) > 0.01f)
-                {
-                    Debug.LogWarning($"启用CharacterController后位置改变！从 {positionBefore.y:F2} 到 {transform.position.y:F2}");
-                }
             }
         }
 
-        // 设置动画状态 - 使用CrossFade避免突然的位置变化
         if (animator != null)
         {
             animator.SetFloat(speedParam, 0f);
             animator.SetBool(isGroundedParam, true);
-
-            // 使用CrossFade而不是Play，避免动画重置导致的位置变化
             animator.CrossFade("Idle", 0.2f);
         }
 
-        // 重要：在附身后强制保持原位置和旋转
         transform.position = positionBefore;
         transform.rotation = rotationBefore;
 
@@ -198,7 +349,12 @@ public class DeerController : MonoBehaviour, IPossessable
     public void OnRelease()
     {
         isPossessed = false;
-        isAIControlled = true; // 启用AI控制
+        isAIControlled = true;
+
+        // 停止附身计时器
+        isPossessionTimerActive = false;
+        isTimeExhausted = false;
+        possessionTimeRemaining = maxPossessionTime;
 
         if (animator != null)
         {
@@ -206,12 +362,10 @@ public class DeerController : MonoBehaviour, IPossessable
             animator.SetBool(isGroundedParam, true);
         }
 
-        // 重置移动方向
         moveDirection = Vector3.zero;
         verticalVelocity = -0.5f;
         isRunning = false;
 
-        // 如果存在AI组件，启用AI
         if (deerAI != null)
         {
             deerAI.enabled = true;
@@ -235,31 +389,10 @@ public class DeerController : MonoBehaviour, IPossessable
     }
     // ===== 接口实现结束 =====
 
-    void Update()
-    {
-        // 如果被附身，执行PossessedUpdate
-        if (isPossessed)
-        {
-            PossessedUpdate();
-            return;
-        }
-
-        // 如果没有被附身且AI控制
-        if (isAIControlled && deerAI != null && deerAI.enabled)
-        {
-            // AI会通过DeerAI.Update()自动控制
-            // 但我们仍然需要处理重力和地面检测
-            CheckGroundStatus();
-            ApplyGravity();
-        }
-    }
-
-    // 新增方法：应用重力（用于AI控制时）
     void ApplyGravity()
     {
         if (controller == null) return;
 
-        // 改进的地面检测 - 每0.1秒检查一次，减少计算
         groundCheckTimer -= Time.deltaTime;
         if (groundCheckTimer <= 0)
         {
@@ -267,13 +400,10 @@ public class DeerController : MonoBehaviour, IPossessable
             groundCheckTimer = 0.1f;
         }
 
-        // 重力计算
         if (!isGrounded)
         {
-            // 在空中时应用重力
             verticalVelocity += gravity * Time.deltaTime;
 
-            // 额外的向下力，确保尽快落地
             if (verticalVelocity < 0)
             {
                 verticalVelocity += extraGravity * Time.deltaTime;
@@ -281,18 +411,16 @@ public class DeerController : MonoBehaviour, IPossessable
         }
         else
         {
-            // 在地面时，施加一个小的向下力保持地面接触
             verticalVelocity = -0.5f;
         }
 
-        // 应用垂直移动
         Vector3 verticalMove = new Vector3(0, verticalVelocity, 0) * Time.deltaTime;
         controller.Move(verticalMove);
     }
 
     void HandleMovement()
     {
-        if (!isPossessed) return; // 确保只有被附身时才处理输入
+        if (!isPossessed) return;
 
         if (controller == null)
         {
@@ -300,12 +428,10 @@ public class DeerController : MonoBehaviour, IPossessable
             return;
         }
 
-        // 获取输入
         float horizontal = Input.GetAxis("Horizontal");
         float vertical = Input.GetAxis("Vertical");
         bool jump = Input.GetButtonDown("Jump");
 
-        // 改进的地面检测 - 每0.1秒检查一次，减少计算
         groundCheckTimer -= Time.deltaTime;
         if (groundCheckTimer <= 0)
         {
@@ -313,10 +439,8 @@ public class DeerController : MonoBehaviour, IPossessable
             groundCheckTimer = 0.1f;
         }
 
-        // 基础移动方向
         Vector3 move = new Vector3(horizontal, 0, vertical);
 
-        // 获取相机方向（第三人称视角）
         Camera mainCamera = Camera.main;
         if (mainCamera != null && move.magnitude > 0.1f)
         {
@@ -331,19 +455,15 @@ public class DeerController : MonoBehaviour, IPossessable
             move = cameraForward * vertical + cameraRight * horizontal;
         }
 
-        // 计算移动速度
         float currentSpeed = 0f;
 
         if (move.magnitude > 0.1f)
         {
-            // 检查是否在跑步
             isRunning = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
             currentSpeed = isRunning ? runSpeed : walkSpeed;
 
-            // 应用移动
             controller.Move(move.normalized * currentSpeed * Time.deltaTime);
 
-            // 旋转朝向移动方向
             if (move != Vector3.zero)
             {
                 Quaternion targetRotation = Quaternion.LookRotation(move);
@@ -356,13 +476,10 @@ public class DeerController : MonoBehaviour, IPossessable
             currentSpeed = 0f;
         }
 
-        // 重力计算
         if (!isGrounded)
         {
-            // 在空中时应用重力
             verticalVelocity += gravity * Time.deltaTime;
 
-            // 额外的向下力，确保尽快落地
             if (verticalVelocity < 0)
             {
                 verticalVelocity += extraGravity * Time.deltaTime;
@@ -370,10 +487,8 @@ public class DeerController : MonoBehaviour, IPossessable
         }
         else
         {
-            // 在地面时，施加一个小的向下力保持地面接触
             verticalVelocity = -0.5f;
 
-            // 跳跃
             if (jump)
             {
                 verticalVelocity = Mathf.Sqrt(jumpForce * -2f * gravity);
@@ -386,13 +501,9 @@ public class DeerController : MonoBehaviour, IPossessable
             }
         }
 
-        // 垂直移动
         Vector3 verticalMove = new Vector3(0, verticalVelocity, 0) * Time.deltaTime;
-
-        // 应用所有移动
         controller.Move(verticalMove);
 
-        // 更新动画速度参数
         if (animator != null)
         {
             float animSpeed = Mathf.Lerp(animator.GetFloat(speedParam), currentSpeed, Time.deltaTime * 5f);
@@ -400,38 +511,29 @@ public class DeerController : MonoBehaviour, IPossessable
         }
     }
 
-    // 修改DeerController.cs中的AIMove方法
     public void AIMove(Vector3 direction, bool isRunning = false)
     {
         if (controller == null || !isAIControlled) return;
 
-        // 保存移动方向，用于调试显示
         moveDirection = direction;
 
-        // AI移动时，总是使用Walk速度，忽略isRunning参数
         float currentSpeed = walkSpeed;
 
-        // 如果有方向，应用移动
         if (direction.magnitude > 0.1f)
         {
-            // 应用移动
             controller.Move(direction.normalized * currentSpeed * Time.deltaTime);
 
-            // 旋转朝向移动方向
             Quaternion targetRotation = Quaternion.LookRotation(direction);
             transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
 
-            // 设置动画速度 - AI状态下只用Walk动画，所以设置为一个较小的固定值
             if (animator != null)
             {
-                // AI移动时，设置一个固定值（比如0.5），确保只触发Walk动画
-                float animSpeed = 0.5f; // 固定值，确保在Walk动画范围内
+                float animSpeed = 0.5f;
                 animator.SetFloat(speedParam, animSpeed);
             }
         }
         else
         {
-            // 没有方向，停止移动
             if (animator != null)
             {
                 animator.SetFloat(speedParam, 0f);
@@ -443,11 +545,9 @@ public class DeerController : MonoBehaviour, IPossessable
     {
         if (animator == null) return;
 
-        // 更新地面状态
         animator.SetBool(isGroundedParam, isGrounded);
 
-        // 调试信息
-        if (showDebugInfo && Time.frameCount % 60 == 0) // 每秒一次
+        if (showDebugInfo && Time.frameCount % 60 == 0)
         {
             Debug.Log($"鹿状态: 在地面={isGrounded}, 垂直速度={verticalVelocity:F2}, 控制器在地面={controller.isGrounded}");
         }
@@ -457,10 +557,8 @@ public class DeerController : MonoBehaviour, IPossessable
     {
         if (controller == null) return;
 
-        // 方法1: 使用CharacterController的isGrounded
         bool controllerGrounded = controller.isGrounded;
 
-        // 方法2: 使用射线检测
         RaycastHit hit;
         bool raycastGrounded = Physics.Raycast(
             transform.position + Vector3.up * 0.1f,
@@ -470,7 +568,6 @@ public class DeerController : MonoBehaviour, IPossessable
             groundLayer
         );
 
-        // 方法3: 使用球体检测（更可靠）
         bool sphereCastGrounded = Physics.SphereCast(
             transform.position + Vector3.up * 0.2f,
             controller.radius * 0.9f,
@@ -480,17 +577,14 @@ public class DeerController : MonoBehaviour, IPossessable
             groundLayer
         );
 
-        // 综合判断
         isGrounded = controllerGrounded || raycastGrounded || sphereCastGrounded;
 
-        // 如果检测到地面，调整位置确保接触
         if (isGrounded && hit.collider != null)
         {
-            // 轻微调整位置确保接触
             float groundHeight = hit.point.y;
             float currentBottom = transform.position.y - controller.height * 0.5f;
 
-            if (currentBottom > groundHeight + 0.05f) // 如果底部高于地面
+            if (currentBottom > groundHeight + 0.05f)
             {
                 float adjustY = groundHeight + controller.height * 0.5f + controller.skinWidth;
                 transform.position = new Vector3(transform.position.x, adjustY, transform.position.z);
@@ -501,19 +595,16 @@ public class DeerController : MonoBehaviour, IPossessable
         }
     }
 
-    // 调试信息
     void OnDrawGizmosSelected()
     {
         if (showDebugInfo)
         {
-            // 绘制地面检测线
             Gizmos.color = isGrounded ? Color.green : Color.red;
             Gizmos.DrawLine(
                 transform.position + Vector3.up * 0.1f,
                 transform.position + Vector3.up * 0.1f + Vector3.down * groundCheckDistance
             );
 
-            // 绘制Character Controller范围
             Gizmos.color = Color.cyan;
             if (controller != null)
             {
@@ -525,7 +616,6 @@ public class DeerController : MonoBehaviour, IPossessable
                 );
             }
 
-            // 绘制移动方向
             if (Application.isPlaying && moveDirection.magnitude > 0.1f)
             {
                 Gizmos.color = Color.yellow;
@@ -534,15 +624,11 @@ public class DeerController : MonoBehaviour, IPossessable
         }
     }
 
-    /*    // 临时调试UI
-        void OnGUI()
-        {
-            if (showDebugInfo)
-            {
-                GUI.Label(new Rect(10, 50, 300, 20), $"鹿在地面: {isGrounded}");
-                GUI.Label(new Rect(10, 70, 300, 20), $"垂直速度: {verticalVelocity:F2}");
-                GUI.Label(new Rect(10, 90, 300, 20), $"控制器在地面: {controller?.isGrounded}");
-                GUI.Label(new Rect(10, 110, 300, 20), $"位置Y: {transform.position.y:F2}");
-            }
-        }*/
+    // 调试方法
+    [ContextMenu("测试：立即时间耗尽")]
+    public void TestTimeExhausted()
+    {
+        possessionTimeRemaining = 0.1f; // 设置很少的时间
+        Debug.Log("测试：鹿的附身时间设置为0.1秒");
+    }
 }

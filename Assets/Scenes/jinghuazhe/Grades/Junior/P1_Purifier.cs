@@ -16,9 +16,19 @@ public class P1_Purifier : MonoBehaviour
     [SerializeField] private float normalWalkSpeed = 2f;
     [SerializeField] private float fastWalkSpeed = 6f;
 
+    [Header("=== 攻击设置 ===")]
+    [SerializeField] private float attackRange = 1.5f; // 攻击范围
+    [SerializeField] private float attackDamage = 20f; // 每次攻击伤害
+    [SerializeField] private float attackCooldown = 2f; // 攻击冷却时间
+    private float lastAttackTime = 0f; // 上次攻击时间
+    [SerializeField] private AudioClip attackSound; // 攻击音效
+    [SerializeField] private GameObject attackEffect; // 攻击特效
+    [SerializeField] private float attackKnockbackForce = 5f; // 攻击击退力
+
     [Header("=== Animation Settings ===")]
     [SerializeField] private Animator animator;
     private string walkParameterName = "IsWalking";
+    private string attackParameterName = "Attack"; // 攻击动画参数
 
     [Header("=== Particle Effects ===")]
     [SerializeField] private ParticleSystem alertParticleSystem;
@@ -38,6 +48,8 @@ public class P1_Purifier : MonoBehaviour
     private bool isInitialized = false;
     private Vector3 lastPosition;
     private Quaternion lastRotation;
+    private GameObject currentTarget; // 当前攻击目标
+    private bool isAttacking = false; // 是否正在攻击
 
     private ParticleSystem.MainModule particleMainModule;
 
@@ -117,26 +129,31 @@ public class P1_Purifier : MonoBehaviour
     {
         if (animator == null) return;
 
-        string[] possibleNames = { "Walk", "isWalking", "Walking", "Move", "IsMoving" };
-        foreach (string name in possibleNames)
+        // 寻找行走参数
+        string[] possibleWalkNames = { "Walk", "isWalking", "Walking", "Move", "IsMoving" };
+        foreach (string name in possibleWalkNames)
         {
             foreach (var param in animator.parameters)
             {
                 if (param.name == name && param.type == AnimatorControllerParameterType.Bool)
                 {
                     walkParameterName = name;
-                    return;
+                    break;
                 }
             }
         }
 
-        // 备用方案
-        foreach (var param in animator.parameters)
+        // 寻找攻击参数
+        string[] possibleAttackNames = { "Attack", "Attacking", "isAttacking" };
+        foreach (string name in possibleAttackNames)
         {
-            if (param.type == AnimatorControllerParameterType.Bool)
+            foreach (var param in animator.parameters)
             {
-                walkParameterName = param.name;
-                return;
+                if (param.name == name && param.type == AnimatorControllerParameterType.Bool)
+                {
+                    attackParameterName = name;
+                    break;
+                }
             }
         }
     }
@@ -188,14 +205,34 @@ public class P1_Purifier : MonoBehaviour
             OnPlayerLost();
         }
 
-        // 执行行为
+        // 检查攻击条件
         if (isPlayerInSight)
         {
-            ChasePlayer();
+            // 更新当前目标
+            UpdateCurrentTarget();
+
+            // 检查是否在攻击范围内
+            if (IsTargetInAttackRange())
+            {
+                // 停止移动，准备攻击
+                agent.isStopped = true;
+
+                // 尝试攻击
+                TryAttack();
+            }
+            else
+            {
+                // 不在攻击范围内，继续追逐
+                agent.isStopped = false;
+                ChasePlayer();
+                isAttacking = false;
+            }
         }
         else
         {
+            agent.isStopped = false;
             Patrol();
+            isAttacking = false;
         }
 
         // 更新动画
@@ -203,6 +240,155 @@ public class P1_Purifier : MonoBehaviour
 
         // 同步粒子状态
         SyncParticleState();
+    }
+
+    /// <summary>
+    /// 更新当前攻击目标
+    /// </summary>
+    private void UpdateCurrentTarget()
+    {
+        // 优先攻击玩家灵魂
+        if (player != null)
+        {
+            currentTarget = player.gameObject;
+        }
+
+        // 如果玩家附身在动物上，则攻击动物
+        PlayerSoulController playerSoul = PlayerSoulController.Instance;
+        if (playerSoul != null && playerSoul.isPossessing && playerSoul.currentPossessedObject != null)
+        {
+            currentTarget = playerSoul.currentPossessedObject;
+        }
+    }
+
+    /// <summary>
+    /// 检查目标是否在攻击范围内
+    /// </summary>
+    private bool IsTargetInAttackRange()
+    {
+        if (currentTarget == null) return false;
+
+        float distance = Vector3.Distance(transform.position, currentTarget.transform.position);
+        return distance <= attackRange;
+    }
+
+    /// <summary>
+    /// 尝试攻击
+    /// </summary>
+    private void TryAttack()
+    {
+        // 检查攻击冷却
+        if (Time.time - lastAttackTime >= attackCooldown)
+        {
+            // 执行攻击
+            PerformAttack();
+            lastAttackTime = Time.time;
+            isAttacking = true;
+        }
+        else
+        {
+            isAttacking = false;
+        }
+    }
+
+    /// <summary>
+    /// 执行攻击
+    /// </summary>
+    private void PerformAttack()
+    {
+        if (currentTarget == null) return;
+
+        // 播放攻击动画
+        if (animator != null && !string.IsNullOrEmpty(attackParameterName))
+        {
+            animator.SetTrigger(attackParameterName);
+        }
+
+        // 播放攻击音效
+        if (attackSound != null)
+        {
+            AudioSource.PlayClipAtPoint(attackSound, transform.position);
+        }
+
+        // 生成攻击特效
+        if (attackEffect != null)
+        {
+            Instantiate(attackEffect, transform.position + transform.forward * 1f, Quaternion.identity);
+        }
+
+        // 对目标造成伤害
+        ApplyDamageToTarget();
+
+        // 击退效果
+        ApplyKnockback();
+    }
+
+    /// <summary>
+    /// 对目标造成伤害
+    /// </summary>
+    private void ApplyDamageToTarget()
+    {
+        if (currentTarget == null) return;
+
+        // 检查目标类型并应用相应伤害
+        if (currentTarget.CompareTag("Player"))
+        {
+            // 攻击玩家灵魂
+            PlayerSoulController playerSoul = currentTarget.GetComponent<PlayerSoulController>();
+            if (playerSoul != null)
+            {
+                playerSoul.TakePurifierDamage();
+                Debug.Log($"净化者攻击玩家灵魂，造成{attackDamage}点伤害");
+            }
+        }
+        else
+        {
+            // 攻击动物或其他对象
+            // 检查是否有IPossessable接口
+            IPossessable possessable = currentTarget.GetComponent<IPossessable>();
+            if (possessable != null && possessable is MonoBehaviour)
+            {
+                MonoBehaviour mb = possessable as MonoBehaviour;
+
+                // 检查是否是DeerController（或其他动物控制器）
+                DeerController deer = mb.GetComponent<DeerController>();
+                if (deer != null)
+                {
+                    deer.TakePurifierDamage(attackDamage);
+                    Debug.Log($"净化者攻击鹿，造成{attackDamage}点伤害");
+                    return;
+                }
+
+                // 可以添加其他动物类型的检查
+                // SheepController, FoxController, BirdController等
+
+                // 通用伤害接口
+                if (mb.gameObject.TryGetComponent<HealthSystem>(out HealthSystem healthSystem))
+                {
+                    healthSystem.TakeDamage(attackDamage);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 应用击退效果
+    /// </summary>
+    private void ApplyKnockback()
+    {
+        if (currentTarget == null || attackKnockbackForce <= 0) return;
+
+        // 计算击退方向
+        Vector3 knockbackDirection = currentTarget.transform.position - transform.position;
+        knockbackDirection.y = 0; // 保持水平方向
+        knockbackDirection.Normalize();
+
+        // 应用击退力
+        Rigidbody targetRigidbody = currentTarget.GetComponent<Rigidbody>();
+        if (targetRigidbody != null)
+        {
+            targetRigidbody.AddForce(knockbackDirection * attackKnockbackForce, ForceMode.Impulse);
+        }
     }
 
     // 同步粒子系统实际状态和标记
@@ -274,6 +460,8 @@ public class P1_Purifier : MonoBehaviour
     private void OnPlayerLost()
     {
         agent.speed = normalWalkSpeed;
+        currentTarget = null;
+        isAttacking = false;
 
         // 停止粒子特效
         if (alertParticleSystem != null && isAlertParticlePlaying)
@@ -287,15 +475,15 @@ public class P1_Purifier : MonoBehaviour
 
     private void ChasePlayer()
     {
-        if (player != null)
+        if (player != null && currentTarget == player.gameObject)
         {
             agent.SetDestination(player.position);
+        }
 
-            // 超出逃脱距离则丢失视野
-            if (Vector3.Distance(transform.position, player.position) > sightRange * 1.5f)
-            {
-                isPlayerInSight = false;
-            }
+        // 超出逃脱距离则丢失视野
+        if (Vector3.Distance(transform.position, player.position) > sightRange * 1.5f)
+        {
+            isPlayerInSight = false;
         }
     }
 
@@ -447,12 +635,22 @@ public class P1_Purifier : MonoBehaviour
                          (isPlayerInSight && agent.remainingDistance > pointArrivalDistance);
 
         animator.SetBool(walkParameterName, shouldWalk);
+
+        // 设置攻击动画状态
+        if (!string.IsNullOrEmpty(attackParameterName))
+        {
+            animator.SetBool(attackParameterName, isAttacking);
+        }
     }
 
     private void OnDrawGizmos()
     {
         // 绘制视野范围
         DrawSightGizmos();
+
+        // 绘制攻击范围
+        Gizmos.color = Color.magenta;
+        Gizmos.DrawWireSphere(transform.position, attackRange);
 
         // 绘制导航路径
         if (isInitialized && agent != null && agent.hasPath)
@@ -545,5 +743,14 @@ public class P1_Purifier : MonoBehaviour
             alertParticleSystem.Play(true);
             isAlertParticlePlaying = true;
         }
+    }
+
+    /// <summary>
+    /// 攻击动画事件回调（可在动画关键帧调用）
+    /// </summary>
+    public void OnAttackAnimationEvent()
+    {
+        // 这个方法可以在攻击动画的关键帧中调用，确保伤害在正确的时间应用
+        ApplyDamageToTarget();
     }
 }

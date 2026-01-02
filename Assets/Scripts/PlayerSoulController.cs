@@ -25,22 +25,17 @@ public class PlayerSoulController : MonoBehaviour
 
     [Header("灵魂时间限制")]
     public float maxSoulTime = 60f; // 灵魂最大存活时间
-    public float warningThreshold = 10f; // 警告开始时间（秒）
     public float soulTimeRemaining = 0f; // 剩余灵魂时间
     private bool isSoulTimerActive = true; // 灵魂计时器是否激活
 
-    [Header("警告效果")]
-    public Image soulWarningOverlay; // 屏幕边缘红光效果
-    public float warningFlashSpeed = 2f; // 警告闪烁速度
-    private bool isWarningActive = false;
+    [Header("生命值系统")]
+    public float maxHealth = 100f; // 最大生命值
+    public float currentHealth; // 当前生命值
 
-    [Header("UI元素")]
-    public Slider soulTimeSlider; // 灵魂时间条
-    public TextMeshProUGUI soulTimeText; // 灵魂时间文本
-
-    [Header("游戏结束")]
-    public GameObject gameOverPanel; // 游戏结束UI
-    public TextMeshProUGUI gameOverText; // 游戏结束文本
+    [Header("净化者伤害")]
+    public float purifierDamageAmount = 20f; // 每次被净化者攻击的伤害
+    public float purifierAttackCooldown = 2f; // 净化者攻击冷却时间
+    private float lastPurifierAttackTime = 0f; // 上次被净化者攻击的时间
 
     // 移动和跳跃相关变量
     private Vector3 playerVelocity;
@@ -53,9 +48,9 @@ public class PlayerSoulController : MonoBehaviour
     private bool jumpTriggered = false;
 
     // 附身相关变量
-    private GameObject currentPossessedObject;
-    private bool isPossessing = false;
-    private IPossessable currentPossessable;
+    public GameObject currentPossessedObject;
+    public bool isPossessing = false;
+    public IPossessable currentPossessable;
 
     // 视角切换
     private CameraController cameraController;
@@ -77,6 +72,9 @@ public class PlayerSoulController : MonoBehaviour
 
     // 单例模式
     public static PlayerSoulController Instance;
+
+    // UI管理器引用
+    private UIManager uiManager;
 
     private void Awake()
     {
@@ -132,18 +130,15 @@ public class PlayerSoulController : MonoBehaviour
 
         // 初始化灵魂时间
         soulTimeRemaining = maxSoulTime;
-        UpdateSoulTimeUI();
 
-        // 初始化警告效果
-        if (soulWarningOverlay != null)
-        {
-            soulWarningOverlay.gameObject.SetActive(false);
-        }
+        // 初始化生命值
+        currentHealth = maxHealth;
 
-        // 初始化游戏结束UI
-        if (gameOverPanel != null)
+        // 获取UI管理器
+        uiManager = UIManager.Instance;
+        if (uiManager == null)
         {
-            gameOverPanel.SetActive(false);
+            Debug.LogWarning("未找到UIManager实例，UI可能无法正常工作");
         }
 
         // 添加场景加载监听
@@ -328,102 +323,28 @@ public class PlayerSoulController : MonoBehaviour
         // 如果正在任何回忆场景中，不更新计时器
         if (IsInAnyMemoryScene) return;
 
-        if (soulTimeRemaining <= 0) return;
+        // 如果时间已经耗尽，持续扣血
+        if (soulTimeRemaining <= 0)
+        {
+            // 时间耗尽，持续扣血（每秒10点）
+            TakeDamage(Time.deltaTime * 10f);
+            return;
+        }
 
         soulTimeRemaining -= Time.deltaTime;
 
-        // 更新时间UI
-        UpdateSoulTimeUI();
-
-        // 检查是否需要显示警告
-        if (soulTimeRemaining <= warningThreshold && soulTimeRemaining > 0)
-        {
-            if (!isWarningActive)
-            {
-                StartWarningEffect();
-            }
-        }
-        else if (isWarningActive)
-        {
-            StopWarningEffect();
-        }
-
-        // 检查灵魂是否消散
+        // 检查灵魂是否消散（时间耗尽扣血）
         if (soulTimeRemaining <= 0)
         {
-            OnSoulDissipate();
-        }
-    }
-
-    /// <summary>
-    /// 更新灵魂时间UI
-    /// </summary>
-    private void UpdateSoulTimeUI()
-    {
-        if (soulTimeSlider != null)
-        {
-            soulTimeSlider.value = soulTimeRemaining / maxSoulTime;
-        }
-
-        if (soulTimeText != null)
-        {
-            soulTimeText.text = $"灵魂时间: {Mathf.Ceil(soulTimeRemaining)}秒";
-        }
-    }
-
-    /// <summary>
-    /// 开始警告效果（屏幕边缘红光）
-    /// </summary>
-    private void StartWarningEffect()
-    {
-        isWarningActive = true;
-
-        if (soulWarningOverlay != null)
-        {
-            soulWarningOverlay.gameObject.SetActive(true);
-            StartCoroutine(FlashWarningEffect());
-        }
-    }
-
-    /// <summary>
-    /// 停止警告效果
-    /// </summary>
-    private void StopWarningEffect()
-    {
-        isWarningActive = false;
-
-        if (soulWarningOverlay != null)
-        {
-            soulWarningOverlay.gameObject.SetActive(false);
-        }
-    }
-
-    /// <summary>
-    /// 闪烁警告效果协程
-    /// </summary>
-    private IEnumerator FlashWarningEffect()
-    {
-        while (isWarningActive && soulWarningOverlay != null)
-        {
-            // 计算闪烁强度（基于剩余时间）
-            float intensity = 1 - (soulTimeRemaining / warningThreshold);
-
-            // 计算闪烁值（0到1之间）
-            float flashValue = (Mathf.Sin(Time.time * warningFlashSpeed) + 1) * 0.5f;
-
-            // 应用闪烁效果
-            Color color = soulWarningOverlay.color;
-            color.a = intensity * flashValue * 0.5f; // 控制透明度
-            soulWarningOverlay.color = color;
-
-            yield return null;
+            // 时间耗尽，开始扣血
+            TakeDamage(Time.deltaTime * 10f);
         }
     }
 
     /// <summary>
     /// 灵魂消散（游戏结束）
     /// </summary>
-    private void OnSoulDissipate()
+    public void OnSoulDissipate()
     {
         Debug.Log("灵魂消散！游戏结束");
 
@@ -432,13 +353,9 @@ public class PlayerSoulController : MonoBehaviour
         currentMovementInput = Vector2.zero;
 
         // 显示游戏结束UI
-        if (gameOverPanel != null)
+        if (uiManager != null)
         {
-            gameOverPanel.SetActive(true);
-            if (gameOverText != null)
-            {
-                gameOverText.text = "灵魂消散\n未能及时找到宿主";
-            }
+            uiManager.ShowGameOver("灵魂消散\n未能及时找到宿主");
         }
 
         // 禁用玩家输入
@@ -450,8 +367,15 @@ public class PlayerSoulController : MonoBehaviour
             soulParticles.Stop();
         }
 
-        // 可选：延迟后重新加载场景
-        // StartCoroutine(RestartGameAfterDelay(3f));
+        // 延迟2秒后重启游戏
+        StartCoroutine(RestartAfterDelay(2f));
+    }
+
+    // 添加重启协程：
+    private IEnumerator RestartAfterDelay(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        RestartGame();
     }
 
     /// <summary>
@@ -461,8 +385,6 @@ public class PlayerSoulController : MonoBehaviour
     {
         soulTimeRemaining = maxSoulTime;
         isSoulTimerActive = true;
-        UpdateSoulTimeUI();
-        StopWarningEffect();
     }
 
     /// <summary>
@@ -471,7 +393,6 @@ public class PlayerSoulController : MonoBehaviour
     public void PauseSoulTimer()
     {
         isSoulTimerActive = false;
-        StopWarningEffect();
     }
 
     /// <summary>
@@ -492,9 +413,6 @@ public class PlayerSoulController : MonoBehaviour
         {
             if (debugMode) Debug.Log("从 DowlScene 返回，但仍在 SoldierScene 中，计时器保持暂停");
         }
-
-        // 更新UI显示
-        UpdateSoulTimeUI();
     }
 
     /// <summary>
@@ -515,9 +433,6 @@ public class PlayerSoulController : MonoBehaviour
         {
             if (debugMode) Debug.Log("从 SoldierScene 返回，但仍在 DowlScene 中，计时器保持暂停");
         }
-
-        // 更新UI显示
-        UpdateSoulTimeUI();
     }
 
     /// <summary>
@@ -542,6 +457,50 @@ public class PlayerSoulController : MonoBehaviour
     public bool IsInAnyMemorySceneMethod()
     {
         return IsInAnyMemoryScene;
+    }
+
+    /// <summary>
+    /// 受到伤害
+    /// </summary>
+    /// <param name="damage">伤害值</param>
+    public void TakeDamage(float damage)
+    {
+        if (currentHealth <= 0) return; // 如果已经死亡，不再扣血
+
+        currentHealth -= damage;
+
+        // 确保生命值不低于0
+        if (currentHealth < 0) currentHealth = 0;
+
+        // 检查是否死亡
+        if (currentHealth <= 0)
+        {
+            currentHealth = 0;
+            OnSoulDissipate();
+        }
+    }
+
+    /// <summary>
+    /// 被净化者攻击
+    /// </summary>
+    public void TakePurifierDamage()
+    {
+        if (Time.time - lastPurifierAttackTime >= purifierAttackCooldown)
+        {
+            TakeDamage(purifierDamageAmount);
+            lastPurifierAttackTime = Time.time;
+
+            if (debugMode) Debug.Log($"被净化者攻击，受到{purifierDamageAmount}点伤害，当前生命值: {currentHealth}");
+        }
+    }
+
+    /// <summary>
+    /// 恢复生命值
+    /// </summary>
+    /// <param name="amount">恢复量</param>
+    public void Heal(float amount)
+    {
+        currentHealth = Mathf.Min(currentHealth + amount, maxHealth);
     }
 
     private void HandleMovementAndJump()
@@ -883,8 +842,6 @@ public class PlayerSoulController : MonoBehaviour
             {
                 // 在回忆场景中，只重置时间但不激活计时器
                 soulTimeRemaining = maxSoulTime;
-                UpdateSoulTimeUI();
-                StopWarningEffect();
                 isSoulTimerActive = false;
                 if (debugMode) Debug.Log("在回忆场景中脱离附身，计时器保持暂停");
             }
