@@ -37,6 +37,12 @@ public class PlayerSoulController : MonoBehaviour
     public float purifierAttackCooldown = 2f; // 净化者攻击冷却时间
     private float lastPurifierAttackTime = 0f; // 上次被净化者攻击的时间
 
+    [Header("碰撞伤害设置")]
+    public bool enableCollisionDamage = true; // 是否启用碰撞伤害
+    public float collisionDamage = 20f; // 碰撞伤害值
+    public float collisionDamageCooldown = 1f; // 碰撞伤害冷却时间
+    private float lastCollisionDamageTime = 0f; // 上次碰撞伤害时间
+
     // 移动和跳跃相关变量
     private Vector3 playerVelocity;
     private bool isGrounded;
@@ -76,6 +82,10 @@ public class PlayerSoulController : MonoBehaviour
     // UI管理器引用
     private UIManager uiManager;
 
+    // 物理组件
+    private Rigidbody rb;
+    private Collider playerCollider;
+
     private void Awake()
     {
         // 设置单例
@@ -97,6 +107,10 @@ public class PlayerSoulController : MonoBehaviour
         }
 
         playerInputActions = new PlayerInputActions();
+
+        // 获取物理组件
+        rb = GetComponent<Rigidbody>();
+        playerCollider = GetComponent<Collider>();
     }
 
     private void Start()
@@ -136,10 +150,17 @@ public class PlayerSoulController : MonoBehaviour
 
         // 获取UI管理器
         uiManager = UIManager.Instance;
-        if (uiManager == null)
+        if (uiManager != null)
+        {
+            Debug.Log("找到UIManager实例");
+        }
+        else
         {
             Debug.LogWarning("未找到UIManager实例，UI可能无法正常工作");
         }
+
+        // 设置物理组件属性
+        SetupPhysicsComponents();
 
         // 添加场景加载监听
         SceneManager.sceneLoaded += OnSceneLoaded;
@@ -149,6 +170,29 @@ public class PlayerSoulController : MonoBehaviour
         CheckCurrentScene();
 
         if (debugMode) Debug.Log($"灵魂控制器初始化完成 - 位置: {transform.position}");
+    }
+
+    /// <summary>
+    /// 设置物理组件属性
+    /// </summary>
+    private void SetupPhysicsComponents()
+    {
+        if (rb != null)
+        {
+            rb.isKinematic = false;
+            rb.useGravity = true;
+            rb.constraints = RigidbodyConstraints.FreezeRotation;
+            rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+
+            if (debugMode) Debug.Log("灵魂刚体设置完成");
+        }
+
+        if (playerCollider != null)
+        {
+            playerCollider.isTrigger = false; // 确保不是触发器，以检测碰撞
+
+            if (debugMode) Debug.Log($"灵魂碰撞器类型: {playerCollider.GetType().Name}, 是否为触发器: {playerCollider.isTrigger}");
+        }
     }
 
     private void OnEnable()
@@ -177,6 +221,144 @@ public class PlayerSoulController : MonoBehaviour
         if (Instance == this)
         {
             Instance = null;
+        }
+    }
+
+    // ===============================================================
+    // 碰撞检测 - 当玩家与净化者碰撞时
+    // ===============================================================
+    private void OnCollisionEnter(Collision collision)
+    {
+        if (!enableCollisionDamage) return;
+
+        GameObject collidedObject = collision.gameObject;
+
+        // 调试信息 - 详细记录碰撞信息
+        if (debugMode)
+        {
+            Debug.Log($"=== 玩家碰撞检测开始 ===");
+            Debug.Log($"碰撞到的物体: {collidedObject.name}");
+            Debug.Log($"碰撞层: {LayerMask.LayerToName(collidedObject.layer)}");
+            Debug.Log($"碰撞点数量: {collision.contactCount}");
+            Debug.Log($"碰撞强度: {collision.relativeVelocity.magnitude}");
+            Debug.Log($"玩家位置: {transform.position}");
+            Debug.Log($"净化者位置: {collidedObject.transform.position}");
+        }
+
+        // 检查是否有P1_Purifier组件
+        P1_Purifier purifier = collidedObject.GetComponent<P1_Purifier>();
+        if (purifier != null)
+        {
+            if (debugMode) Debug.Log($"✓ 检测到净化者组件，调用ApplyCollisionDamageFromPurifier");
+            ApplyCollisionDamageFromPurifier(collidedObject);
+            return;
+        }
+        else
+        {
+            if (debugMode) Debug.Log($"✗ 未找到净化者组件");
+        }
+    }
+
+    /// <summary>
+    /// 触发器检测
+    /// </summary>
+    private void OnTriggerEnter(Collider other)
+    {
+        if (!enableCollisionDamage) return;
+
+        GameObject collidedObject = other.gameObject;
+
+        if (debugMode) Debug.Log($"玩家触发器进入: {collidedObject.name}");
+
+        // 检查是否有P1_Purifier组件
+        P1_Purifier purifier = collidedObject.GetComponent<P1_Purifier>();
+        if (purifier != null)
+        {
+            if (debugMode) Debug.Log($"触发器检测到净化者组件，应用碰撞伤害");
+            ApplyCollisionDamageFromPurifier(collidedObject);
+            return;
+        }
+    }
+
+    /// <summary>
+    /// 处理来自净化者的碰撞伤害（现在改为公共方法）
+    /// </summary>
+    /// <param name="purifierObject">净化者游戏对象</param>
+    public void ApplyCollisionDamageFromPurifier(GameObject purifierObject)
+    {
+        if (debugMode) Debug.Log($"=== 开始处理净化者碰撞伤害 ===");
+
+        if (!enableCollisionDamage)
+        {
+            if (debugMode) Debug.Log("碰撞伤害已禁用");
+            return;
+        }
+
+        // 检查冷却时间
+        float timeSinceLastDamage = Time.time - lastCollisionDamageTime;
+        if (timeSinceLastDamage < collisionDamageCooldown)
+        {
+            if (debugMode) Debug.Log($"碰撞伤害冷却中，剩余时间: {collisionDamageCooldown - timeSinceLastDamage:F2}秒");
+            return;
+        }
+
+        // 更新上次碰撞伤害时间
+        lastCollisionDamageTime = Time.time;
+
+        // 造成伤害
+        if (debugMode) Debug.Log($"开始造成伤害: {collisionDamage}点");
+        TakeDamage(collisionDamage);
+
+        if (debugMode)
+        {
+            Debug.Log($"被净化者碰撞，受到{collisionDamage}点伤害");
+            Debug.Log($"当前生命值: {currentHealth}/{maxHealth}");
+            Debug.Log($"下次碰撞伤害冷却: {collisionDamageCooldown}秒后");
+        }
+
+        // 添加击退效果（可选）
+        ApplyKnockbackFromPurifier(purifierObject);
+
+        // 播放受伤效果（可选）
+        PlayHurtEffect();
+
+        if (debugMode) Debug.Log($"=== 净化者碰撞伤害处理完成 ===");
+    }
+
+    /// <summary>
+    /// 应用来自净化者的击退效果
+    /// </summary>
+    private void ApplyKnockbackFromPurifier(GameObject purifierObject)
+    {
+        if (rb == null) return;
+
+        // 计算击退方向
+        Vector3 knockbackDirection = transform.position - purifierObject.transform.position;
+        knockbackDirection.y = 0.3f; // 稍微向上
+        knockbackDirection.Normalize();
+
+        // 应用击退力
+        float knockbackForce = 5f;
+        rb.AddForce(knockbackDirection * knockbackForce, ForceMode.Impulse);
+
+        if (debugMode) Debug.Log($"受到净化者击退，方向: {knockbackDirection}, 力量: {knockbackForce}");
+    }
+
+    /// <summary>
+    /// 播放受伤效果
+    /// </summary>
+    private void PlayHurtEffect()
+    {
+        // 可以添加粒子效果、声音、屏幕震动等
+        if (soulParticles != null)
+        {
+            soulParticles.Emit(10); // 发射一些粒子
+        }
+
+        // 屏幕变红或闪烁（如果有UI效果的话）
+        if (uiManager != null)
+        {
+            // 这里可以调用UI管理器显示受伤效果
         }
     }
 
@@ -225,6 +407,12 @@ public class PlayerSoulController : MonoBehaviour
         else if (!IsInAnyMemoryScene)  // 不在回忆场景中才处理移动
         {
             HandleMovementAndJump();
+        }
+
+        // 调试：显示当前生命值
+        if (debugMode && Time.frameCount % 60 == 0)
+        {
+            Debug.Log($"当前生命值: {currentHealth}/{maxHealth}");
         }
     }
 
@@ -465,23 +653,50 @@ public class PlayerSoulController : MonoBehaviour
     /// <param name="damage">伤害值</param>
     public void TakeDamage(float damage)
     {
-        if (currentHealth <= 0) return; // 如果已经死亡，不再扣血
+        if (debugMode) Debug.Log($"=== TakeDamage 开始: {damage}点伤害 ===");
 
+        if (currentHealth <= 0)
+        {
+            if (debugMode) Debug.Log("玩家已死亡，不再扣血");
+            return; // 如果已经死亡，不再扣血
+        }
+
+        float healthBefore = currentHealth;
         currentHealth -= damage;
 
         // 确保生命值不低于0
         if (currentHealth < 0) currentHealth = 0;
 
+        if (debugMode)
+        {
+            Debug.Log($"扣血前: {healthBefore}, 扣血后: {currentHealth}");
+            Debug.Log($"伤害值: {damage}");
+        }
+
         // 检查是否死亡
         if (currentHealth <= 0)
         {
             currentHealth = 0;
+            if (debugMode) Debug.Log("生命值归零，触发灵魂消散");
             OnSoulDissipate();
         }
+
+        // 更新UI
+        if (uiManager != null)
+        {
+            if (debugMode) Debug.Log("调用UI管理器刷新UI");
+            uiManager.ForceRefreshUI();
+        }
+        else
+        {
+            if (debugMode) Debug.LogWarning("UI管理器为空！");
+        }
+
+        if (debugMode) Debug.Log($"=== TakeDamage 结束 ===");
     }
 
     /// <summary>
-    /// 被净化者攻击
+    /// 被净化者攻击（从净化者脚本调用）
     /// </summary>
     public void TakePurifierDamage()
     {
@@ -501,6 +716,12 @@ public class PlayerSoulController : MonoBehaviour
     public void Heal(float amount)
     {
         currentHealth = Mathf.Min(currentHealth + amount, maxHealth);
+
+        // 更新UI
+        if (uiManager != null)
+        {
+            uiManager.ForceRefreshUI();
+        }
     }
 
     private void HandleMovementAndJump()
@@ -911,6 +1132,20 @@ public class PlayerSoulController : MonoBehaviour
 
         Gizmos.color = new Color(1, 1, 0, 0.2f);
         Gizmos.DrawSphere(transform.position, possessionRange);
+
+        // 绘制碰撞范围
+        if (enableCollisionDamage)
+        {
+            Gizmos.color = Color.red;
+            if (playerCollider != null)
+            {
+                Gizmos.DrawWireSphere(transform.position, playerCollider.bounds.extents.magnitude * 1.5f);
+            }
+            else
+            {
+                Gizmos.DrawWireSphere(transform.position, 0.5f);
+            }
+        }
     }
 
     public void ForceReleasePossession()
@@ -928,5 +1163,23 @@ public class PlayerSoulController : MonoBehaviour
     {
         // 重新加载当前场景
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+    }
+
+    /// <summary>
+    /// 启用或禁用碰撞伤害
+    /// </summary>
+    public void SetCollisionDamageEnabled(bool enabled)
+    {
+        enableCollisionDamage = enabled;
+        Debug.Log($"玩家碰撞伤害接收已{(enabled ? "启用" : "禁用")}");
+    }
+
+    /// <summary>
+    /// 设置碰撞伤害值
+    /// </summary>
+    public void SetCollisionDamage(float damage)
+    {
+        collisionDamage = damage;
+        Debug.Log($"玩家碰撞伤害值已设置为{damage}点");
     }
 }
