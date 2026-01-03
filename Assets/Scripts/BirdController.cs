@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using System.Collections;
 
 public class BirdController : MonoBehaviour, IPossessable
 {
@@ -12,12 +13,37 @@ public class BirdController : MonoBehaviour, IPossessable
     public float idleDrag = 0.3f;
     public float groundCheckDistance = 0.4f;
 
+    [Header("模型引用")]
+    public Transform birdModel;
+    public bool fixModelRotation = true;
+
     [Header("动画参数")]
     public string flyParam = "IsFlying";
     public string glideParam = "IsGliding";
 
+    [Header("动画阈值")]
+    public float flyThreshold = 0.1f;
+
     [Header("能力描述")]
     public string abilityDescription = "可以飞行和滑翔的鸟";
+
+    [Header("AI 设置")]
+    public BirdAI birdAI;
+    private bool isAIControlled = false;
+
+    [Header("附身时间限制")]
+    public float maxPossessionTime = 100f; // 最大附身时间（鸟的附身时间较短）
+    public float possessionTimeRemaining = 0f; // 剩余附身时间
+    private bool isPossessionTimerActive = false; // 附身计时器是否激活
+    private bool isTimeExhausted = false; // 时间是否已耗尽
+
+    [Header("生命值设置")]
+    public float maxHealth = 60f; // 鸟的生命值较低，比较脆弱
+    public float currentHealth = 0f;
+
+    [Header("死亡效果")]
+    public GameObject deathEffect;
+    public AudioClip deathSound;
 
     [Header("状态")]
     public bool isPossessed = false;
@@ -39,10 +65,10 @@ public class BirdController : MonoBehaviour, IPossessable
     [Header("调试")]
     public bool showDebugInfo = true;
     public LayerMask groundLayer = -1;
-
-    [Header("AI 设置")]
-    public BirdAI birdAI;
-    private bool isAIControlled = false;
+    public bool drawDebugGizmos = true;
+    public bool logAnimationState = true;
+    public bool autoFixParameters = true;
+    public bool showRealTimeState = true;
 
     // AI输入变量
     private Vector2 aiMoveInput = Vector2.zero;
@@ -50,21 +76,88 @@ public class BirdController : MonoBehaviour, IPossessable
     private bool aiDescending = false;
     private bool aiGliding = false;
 
+    // UI管理器引用
+    private UIManager uiManager;
+
     // ===============================================================
     // Start
     // ===============================================================
     void Start()
     {
-        animator = GetComponent<Animator>();
-        controller = GetComponent<CharacterController>();
+        InitializeComponents();
 
-        if (!animator) Debug.LogError("缺少 Animator !");
-        if (!controller) Debug.LogError("缺少 CharacterController !");
+        // 初始化生命值和附身时间
+        currentHealth = maxHealth;
+        possessionTimeRemaining = maxPossessionTime;
+        isTimeExhausted = false;
 
-        if (animator)
+        // 获取UI管理器
+        uiManager = UIManager.Instance;
+        if (uiManager == null)
         {
-            animator.SetBool(flyParam, false);
-            animator.SetBool(glideParam, false);
+            Debug.LogWarning("未找到UIManager实例，UI可能无法正常工作");
+        }
+
+        FindGroundPosition(); // ★ 初始化贴地
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"鸟({gameObject.name})初始化完成:");
+            Debug.Log($"- 控制器位置: {transform.position}");
+            Debug.Log($"- 控制器旋转: {transform.rotation.eulerAngles}");
+            Debug.Log($"- 模型位置: {(birdModel != null ? birdModel.position.ToString() : "N/A")}");
+            Debug.Log($"- 模型旋转: {(birdModel != null ? birdModel.rotation.eulerAngles.ToString() : "N/A")}");
+            Debug.Log($"- 组件: Animator={animator != null}, Controller={controller != null}");
+            Debug.Log($"- 生命值: {currentHealth}/{maxHealth}");
+            Debug.Log($"- 附身时间: {possessionTimeRemaining}/{maxPossessionTime}");
+        }
+    }
+
+    void InitializeComponents()
+    {
+        // 自动找到子对象中的模型和Animator
+        if (birdModel == null)
+        {
+            foreach (Transform child in transform)
+            {
+                if (child.GetComponent<MeshRenderer>() != null ||
+                    child.GetComponent<SkinnedMeshRenderer>() != null)
+                {
+                    birdModel = child;
+                    break;
+                }
+            }
+
+            if (birdModel == null && transform.childCount > 0)
+            {
+                birdModel = transform.GetChild(0);
+            }
+        }
+
+        if (birdModel == null)
+        {
+            birdModel = transform;
+        }
+
+        // 获取Animator
+        animator = birdModel.GetComponent<Animator>();
+        if (animator == null)
+        {
+            animator = GetComponentInChildren<Animator>();
+            if (animator == null)
+            {
+                Debug.LogError($"鸟({gameObject.name}): 需要Animator组件！");
+            }
+        }
+
+        // 获取或添加CharacterController
+        controller = GetComponent<CharacterController>();
+        if (controller == null)
+        {
+            controller = gameObject.AddComponent<CharacterController>();
+            controller.center = new Vector3(0, 0.5f, 0);
+            controller.height = 0.5f; // 鸟的控制器较矮
+            controller.radius = 0.2f;
         }
 
         // 获取或添加BirdAI组件
@@ -78,16 +171,170 @@ public class BirdController : MonoBehaviour, IPossessable
         // 初始状态由AI控制（如果没有被附身）
         isAIControlled = !isPossessed;
 
-        FindGroundPosition(); // ★ 初始化贴地
+        // 自动修复参数名
+        if (autoFixParameters && animator != null)
+        {
+            AutoFixParameterNames();
+        }
+
+        // 确保有地面层
+        if (groundLayer.value == 0 || groundLayer.value == -1)
+        {
+            groundLayer = LayerMask.GetMask("Default");
+        }
+
+        // 修复模型旋转
+        if (fixModelRotation && birdModel != null)
+        {
+            FixModelRotation();
+        }
+    }
+
+    void Update()
+    {
+        // 更新附身计时器
+        if (isPossessionTimerActive && isPossessed)
+        {
+            UpdatePossessionTimer();
+        }
+
+        // 如果没有被附身且AI控制，执行AI更新
+        if (!isPossessed)
+        {
+            UpdateIdleBehavior();
+            return;
+        }
+    }
+
+    /// <summary>
+    /// 更新附身计时器
+    /// </summary>
+    private void UpdatePossessionTimer()
+    {
+        // 如果还有剩余时间，减少时间
+        if (possessionTimeRemaining > 0 && !isTimeExhausted)
+        {
+            possessionTimeRemaining -= Time.deltaTime;
+
+            // 确保时间不会变成负数
+            if (possessionTimeRemaining < 0)
+            {
+                possessionTimeRemaining = 0;
+            }
+
+            // 添加调试信息
+            if (showDebugInfo && Time.frameCount % 60 == 0)
+            {
+                Debug.Log($"鸟附身剩余时间: {possessionTimeRemaining:F1}s, 生命值: {currentHealth:F1}");
+            }
+
+            // 检查时间是否耗尽
+            if (possessionTimeRemaining <= 0)
+            {
+                isTimeExhausted = true;
+                Debug.Log("鸟的附身时间耗尽！开始持续扣血");
+            }
+        }
+
+        // 时间耗尽，持续扣血
+        if (isTimeExhausted)
+        {
+            // 每秒扣15点血
+            float damagePerSecond = 15f;
+            float damageThisFrame = damagePerSecond * Time.deltaTime;
+            TakeDamage(damageThisFrame);
+
+            // 添加调试信息
+            if (showDebugInfo && Time.frameCount % 30 == 0)
+            {
+                Debug.Log($"鸟时间耗尽持续扣血中，当前生命值: {currentHealth:F1}, 本帧伤害: {damageThisFrame:F2}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 受到伤害
+    /// </summary>
+    /// <param name="damage">伤害值</param>
+    public void TakeDamage(float damage)
+    {
+        if (currentHealth <= 0) return; // 如果已经死亡，不再扣血
+
+        currentHealth -= damage;
+
+        // 确保生命值不低于0
+        if (currentHealth < 0) currentHealth = 0;
+
+        // 检查是否死亡
+        if (currentHealth <= 0)
+        {
+            Die();
+        }
+    }
+
+    /// <summary>
+    /// 死亡
+    /// </summary>
+    private void Die()
+    {
+        Debug.Log($"{gameObject.name} 死亡！当前生命值: {currentHealth}");
+
+        // 播放死亡效果
+        if (deathEffect != null)
+        {
+            Instantiate(deathEffect, transform.position, Quaternion.identity);
+        }
+
+        if (deathSound != null)
+        {
+            AudioSource.PlayClipAtPoint(deathSound, transform.position);
+        }
+
+        // 如果当前被附身，强制玩家灵魂脱离
+        if (isPossessed)
+        {
+            PlayerSoulController.Instance.ForceReleasePossession();
+
+            // 如果玩家在动物死亡时没有足够生命值，游戏结束
+            if (PlayerSoulController.Instance.currentHealth <= 0)
+            {
+                StartCoroutine(DelayedGameOver(1f));
+            }
+        }
+
+        // 销毁动物
+        Destroy(gameObject);
+    }
+
+    private IEnumerator DelayedGameOver(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+
+        // 调用玩家灵魂的游戏结束方法
+        PlayerSoulController.Instance.OnSoulDissipate();
+    }
+
+    /// <summary>
+    /// 被净化者攻击
+    /// </summary>
+    public void TakePurifierDamage(float damage)
+    {
+        TakeDamage(damage);
     }
 
     // ===============================================================
-    // IPossessable
+    // IPossessable 接口实现
     // ===============================================================
     public void OnPossess()
     {
         isPossessed = true;
         isAIControlled = false; // 禁用AI控制
+
+        // 启动附身计时器
+        isPossessionTimerActive = true;
+        isTimeExhausted = false;
+        possessionTimeRemaining = maxPossessionTime;
+
         if (controller) controller.enabled = true;
 
         // 如果存在AI组件，禁用AI
@@ -99,10 +346,30 @@ public class BirdController : MonoBehaviour, IPossessable
         verticalVelocity = 0f;
         isGliding = false;
 
+        // 重置AI输入
+        aiMoveInput = Vector2.zero;
+        aiAscending = false;
+        aiDescending = false;
+        aiGliding = false;
+
+        // 重置动画状态
+        if (animator)
+        {
+            animator.SetBool(flyParam, false);
+            animator.SetBool(glideParam, false);
+        }
+
         // ★ ★ ★ 附身瞬间强制校准地面对齐
         FindGroundPosition();
         SnapToGround();
         isGrounded = true;
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"=== 鸟({gameObject.name})被附身 ===");
+            Debug.Log($"- 当前动画参数: Fly={flyParam}, Glide={glideParam}");
+            Debug.Log($"- 附身时间重置为: {possessionTimeRemaining}s");
+        }
 
         Debug.Log("鸟被附身并校正位置！");
     }
@@ -111,6 +378,11 @@ public class BirdController : MonoBehaviour, IPossessable
     {
         isPossessed = false;
         isAIControlled = true; // 启用AI控制
+
+        // 停止附身计时器
+        isPossessionTimerActive = false;
+        isTimeExhausted = false;
+        possessionTimeRemaining = maxPossessionTime;
 
         // 重置移动状态
         verticalVelocity = 0;
@@ -138,32 +410,47 @@ public class BirdController : MonoBehaviour, IPossessable
             animator.SetBool(glideParam, false);
         }
 
-        Debug.Log("鸟脱离附身！");
+        if (showDebugInfo) Debug.Log("鸟脱离附身！");
     }
 
     public string GetAbilityDescription() => abilityDescription;
 
-    // ===============================================================
-    // Update
-    // ===============================================================
-    void Update()
+    public void PossessedUpdate()
     {
-        // 如果没有被附身且AI控制，执行AI更新
-        if (!isPossessed && isAIControlled && birdAI != null && birdAI.enabled)
+        if (!isPossessed) return;
+
+        GetInput();
+        HandleMovement();
+        UpdateAnimations();
+        CheckGroundStatus();
+        DebugAnimations();
+    }
+    // ===============================================================
+    // 接口实现结束
+    // ===============================================================
+
+    void UpdateIdleBehavior()
+    {
+        // 非附身状态下的空闲行为
+        if (isAIControlled && birdAI != null && birdAI.enabled)
         {
-            // AI通过BirdAI.Update()自动控制
-            // 我们只需要处理移动逻辑
             HandleAIMovement();
             UpdateAnimations();
             CheckGroundStatus();
         }
-        // 如果被附身，执行玩家控制
-        else if (isPossessed)
+        else
         {
-            GetInput();
-            HandleMovement();
-            UpdateAnimations();
-            CheckGroundStatus();
+            if (animator != null)
+            {
+                if (animator.GetBool(flyParam))
+                {
+                    animator.SetBool(flyParam, false);
+                }
+                if (animator.GetBool(glideParam))
+                {
+                    animator.SetBool(glideParam, false);
+                }
+            }
         }
     }
 
@@ -180,9 +467,6 @@ public class BirdController : MonoBehaviour, IPossessable
 
     // ===============================================================
     // AI移动逻辑
-    // ===============================================================
-    // ===============================================================
-    // AI移动逻辑 - 修复版本
     // ===============================================================
     void HandleAIMovement()
     {
@@ -428,11 +712,166 @@ public class BirdController : MonoBehaviour, IPossessable
         }
     }
 
-    // ===============================================================
-    // 接口方法（用于其他系统调用）
-    // ===============================================================
-    public void PossessedUpdate()
+    void DebugAnimations()
     {
-        // 这个方法现在通过Update处理，留空或可以删除
+        if (!logAnimationState || animator == null) return;
+
+        if (Time.frameCount % 30 == 0 || showRealTimeState) // 每30帧输出一次，或实时输出
+        {
+            bool flyingValue = animator.GetBool(flyParam);
+            bool glidingValue = animator.GetBool(glideParam);
+            string currentState = GetCurrentStateName();
+
+            Debug.Log($"鸟动画状态: {currentState}, Flying={flyingValue}, Gliding={glidingValue}, Grounded={isGrounded}");
+        }
+    }
+
+    // ===== 以下是辅助方法 =====
+
+    string GetCurrentStateName()
+    {
+        if (animator == null) return "No Animator";
+
+        AnimatorStateInfo stateInfo = animator.GetCurrentAnimatorStateInfo(0);
+
+        if (stateInfo.IsName("Idle")) return "Idle";
+        if (stateInfo.IsName("Fly")) return "Fly";
+        if (stateInfo.IsName("Glide")) return "Glide";
+
+        // 尝试通过哈希值判断
+        if (stateInfo.fullPathHash == Animator.StringToHash("Base Layer.Idle")) return "Idle";
+        if (stateInfo.fullPathHash == Animator.StringToHash("Base Layer.Fly")) return "Fly";
+        if (stateInfo.fullPathHash == Animator.StringToHash("Base Layer.Glide")) return "Glide";
+
+        return $"Unknown ({stateInfo.fullPathHash})";
+    }
+
+    void AutoFixParameterNames()
+    {
+        if (animator == null) return;
+
+        Debug.Log("=== 自动检查Animator参数 ===");
+
+        // 检查所有参数
+        foreach (AnimatorControllerParameter param in animator.parameters)
+        {
+            Debug.Log($"找到参数: {param.name} ({param.type})");
+        }
+
+        // 检查并修复参数名
+        CheckAndFixParameter(flyParam, "IsFlying", "Flying", "Fly", "isFlying");
+        CheckAndFixParameter(glideParam, "IsGliding", "Gliding", "Glide", "isGliding");
+
+        Debug.Log($"最终使用的参数: Fly={flyParam}, Glide={glideParam}");
+    }
+
+    void CheckAndFixParameter(string currentParam, params string[] possibleNames)
+    {
+        if (HasParameter(currentParam)) return;
+
+        foreach (string name in possibleNames)
+        {
+            if (HasParameter(name))
+            {
+                Debug.Log($"参数 '{currentParam}' 不存在，自动改为 '{name}'");
+
+                // 根据参数类型设置正确的字段
+                if (possibleNames[0].Contains("Fly"))
+                    flyParam = name;
+                else if (possibleNames[0].Contains("Glide"))
+                    glideParam = name;
+
+                return;
+            }
+        }
+
+        Debug.LogWarning($"未找到参数 '{currentParam}' 的任何变体！");
+    }
+
+    bool HasParameter(string paramName)
+    {
+        if (animator == null) return false;
+
+        foreach (AnimatorControllerParameter param in animator.parameters)
+        {
+            if (param.name == paramName)
+                return true;
+        }
+        return false;
+    }
+
+    void FixModelRotation()
+    {
+        if (birdModel == null) return;
+
+        Vector3 modelEuler = birdModel.localRotation.eulerAngles;
+        if (Mathf.Abs(modelEuler.x + 90) < 1f || Mathf.Abs(modelEuler.x - 270) < 1f)
+        {
+            if (showDebugInfo) Debug.Log($"检测到模型旋转问题: {modelEuler}");
+
+            Quaternion fixedRotation = Quaternion.Euler(0, modelEuler.y, modelEuler.z);
+            birdModel.localRotation = fixedRotation;
+        }
+    }
+
+    void OnDrawGizmosSelected()
+    {
+        if (!drawDebugGizmos) return;
+
+        // 绘制控制器位置
+        Gizmos.color = Color.green;
+        Gizmos.DrawWireSphere(transform.position, 0.5f);
+
+        // 绘制地面检测线
+        Gizmos.color = isGrounded ? Color.green : Color.red;
+        float controllerBottom = controller != null ? controller.height / 2f - controller.radius : 0;
+        Vector3 rayStart = transform.position + Vector3.down * controllerBottom + Vector3.up * 0.05f;
+        Gizmos.DrawLine(rayStart, rayStart + Vector3.down * (groundCheckDistance + 0.2f));
+
+        // 绘制移动方向
+        if (Application.isPlaying)
+        {
+            Gizmos.color = Color.blue;
+            if (horizontalMoveDirection.magnitude > 0.1f)
+            {
+                Gizmos.DrawLine(transform.position, transform.position + horizontalMoveDirection.normalized * 2f);
+            }
+        }
+    }
+
+    // ===== 调试方法 =====
+    [ContextMenu("测试：立即时间耗尽")]
+    public void TestTimeExhausted()
+    {
+        possessionTimeRemaining = 0.1f; // 设置很少的时间
+        Debug.Log("测试：鸟的附身时间设置为0.1秒");
+    }
+
+    [ContextMenu("检查当前状态")]
+    public void ShowCurrentStateDetails()
+    {
+        if (animator == null)
+        {
+            Debug.LogError("没有Animator组件！");
+            return;
+        }
+
+        AnimatorStateInfo stateInfo = animator.GetCurrentAnimatorStateInfo(0);
+
+        Debug.Log("=== 当前状态详情 ===");
+        Debug.Log($"状态名称: {GetCurrentStateName()}");
+        Debug.Log($"状态哈希: {stateInfo.fullPathHash}");
+        Debug.Log($"状态长度: {stateInfo.length:F2}秒");
+        Debug.Log($"标准化时间: {stateInfo.normalizedTime:F2}");
+        Debug.Log($"是否循环: {stateInfo.loop}");
+        Debug.Log($"速度倍数: {stateInfo.speed}");
+        Debug.Log($"是否在过渡: {animator.IsInTransition(0)}");
+
+        if (animator.IsInTransition(0))
+        {
+            AnimatorTransitionInfo transInfo = animator.GetAnimatorTransitionInfo(0);
+            Debug.Log($"过渡持续时间: {transInfo.duration:F2}");
+            Debug.Log($"过渡标准化时间: {transInfo.normalizedTime:F2}");
+        }
     }
 }

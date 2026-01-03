@@ -1,8 +1,9 @@
-using UnityEngine;
+ï»¿using UnityEngine;
+using System.Collections;
 
 public class SheepController : MonoBehaviour, IPossessable
 {
-    [Header("ÒÆ¶¯ÉèÖÃ")]
+    [Header("ç§»åŠ¨è®¾ç½®")]
     public float walkSpeed = 2f;
     public float runSpeed = 4f;
     public float rotationSpeed = 8f;
@@ -10,261 +11,423 @@ public class SheepController : MonoBehaviour, IPossessable
     public float groundCheckDistance = 0.2f;
     public LayerMask groundLayer = -1;
 
-    [Header("¶¯»­²ÎÊı")]
+    [Header("æ¨¡å‹å¼•ç”¨")]
+    public Transform sheepModel;
+    public bool fixModelRotation = true;
+
+    [Header("åŠ¨ç”»å‚æ•°")]
     public string speedParam = "Speed";
     public string isGroundParam = "isGround";
     public string jumpParam = "Jump";
 
-    [Header("¶¯»­×´Ì¬Ãû³Æ")]
-    public string idleStateName = "Idle";
-    public string walkStateName = "Walk";
-    public string runStateName = "Run";
+    [Header("åŠ¨ç”»é˜ˆå€¼")]
+    public float walkThreshold = 0.1f;
+    public float runThreshold = 0.5f;
 
-    [Header("ÄÜÁ¦ÃèÊö")]
-    public string abilityDescription = "ÎÂË³µÄÃàÑò£¬¿ÉÒÔĞĞ×ßºÍ±¼ÅÜ";
+    [Header("è·³è·ƒä¿®å¤è®¾ç½®")]
+    public float jumpAnimationCooldown = 0.5f; // è·³è·ƒåŠ¨ç”»å†·å´æ—¶é—´
+    public bool forceJumpTransition = true; // æ˜¯å¦å¼ºåˆ¶åˆ‡æ¢è·³è·ƒçŠ¶æ€
+    public float jumpTransitionDuration = 0.05f; // è·³è·ƒè¿‡æ¸¡æ—¶é—´
 
-    [Header("AI Ğ­µ÷")]
-    public SheepAI sheepAI; // ÒıÓÃAI×é¼ş
-    public bool enableAIWhenNotPossessed = true;
+    [Header("AI è®¾ç½®")]
+    public SheepAI sheepAI;
+    private bool isAIControlled = false;
 
-    [Header("×´Ì¬")]
+    [Header("èƒ½åŠ›æè¿°")]
+    public string abilityDescription = "æ¸©é¡ºçš„ç»µç¾Šï¼Œå¯ä»¥è¡Œèµ°å’Œå¥”è·‘";
+
+    [Header("é™„èº«æ—¶é—´é™åˆ¶")]
+    public float maxPossessionTime = 150f; // æœ€å¤§é™„èº«æ—¶é—´ï¼ˆæ¯”ç‹ç‹¸é•¿ä¸€äº›ï¼‰
+    public float possessionTimeRemaining = 0f; // å‰©ä½™é™„èº«æ—¶é—´
+    private bool isPossessionTimerActive = false; // é™„èº«è®¡æ—¶å™¨æ˜¯å¦æ¿€æ´»
+    private bool isTimeExhausted = false; // æ—¶é—´æ˜¯å¦å·²è€—å°½
+
+    [Header("ç”Ÿå‘½å€¼è®¾ç½®")]
+    public float maxHealth = 100f; // ç»µç¾Šç”Ÿå‘½å€¼è¾ƒé«˜
+    public float currentHealth = 0f;
+
+    [Header("æ­»äº¡æ•ˆæœ")]
+    public GameObject deathEffect;
+    public AudioClip deathSound;
+
+    [Header("çŠ¶æ€")]
     public bool isPossessed = false;
     private bool isGrounded = true;
+    private float currentSpeed = 0f;
+    private Vector3 moveDirection = Vector3.zero;
+    private bool jumpTriggered = false;
+    private bool isJumping = false;
+    private bool wasJumping = false;
+    private float lastJumpTime = 0f;
 
-    [Header("×é¼şÒıÓÃ")]
+    [Header("ç»„ä»¶å¼•ç”¨")]
     private Animator animator;
     private CharacterController controller;
-    private Vector3 moveDirection = Vector3.zero;
-    private float verticalVelocity;
-    private float groundCheckTimer = 0f;
 
-    [Header("ÖØÁ¦ÉèÖÃ")]
+    [Header("é‡åŠ›è®¾ç½®")]
     public float gravity = -9.81f;
     public float extraGravity = -2f;
+    private float verticalVelocity = 0f;
 
-    [Header("µ÷ÊÔ")]
+    [Header("è°ƒè¯•")]
     public bool showDebugInfo = true;
+    public bool drawDebugGizmos = true;
+    public bool logAnimationState = true;
+    public bool autoFixParameters = true;
+    public bool showRealTimeState = true; // å®æ—¶æ˜¾ç¤ºçŠ¶æ€
 
-    // ¶¯»­¹ı¶ÉÏà¹Ø
-    private float currentSpeed = 0f;
-    private float targetSpeed = 0f;
-    private bool isRunning = false;
-
-    // ÌøÔ¾Ïà¹Ø - ĞŞ¸´°æ
-    private bool isJumping = false;
-    private float jumpCooldown = 0.2f;
-    private float jumpCooldownTimer = 0f;
-    private float lastJumpTime = -1f;
-    private float coyoteTime = 0.15f; // Coyote Time»º³åÊ±¼ä
+    // è·³è·ƒç¼“å†²ç³»ç»Ÿ
+    private float coyoteTime = 0.15f; // Coyote Timeç¼“å†²æ—¶é—´
     private float coyoteTimeCounter = 0f;
-    private float jumpBufferTime = 0.15f; // ÌøÔ¾ÊäÈë»º³åÊ±¼ä
+    private float jumpBufferTime = 0.15f; // è·³è·ƒè¾“å…¥ç¼“å†²æ—¶é—´
     private float jumpBufferTimer = 0f;
-    private bool jumpRequested = false; // ±ê¼ÇÊÇ·ñÓĞÌøÔ¾ÇëÇó
+    private bool jumpRequested = false; // æ ‡è®°æ˜¯å¦æœ‰è·³è·ƒè¯·æ±‚
+
+    // UIç®¡ç†å™¨å¼•ç”¨
+    private UIManager uiManager;
 
     void Start()
     {
         InitializeComponents();
+
+        // åˆå§‹åŒ–ç”Ÿå‘½å€¼å’Œé™„èº«æ—¶é—´
+        currentHealth = maxHealth;
+        possessionTimeRemaining = maxPossessionTime;
+        isTimeExhausted = false;
+
+        // è·å–UIç®¡ç†å™¨
+        uiManager = UIManager.Instance;
+        if (uiManager == null)
+        {
+            Debug.LogWarning("æœªæ‰¾åˆ°UIManagerå®ä¾‹ï¼ŒUIå¯èƒ½æ— æ³•æ­£å¸¸å·¥ä½œ");
+        }
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"ç»µç¾Š({gameObject.name})åˆå§‹åŒ–å®Œæˆ:");
+            Debug.Log($"- æ§åˆ¶å™¨ä½ç½®: {transform.position}");
+            Debug.Log($"- æ§åˆ¶å™¨æ—‹è½¬: {transform.rotation.eulerAngles}");
+            Debug.Log($"- æ¨¡å‹ä½ç½®: {(sheepModel != null ? sheepModel.position.ToString() : "N/A")}");
+            Debug.Log($"- æ¨¡å‹æ—‹è½¬: {(sheepModel != null ? sheepModel.rotation.eulerAngles.ToString() : "N/A")}");
+            Debug.Log($"- ç»„ä»¶: Animator={animator != null}, Controller={controller != null}");
+            Debug.Log($"- ç”Ÿå‘½å€¼: {currentHealth}/{maxHealth}");
+            Debug.Log($"- é™„èº«æ—¶é—´: {possessionTimeRemaining}/{maxPossessionTime}");
+        }
     }
 
     void InitializeComponents()
     {
-        // »ñÈ¡×é¼şÒıÓÃ
-        animator = GetComponentInChildren<Animator>();
-        if (animator == null)
+        // è‡ªåŠ¨æ‰¾åˆ°å­å¯¹è±¡ä¸­çš„æ¨¡å‹å’ŒAnimator
+        if (sheepModel == null)
         {
-            animator = GetComponent<Animator>();
-            Debug.LogWarning("´Ó×Ó¶ÔÏóÖĞÎ´ÕÒµ½Animator£¬³¢ÊÔ´Óµ±Ç°¶ÔÏó»ñÈ¡");
+            foreach (Transform child in transform)
+            {
+                if (child.GetComponent<MeshRenderer>() != null ||
+                    child.GetComponent<SkinnedMeshRenderer>() != null)
+                {
+                    sheepModel = child;
+                    break;
+                }
+            }
+
+            if (sheepModel == null && transform.childCount > 0)
+            {
+                sheepModel = transform.GetChild(0);
+            }
         }
 
-        // Ìí¼Ó»ò»ñÈ¡CharacterController
+        if (sheepModel == null)
+        {
+            sheepModel = transform;
+        }
+
+        // è·å–Animator
+        animator = sheepModel.GetComponent<Animator>();
+        if (animator == null)
+        {
+            animator = GetComponentInChildren<Animator>();
+            if (animator == null)
+            {
+                Debug.LogError($"ç»µç¾Š({gameObject.name}): éœ€è¦Animatorç»„ä»¶ï¼");
+            }
+        }
+
+        // è·å–æˆ–æ·»åŠ CharacterController
         controller = GetComponent<CharacterController>();
         if (controller == null)
         {
             controller = gameObject.AddComponent<CharacterController>();
-            Debug.Log("×Ô¶¯Ìí¼ÓCharacterController×é¼ş");
-            SetupCharacterController();
-        }
-        else
-        {
-            ValidateCharacterControllerSettings();
+            controller.center = new Vector3(0, 0.5f, 0);
+            controller.height = 1f;
+            controller.radius = 0.3f;
         }
 
-        // »ñÈ¡SheepAI×é¼ş
+        // è·å–æˆ–æ·»åŠ SheepAIç»„ä»¶
+        sheepAI = GetComponent<SheepAI>();
         if (sheepAI == null)
         {
-            sheepAI = GetComponent<SheepAI>();
-            if (sheepAI == null && enableAIWhenNotPossessed)
+            sheepAI = gameObject.AddComponent<SheepAI>();
+            Debug.Log("è‡ªåŠ¨æ·»åŠ SheepAIç»„ä»¶");
+        }
+
+        // åˆå§‹çŠ¶æ€ç”±AIæ§åˆ¶ï¼ˆå¦‚æœæ²¡æœ‰è¢«é™„èº«ï¼‰
+        isAIControlled = !isPossessed;
+
+        // è‡ªåŠ¨ä¿®å¤å‚æ•°å
+        if (autoFixParameters && animator != null)
+        {
+            AutoFixParameterNames();
+        }
+
+        // ç¡®ä¿æœ‰åœ°é¢å±‚
+        if (groundLayer.value == 0 || groundLayer.value == -1)
+        {
+            groundLayer = LayerMask.GetMask("Default");
+        }
+
+        // ä¿®å¤æ¨¡å‹æ—‹è½¬
+        if (fixModelRotation && sheepModel != null)
+        {
+            FixModelRotation();
+        }
+    }
+
+    void Update()
+    {
+        // æ›´æ–°é™„èº«è®¡æ—¶å™¨
+        if (isPossessionTimerActive && isPossessed)
+        {
+            UpdatePossessionTimer();
+        }
+
+        // æ£€æŸ¥è·³è·ƒè¾“å…¥ - å†·å´æ—¶é—´æ£€æŸ¥
+        if (Input.GetButtonDown("Jump") && !jumpTriggered && (Time.time - lastJumpTime) > jumpAnimationCooldown)
+        {
+            jumpTriggered = true;
+            if (showDebugInfo) Debug.Log($"è·³è·ƒè§¦å‘ - æ—¶é—´: {Time.time:F2}, ä¸Šæ¬¡è·³è·ƒ: {lastJumpTime:F2}");
+        }
+
+        // éé™„èº«çŠ¶æ€ä¸‹çš„é€»è¾‘
+        if (!isPossessed)
+        {
+            UpdateIdleBehavior();
+            return;
+        }
+    }
+
+    /// <summary>
+    /// æ›´æ–°é™„èº«è®¡æ—¶å™¨
+    /// </summary>
+    private void UpdatePossessionTimer()
+    {
+        // å¦‚æœè¿˜æœ‰å‰©ä½™æ—¶é—´ï¼Œå‡å°‘æ—¶é—´
+        if (possessionTimeRemaining > 0 && !isTimeExhausted)
+        {
+            possessionTimeRemaining -= Time.deltaTime;
+
+            // ç¡®ä¿æ—¶é—´ä¸ä¼šå˜æˆè´Ÿæ•°
+            if (possessionTimeRemaining < 0)
             {
-                // Èç¹ûÃ»ÓĞAI×é¼şµ«ĞèÒªAI£¬×Ô¶¯Ìí¼Ó
-                sheepAI = gameObject.AddComponent<SheepAI>();
-                Debug.Log("×Ô¶¯Ìí¼ÓSheepAI×é¼ş");
+                possessionTimeRemaining = 0;
+            }
+
+            // æ·»åŠ è°ƒè¯•ä¿¡æ¯
+            if (showDebugInfo && Time.frameCount % 60 == 0)
+            {
+                Debug.Log($"ç»µç¾Šé™„èº«å‰©ä½™æ—¶é—´: {possessionTimeRemaining:F1}s, ç”Ÿå‘½å€¼: {currentHealth:F1}");
+            }
+
+            // æ£€æŸ¥æ—¶é—´æ˜¯å¦è€—å°½
+            if (possessionTimeRemaining <= 0)
+            {
+                isTimeExhausted = true;
+                Debug.Log("ç»µç¾Šçš„é™„èº«æ—¶é—´è€—å°½ï¼å¼€å§‹æŒç»­æ‰£è¡€");
             }
         }
 
-        // ³õÊ¼»¯¶¯»­×´Ì¬
-        InitializeAnimation();
+        // æ—¶é—´è€—å°½ï¼ŒæŒç»­æ‰£è¡€
+        if (isTimeExhausted)
+        {
+            // æ¯ç§’æ‰£15ç‚¹è¡€
+            float damagePerSecond = 15f;
+            float damageThisFrame = damagePerSecond * Time.deltaTime;
+            TakeDamage(damageThisFrame);
 
-        // È·±£Î»ÖÃÕıÈ·
-        ForceGroundPosition();
+            // æ·»åŠ è°ƒè¯•ä¿¡æ¯
+            if (showDebugInfo && Time.frameCount % 30 == 0)
+            {
+                Debug.Log($"ç»µç¾Šæ—¶é—´è€—å°½æŒç»­æ‰£è¡€ä¸­ï¼Œå½“å‰ç”Ÿå‘½å€¼: {currentHealth:F1}, æœ¬å¸§ä¼¤å®³: {damageThisFrame:F2}");
+            }
+        }
     }
 
-    void SetupCharacterController()
+    /// <summary>
+    /// å—åˆ°ä¼¤å®³
+    /// </summary>
+    /// <param name="damage">ä¼¤å®³å€¼</param>
+    public void TakeDamage(float damage)
     {
-        controller.height = 1.0f;
-        controller.radius = 0.3f;
-        controller.center = new Vector3(0, 0.5f, 0);
-        controller.stepOffset = 0.2f;
-        controller.slopeLimit = 45f;
-        controller.minMoveDistance = 0.001f;
-        controller.skinWidth = 0.01f;
+        if (currentHealth <= 0) return; // å¦‚æœå·²ç»æ­»äº¡ï¼Œä¸å†æ‰£è¡€
+
+        currentHealth -= damage;
+
+        // ç¡®ä¿ç”Ÿå‘½å€¼ä¸ä½äº0
+        if (currentHealth < 0) currentHealth = 0;
+
+        // æ£€æŸ¥æ˜¯å¦æ­»äº¡
+        if (currentHealth <= 0)
+        {
+            Die();
+        }
     }
 
-    void ValidateCharacterControllerSettings()
+    /// <summary>
+    /// æ­»äº¡
+    /// </summary>
+    private void Die()
     {
-        if (showDebugInfo)
+        Debug.Log($"{gameObject.name} æ­»äº¡ï¼å½“å‰ç”Ÿå‘½å€¼: {currentHealth}");
+
+        // æ’­æ”¾æ­»äº¡æ•ˆæœ
+        if (deathEffect != null)
         {
-            Debug.Log($"ÃàÑòCharacter ControllerÉèÖÃ:");
-            Debug.Log($"  Height: {controller.height}");
-            Debug.Log($"  Radius: {controller.radius}");
-            Debug.Log($"  Center: {controller.center}");
-            Debug.Log($"  StepOffset: {controller.stepOffset}");
-            Debug.Log($"  SkinWidth: {controller.skinWidth}");
+            Instantiate(deathEffect, transform.position, Quaternion.identity);
         }
 
-        if (controller.skinWidth < 0.01f)
+        if (deathSound != null)
         {
-            controller.skinWidth = 0.01f;
-            Debug.Log("µ÷ÕûCharacterControllerµÄskinWidthÎª0.01f");
+            AudioSource.PlayClipAtPoint(deathSound, transform.position);
         }
+
+        // å¦‚æœå½“å‰è¢«é™„èº«ï¼Œå¼ºåˆ¶ç©å®¶çµé­‚è„±ç¦»
+        if (isPossessed)
+        {
+            PlayerSoulController.Instance.ForceReleasePossession();
+
+            // å¦‚æœç©å®¶åœ¨åŠ¨ç‰©æ­»äº¡æ—¶æ²¡æœ‰è¶³å¤Ÿç”Ÿå‘½å€¼ï¼Œæ¸¸æˆç»“æŸ
+            if (PlayerSoulController.Instance.currentHealth <= 0)
+            {
+                StartCoroutine(DelayedGameOver(1f));
+            }
+        }
+
+        // é”€æ¯åŠ¨ç‰©
+        Destroy(gameObject);
     }
 
-    void InitializeAnimation()
+    private IEnumerator DelayedGameOver(float delay)
     {
-        if (animator == null)
-        {
-            Debug.LogError("ÃàÑò¿ØÖÆÆ÷ĞèÒªAnimator×é¼ş£¡");
-            return;
-        }
+        yield return new WaitForSeconds(delay);
 
-        animator.applyRootMotion = false;
-        animator.SetFloat(speedParam, 0f);
-        animator.SetBool(isGroundParam, true);
-
-        // ¼ì²é¶¯»­²ÎÊıÊÇ·ñ´æÔÚ
-        CheckAnimatorParameters();
+        // è°ƒç”¨ç©å®¶çµé­‚çš„æ¸¸æˆç»“æŸæ–¹æ³•
+        PlayerSoulController.Instance.OnSoulDissipate();
     }
 
-    void CheckAnimatorParameters()
+    /// <summary>
+    /// è¢«å‡€åŒ–è€…æ”»å‡»
+    /// </summary>
+    public void TakePurifierDamage(float damage)
     {
-        if (animator == null) return;
-
-        bool hasSpeedParam = false;
-        bool hasGroundParam = false;
-        bool hasJumpParam = false;
-
-        foreach (AnimatorControllerParameter param in animator.parameters)
-        {
-            if (param.name == speedParam) hasSpeedParam = true;
-            if (param.name == isGroundParam) hasGroundParam = true;
-            if (param.name == jumpParam) hasJumpParam = true;
-        }
-
-        if (showDebugInfo)
-        {
-            Debug.Log($"¶¯»­²ÎÊı¼ì²é:");
-            Debug.Log($"  {speedParam}: {hasSpeedParam}");
-            Debug.Log($"  {isGroundParam}: {hasGroundParam}");
-            Debug.Log($"  {jumpParam}: {hasJumpParam}");
-        }
+        TakeDamage(damage);
     }
 
-    void ForceGroundPosition()
-    {
-        RaycastHit hit;
-        float raycastDistance = 5f;
-
-        if (Physics.Raycast(transform.position + Vector3.up * 2f, Vector3.down, out hit, raycastDistance, groundLayer))
-        {
-            float targetY = hit.point.y + controller.height * 0.5f + controller.skinWidth;
-            transform.position = new Vector3(transform.position.x, targetY, transform.position.z);
-
-            if (showDebugInfo)
-                Debug.Log($"Ç¿ÖÆµ÷ÕûÃàÑòµ½µØÃæ: Y={targetY}");
-        }
-
-        verticalVelocity = -0.5f;
-    }
-
-    // ===== ÊµÏÖ IPossessable ½Ó¿Ú =====
-
+    // ===== å®ç° IPossessable æ¥å£ =====
     public void OnPossess()
     {
-        if (showDebugInfo)
-            Debug.Log($"ÃàÑò±»¸½Éí£¡Î»ÖÃ: Y={transform.position.y:F2}");
-
         isPossessed = true;
+        isAIControlled = false; // ç¦ç”¨AIæ§åˆ¶
 
-        // ½ûÓÃAI¿ØÖÆ
-        if (sheepAI != null)
+        // å¯åŠ¨é™„èº«è®¡æ—¶å™¨
+        isPossessionTimerActive = true;
+        isTimeExhausted = false;
+        possessionTimeRemaining = maxPossessionTime;
+
+        if (showDebugInfo)
         {
-            sheepAI.enableAI = false;
-            if (showDebugInfo) Debug.Log("½ûÓÃÃàÑòAI");
+            Debug.Log($"=== ç»µç¾Š({gameObject.name})è¢«é™„èº« ===");
+            Debug.Log($"- å½“å‰åŠ¨ç”»å‚æ•°: Speed={speedParam}, Grounded={isGroundParam}, Jump={jumpParam}");
+            Debug.Log($"- é™„èº«æ—¶é—´é‡ç½®ä¸º: {possessionTimeRemaining}s");
         }
 
-        if (controller != null && !controller.enabled)
+        // å¦‚æœå­˜åœ¨AIç»„ä»¶ï¼Œç¦ç”¨AI
+        if (sheepAI != null)
+        {
+            sheepAI.enabled = false;
+        }
+
+        // ç¡®ä¿æ§åˆ¶å™¨å¯ç”¨
+        if (controller != null)
         {
             controller.enabled = true;
         }
 
+        // é‡ç½®åŠ¨ç”»çŠ¶æ€
         if (animator != null)
         {
-            animator.applyRootMotion = false;
             animator.SetFloat(speedParam, 0f);
             animator.SetBool(isGroundParam, true);
+            animator.ResetTrigger(jumpParam);
         }
 
-        // ÖØÖÃ×´Ì¬
+        // é‡ç½®ç§»åŠ¨çŠ¶æ€
         moveDirection = Vector3.zero;
         currentSpeed = 0f;
-        targetSpeed = 0f;
-        isRunning = false;
+        verticalVelocity = 0f;
+        jumpTriggered = false;
         isJumping = false;
-        jumpCooldownTimer = 0f;
+        wasJumping = false;
+        lastJumpTime = 0f;
+
+        // é‡ç½®è·³è·ƒç¼“å†²ç³»ç»Ÿ
         coyoteTimeCounter = coyoteTime;
         jumpBufferTimer = 0f;
         jumpRequested = false;
+
+        // ç¡®ä¿åœ¨åœ°é¢
+        if (controller != null)
+        {
+            isGrounded = controller.isGrounded;
+        }
+
+        if (showDebugInfo) Debug.Log($"ç»µç¾Š({gameObject.name})å‡†å¤‡æ¥å—æ§åˆ¶");
     }
 
     public void OnRelease()
     {
         isPossessed = false;
+        isAIControlled = true; // å¯ç”¨AIæ§åˆ¶
 
-        // ÆôÓÃAI¿ØÖÆ£¨Èç¹ûÉèÖÃÁË£©
-        if (sheepAI != null && enableAIWhenNotPossessed)
-        {
-            sheepAI.enableAI = true;
-            if (showDebugInfo) Debug.Log("ÆôÓÃÃàÑòAI");
-        }
+        // åœæ­¢é™„èº«è®¡æ—¶å™¨
+        isPossessionTimerActive = false;
+        isTimeExhausted = false;
+        possessionTimeRemaining = maxPossessionTime;
 
         if (animator != null)
         {
             animator.SetFloat(speedParam, 0f);
             animator.SetBool(isGroundParam, true);
+            animator.ResetTrigger(jumpParam);
         }
 
-        // ÖØÖÃÒÆ¶¯
         moveDirection = Vector3.zero;
         currentSpeed = 0f;
-        targetSpeed = 0f;
-        verticalVelocity = -0.5f;
-        isRunning = false;
+        verticalVelocity = 0f;
+        jumpTriggered = false;
         isJumping = false;
-        jumpCooldownTimer = 0f;
+        wasJumping = false;
+
+        // é‡ç½®è·³è·ƒç¼“å†²ç³»ç»Ÿ
+        coyoteTimeCounter = coyoteTime;
         jumpBufferTimer = 0f;
         jumpRequested = false;
 
-        if (showDebugInfo)
-            Debug.Log("ÃàÑòÍÑÀë¸½Éí£¡");
+        // å¦‚æœå­˜åœ¨AIç»„ä»¶ï¼Œå¯ç”¨AI
+        if (sheepAI != null)
+        {
+            sheepAI.enabled = true;
+        }
+
+        if (showDebugInfo) Debug.Log($"ç»µç¾Š({gameObject.name})è„±ç¦»é™„èº«ï¼");
     }
 
     public string GetAbilityDescription()
@@ -274,36 +437,148 @@ public class SheepController : MonoBehaviour, IPossessable
 
     public void PossessedUpdate()
     {
-        if (!isPossessed || controller == null)
-            return;
-
-        // ¸üĞÂ¼ÆÊ±Æ÷
-        UpdateTimers();
-
-        // ¼ì²âÌøÔ¾ÊäÈë
-        CheckJumpInput();
+        if (!isPossessed) return;
 
         HandleMovement();
-        UpdateAnimations();
         CheckGroundStatus();
+        UpdateAnimations();
+        DebugAnimations();
+        CheckJumpState();
     }
-    // ===== ½Ó¿ÚÊµÏÖ½áÊø =====
+    // ===== æ¥å£å®ç°ç»“æŸ =====
 
-    void UpdateTimers()
+    void UpdateIdleBehavior()
     {
-        // ¸üĞÂÌøÔ¾ÀäÈ´¼ÆÊ±
-        if (jumpCooldownTimer > 0)
+        // éé™„èº«çŠ¶æ€ä¸‹çš„ç©ºé—²è¡Œä¸º
+        if (isAIControlled && sheepAI != null && sheepAI.enabled)
         {
-            jumpCooldownTimer -= Time.deltaTime;
+            // AIä¼šé€šè¿‡SheepAI.Update()è‡ªåŠ¨æ§åˆ¶
+            // ä½†æˆ‘ä»¬ä»ç„¶éœ€è¦å¤„ç†ä¸€äº›åŸºæœ¬é€»è¾‘
+            CheckGroundStatus();
+
+            // ç¡®ä¿åœ¨åœ°é¢ä¸”ä¸‹è½é€Ÿåº¦å°äº0ï¼Œé‡ç½®Yé€Ÿåº¦
+            if (controller != null)
+            {
+                isGrounded = controller.isGrounded;
+                if (isGrounded && verticalVelocity < 0)
+                {
+                    verticalVelocity = -2f;
+                }
+
+                // åº”ç”¨é‡åŠ›
+                if (!isGrounded)
+                {
+                    verticalVelocity += gravity * Time.deltaTime;
+                }
+
+                // åº”ç”¨å‚ç›´ç§»åŠ¨
+                controller.Move(new Vector3(0, verticalVelocity, 0) * Time.deltaTime);
+            }
+        }
+        else
+        {
+            if (animator != null)
+            {
+                if (animator.GetFloat(speedParam) > 0.1f)
+                {
+                    animator.SetFloat(speedParam, 0f);
+                }
+
+                if (!isGrounded && controller != null)
+                {
+                    isGrounded = controller.isGrounded;
+                    animator.SetBool(isGroundParam, isGrounded);
+                }
+            }
+        }
+    }
+
+    // æ–°å¢æ–¹æ³•ï¼šä¾›AIè°ƒç”¨ç§»åŠ¨
+    public void AIMove(Vector3 direction, bool isRunning = false)
+    {
+        if (controller == null || !isAIControlled)
+        {
+            if (showDebugInfo)
+                Debug.LogWarning($"AIMoveè°ƒç”¨å¤±è´¥: controller={controller != null}, isAIControlled={isAIControlled}");
+            return;
         }
 
-        // ¸üĞÂÌøÔ¾»º³å¼ÆÊ±
-        if (jumpBufferTimer > 0)
+        // æ£€æŸ¥æ˜¯å¦åœ¨åœ°é¢
+        isGrounded = controller.isGrounded;
+
+        // å¦‚æœåœ¨åœ°é¢ä¸”ä¸‹è½é€Ÿåº¦å°äº0ï¼Œé‡ç½®Yé€Ÿåº¦
+        if (isGrounded && verticalVelocity < 0)
         {
-            jumpBufferTimer -= Time.deltaTime;
+            verticalVelocity = -2f;
         }
 
-        // ¸üĞÂCoyote Time
+        // AIç§»åŠ¨æ—¶ï¼Œæ ¹æ®isRunningå‚æ•°å†³å®šé€Ÿåº¦
+        float targetSpeed = isRunning ? runSpeed : walkSpeed;
+        currentSpeed = Mathf.Lerp(currentSpeed, targetSpeed, Time.deltaTime * 5f);
+
+        // åº”ç”¨æ°´å¹³ç§»åŠ¨
+        if (direction.magnitude > 0.1f)
+        {
+            // è®¡ç®—ç§»åŠ¨å‘é‡
+            Vector3 move = direction.normalized * currentSpeed;
+            moveDirection.x = move.x;
+            moveDirection.z = move.z;
+
+            // æ—‹è½¬æ§åˆ¶å™¨å¯¹è±¡
+            if (direction != Vector3.zero)
+            {
+                Quaternion targetRotation = Quaternion.LookRotation(new Vector3(direction.x, 0, direction.z));
+                transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
+            }
+
+            // è®¾ç½®åŠ¨ç”»é€Ÿåº¦ - ç»µç¾Šçš„Speedå‚æ•°æ˜¯å½’ä¸€åŒ–çš„
+            if (animator != null)
+            {
+                float normalizedSpeed = Mathf.Clamp01(currentSpeed / runSpeed);
+                animator.SetFloat(speedParam, normalizedSpeed);
+            }
+
+            if (showDebugInfo && Time.frameCount % 60 == 0)
+            {
+                Debug.Log($"AIç§»åŠ¨: é€Ÿåº¦={currentSpeed:F1}, æ–¹å‘={direction}, ç§»åŠ¨å‘é‡={move}");
+            }
+        }
+        else
+        {
+            // æ²¡æœ‰æ–¹å‘ï¼Œåœæ­¢ç§»åŠ¨
+            currentSpeed = Mathf.Lerp(currentSpeed, 0f, Time.deltaTime * 10f);
+            moveDirection.x = 0;
+            moveDirection.z = 0;
+
+            if (animator != null)
+            {
+                float normalizedSpeed = Mathf.Clamp01(currentSpeed / runSpeed);
+                animator.SetFloat(speedParam, normalizedSpeed);
+            }
+        }
+
+        // åº”ç”¨é‡åŠ›
+        if (!isGrounded)
+        {
+            verticalVelocity += gravity * Time.deltaTime;
+        }
+
+        // åº”ç”¨æ‰€æœ‰ç§»åŠ¨
+        if (controller.enabled)
+        {
+            Vector3 totalMove = new Vector3(moveDirection.x, verticalVelocity, moveDirection.z) * Time.deltaTime;
+            controller.Move(totalMove);
+        }
+    }
+
+    void HandleMovement()
+    {
+        if (controller == null) return;
+
+        // æ£€æŸ¥æ˜¯å¦åœ¨åœ°é¢
+        isGrounded = controller.isGrounded;
+
+        // æ›´æ–°Coyote Time
         if (isGrounded && !isJumping)
         {
             coyoteTimeCounter = coyoteTime;
@@ -312,288 +587,484 @@ public class SheepController : MonoBehaviour, IPossessable
         {
             coyoteTimeCounter -= Time.deltaTime;
         }
-    }
 
-    void CheckJumpInput()
-    {
-        // ¼ì²âÌøÔ¾ÊäÈë£¬Ê¹ÓÃ»º³åÏµÍ³
-        if (Input.GetButtonDown("Jump"))
+        // å¦‚æœåœ¨åœ°é¢ä¸”ä¸‹è½é€Ÿåº¦å°äº0ï¼Œé‡ç½®Yé€Ÿåº¦
+        if (isGrounded && verticalVelocity < 0)
         {
-            jumpRequested = true;
-            jumpBufferTimer = jumpBufferTime; // ¿ªÊ¼»º³å¼ÆÊ±
-            if (showDebugInfo) Debug.Log("ÌøÔ¾ÊäÈë¼ì²âµ½£¬¿ªÊ¼»º³å");
+            verticalVelocity = -2f;
         }
-    }
 
-    void HandleMovement()
-    {
-        // »ñÈ¡ÊäÈë
+        // è·å–è¾“å…¥
         float horizontal = Input.GetAxis("Horizontal");
         float vertical = Input.GetAxis("Vertical");
-        bool runInput = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+        bool runInput = Input.GetKey(KeyCode.LeftShift);
 
-        // µØÃæ¼ì²â
-        groundCheckTimer -= Time.deltaTime;
-        if (groundCheckTimer <= 0)
-        {
-            CheckGroundStatus();
-            groundCheckTimer = 0.1f;
-        }
-
-        // ¼ÆËãÒÆ¶¯·½Ïò
+        // è®¡ç®—ç§»åŠ¨æ–¹å‘
         Vector3 move = new Vector3(horizontal, 0, vertical);
 
-        // »ùÓÚÏà»ú·½Ïò×ª»»
-        if (move.magnitude > 0.1f)
+        // è·å–ç›¸æœºæ–¹å‘
+        Camera mainCamera = Camera.main;
+        if (mainCamera != null)
         {
-            Camera mainCamera = Camera.main;
-            if (mainCamera != null)
+            Vector3 cameraForward = mainCamera.transform.forward;
+            Vector3 cameraRight = mainCamera.transform.right;
+
+            cameraForward.y = 0;
+            cameraRight.y = 0;
+
+            cameraForward.Normalize();
+            cameraRight.Normalize();
+
+            move = cameraForward * vertical + cameraRight * horizontal;
+        }
+
+        // åˆ¤æ–­æ˜¯å¦æœ‰ç§»åŠ¨è¾“å…¥
+        bool isMoving = move.magnitude > 0.1f;
+
+        // è®¡ç®—é€Ÿåº¦ - è·³è·ƒæœŸé—´ä¿æŒå½“å‰é€Ÿåº¦
+        if (!isJumping)
+        {
+            if (isMoving)
             {
-                Vector3 cameraForward = mainCamera.transform.forward;
-                Vector3 cameraRight = mainCamera.transform.right;
+                float targetSpeed = runInput ? runSpeed : walkSpeed;
+                currentSpeed = Mathf.Lerp(currentSpeed, targetSpeed, Time.deltaTime * 5f);
 
-                cameraForward.y = 0;
-                cameraRight.y = 0;
-                cameraForward.Normalize();
-                cameraRight.Normalize();
+                move.Normalize();
+                moveDirection.x = move.x * currentSpeed;
+                moveDirection.z = move.z * currentSpeed;
 
-                move = cameraForward * vertical + cameraRight * horizontal;
+                // æ—‹è½¬æ§åˆ¶å™¨å¯¹è±¡
+                if (move != Vector3.zero)
+                {
+                    Quaternion targetRotation = Quaternion.LookRotation(new Vector3(move.x, 0, move.z));
+                    transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
+                }
             }
-
-            // È·¶¨ËÙ¶ÈºÍÊÇ·ñÅÜ²½ - ĞŞ¸´ÅÜ²½¼ì²âÂß¼­
-            isRunning = runInput && move.magnitude > 0.1f; // ½µµÍãĞÖµ
-            targetSpeed = isRunning ? runSpeed : walkSpeed;
-
-            // Ó¦ÓÃÒÆ¶¯
-            controller.Move(move.normalized * targetSpeed * Time.deltaTime);
-
-            // Ğı×ª³¯ÏòÒÆ¶¯·½Ïò
-            if (move != Vector3.zero)
+            else
             {
-                Quaternion targetRotation = Quaternion.LookRotation(move);
-                transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
+                currentSpeed = Mathf.Lerp(currentSpeed, 0f, Time.deltaTime * 10f);
+                moveDirection.x = 0;
+                moveDirection.z = 0;
             }
         }
         else
         {
-            // Ã»ÓĞÊäÈëÊ±¼õËÙ
-            isRunning = false;
-            targetSpeed = 0f;
+            // è·³è·ƒæœŸé—´ä¿æŒæ°´å¹³ç§»åŠ¨åŠ¨é‡
+            moveDirection.x = moveDirection.x * 0.99f; // è½»å¾®å‡é€Ÿ
+            moveDirection.z = moveDirection.z * 0.99f;
         }
 
-        // Æ½»¬ËÙ¶È±ä»¯£¨ÓÃÓÚ¶¯»­£©
-        currentSpeed = Mathf.Lerp(currentSpeed, targetSpeed, Time.deltaTime * 5f);
+        // è·³è·ƒå¤„ç† - ä½¿ç”¨ç¼“å†²ç³»ç»Ÿ
+        if (Input.GetButtonDown("Jump"))
+        {
+            jumpRequested = true;
+            jumpBufferTimer = jumpBufferTime; // å¼€å§‹ç¼“å†²è®¡æ—¶
+        }
 
-        // ÌøÔ¾´¦Àí - Ê¹ÓÃ»º³åÏµÍ³
-        if (jumpRequested && jumpCooldownTimer <= 0 && CanJump())
+        // æ£€æŸ¥æ˜¯å¦å¯ä»¥è·³è·ƒ
+        if (jumpRequested && (isGrounded || coyoteTimeCounter > 0) && jumpBufferTimer > 0)
         {
             PerformJump();
         }
 
-        // ÖØÁ¦´¦Àí
-        ApplyGravity();
-    }
+        // æ›´æ–°è·³è·ƒç¼“å†²è®¡æ—¶
+        if (jumpBufferTimer > 0)
+        {
+            jumpBufferTimer -= Time.deltaTime;
+        }
 
-    bool CanJump()
-    {
-        // ¼ì²éÊÇ·ñ¿ÉÒÔÌøÔ¾£ºÔÚµØÃæ¡¢Coyote TimeÄÚ»òÌøÔ¾»º³åÆÚÄÚ
-        return (isGrounded || coyoteTimeCounter > 0) && jumpBufferTimer > 0;
+        // åº”ç”¨é‡åŠ›
+        if (!isGrounded)
+        {
+            verticalVelocity += gravity * Time.deltaTime;
+
+            // é¢å¤–çš„å‘ä¸‹åŠ›
+            if (verticalVelocity < 0)
+            {
+                verticalVelocity += extraGravity * Time.deltaTime;
+            }
+        }
+
+        // åº”ç”¨ç§»åŠ¨
+        if (controller.enabled)
+        {
+            Vector3 totalMove = new Vector3(moveDirection.x, verticalVelocity, moveDirection.z) * Time.deltaTime;
+            controller.Move(totalMove);
+        }
     }
 
     void PerformJump()
     {
         verticalVelocity = Mathf.Sqrt(jumpForce * -2f * gravity);
         isJumping = true;
-        jumpCooldownTimer = jumpCooldown;
+        wasJumping = true;
+        lastJumpTime = Time.time;
         coyoteTimeCounter = 0f;
         jumpBufferTimer = 0f;
         jumpRequested = false;
 
-        // ´¥·¢ÌøÔ¾¶¯»­
+        // è§¦å‘è·³è·ƒåŠ¨ç”» - ä½¿ç”¨å¤šç§æ–¹æ³•ç¡®ä¿è§¦å‘
         if (animator != null)
         {
-            // ¼ì²éÌøÔ¾²ÎÊıÊÇ·ñ´æÔÚ
-            bool hasJumpParam = false;
-            foreach (AnimatorControllerParameter param in animator.parameters)
+            // æ–¹æ³•1: ä½¿ç”¨è§¦å‘å™¨
+            animator.ResetTrigger(jumpParam);
+            animator.SetTrigger(jumpParam);
+
+            // æ–¹æ³•2: å¼ºåˆ¶åˆ‡æ¢çŠ¶æ€ï¼ˆå¦‚æœè§¦å‘å™¨ä¸èµ·ä½œç”¨ï¼‰
+            if (forceJumpTransition)
             {
-                if (param.name == jumpParam)
-                {
-                    hasJumpParam = true;
-                    break;
-                }
+                StartCoroutine(ForceJumpState());
             }
 
-            if (hasJumpParam)
+            if (showDebugInfo)
             {
-                animator.SetTrigger(jumpParam);
-                if (showDebugInfo) Debug.Log($"´¥·¢ÌøÔ¾¶¯»­: {jumpParam}");
+                Debug.Log($"è§¦å‘è·³è·ƒåŠ¨ç”»ï¼Œè§¦å‘å™¨: {jumpParam}");
+                Debug.Log($"è·³è·ƒé€Ÿåº¦: {verticalVelocity:F2}");
+                Debug.Log($"å½“å‰çŠ¶æ€: {GetCurrentStateName()}");
+            }
+        }
+    }
+
+    // å¼ºåˆ¶åˆ‡æ¢è·³è·ƒçŠ¶æ€çš„åç¨‹
+    IEnumerator ForceJumpState()
+    {
+        if (animator == null) yield break;
+
+        // ç­‰å¾…ä¸€å¸§ç¡®ä¿è§¦å‘å™¨è¢«å¤„ç†
+        yield return null;
+
+        // æ£€æŸ¥å½“å‰çŠ¶æ€
+        AnimatorStateInfo stateInfo = animator.GetCurrentAnimatorStateInfo(0);
+        if (!stateInfo.IsName("Jump"))
+        {
+            Debug.LogWarning("è§¦å‘å™¨æœªåˆ‡æ¢åˆ°JumpçŠ¶æ€ï¼Œå°è¯•å¼ºåˆ¶åˆ‡æ¢...");
+
+            // æ–¹æ³•1: ç›´æ¥æ’­æ”¾JumpçŠ¶æ€
+            animator.Play("Jump", 0, 0f);
+
+            // ç­‰å¾…ä¸€å¸§æ£€æŸ¥ç»“æœ
+            yield return null;
+
+            stateInfo = animator.GetCurrentAnimatorStateInfo(0);
+            if (stateInfo.IsName("Jump"))
+            {
+                Debug.Log("âœ“ æˆåŠŸå¼ºåˆ¶åˆ‡æ¢åˆ°JumpçŠ¶æ€");
             }
             else
             {
-                // Èç¹ûÃ»ÓĞÌøÔ¾²ÎÊı£¬Í¨¹ıSpeed²ÎÊıÄ£Äâ
-                animator.SetFloat(speedParam, 1.0f);
-                if (showDebugInfo) Debug.Log("Ã»ÓĞÌøÔ¾²ÎÊı£¬Ê¹ÓÃSpeed²ÎÊıÄ£ÄâÌøÔ¾");
+                Debug.LogError("âœ— å¼ºåˆ¶åˆ‡æ¢å¤±è´¥ï¼Œå½“å‰çŠ¶æ€: " + GetCurrentStateName());
+
+                // æ–¹æ³•2: å°è¯•å…¶ä»–å¯èƒ½çš„çŠ¶æ€å
+                string[] possibleJumpStateNames = { "Jump", "JUMP", "jump", "Jumping", "JUMPING", "jumping" };
+                foreach (string stateName in possibleJumpStateNames)
+                {
+                    if (animator.HasState(0, Animator.StringToHash("Base Layer." + stateName)))
+                    {
+                        animator.Play(stateName, 0, 0f);
+                        Debug.Log($"å°è¯•åˆ‡æ¢åˆ°çŠ¶æ€: {stateName}");
+                        break;
+                    }
+                }
             }
         }
-
-        if (showDebugInfo)
-            Debug.Log($"ÃàÑòÌøÔ¾£¡´¹Ö±ËÙ¶È: {verticalVelocity:F2}, »º³åÊ±¼ä: {jumpBufferTimer:F2}");
-    }
-
-    void ApplyGravity()
-    {
-        if (!isGrounded)
-        {
-            // ÔÚ¿ÕÖĞÊ±Ó¦ÓÃÖØÁ¦
-            verticalVelocity += gravity * Time.deltaTime;
-
-            // ¶îÍâµÄÏòÏÂÁ¦
-            if (verticalVelocity < 0)
-            {
-                verticalVelocity += extraGravity * Time.deltaTime;
-            }
-        }
-        else
-        {
-            // ÔÚµØÃæÊ±£¬Ê©¼ÓÒ»¸öĞ¡µÄÏòÏÂÁ¦±£³ÖµØÃæ½Ó´¥
-            verticalVelocity = Mathf.Max(verticalVelocity, -0.5f);
-
-            // Èç¹ûÔÚµØÃæ£¬ÖØÖÃÌøÔ¾×´Ì¬
-            if (isJumping && verticalVelocity <= 0)
-            {
-                isJumping = false;
-            }
-        }
-
-        // Ó¦ÓÃ´¹Ö±ÒÆ¶¯
-        Vector3 verticalMove = new Vector3(0, verticalVelocity, 0) * Time.deltaTime;
-        controller.Move(verticalMove);
     }
 
     void UpdateAnimations()
     {
-        if (animator == null)
-            return;
+        if (animator == null) return;
 
-        // ¸üĞÂËÙ¶È²ÎÊı - ĞŞ¸´ÅÜ²½¶¯»­´¥·¢Âß¼­
-        float animSpeedValue = 0f;
-
-        if (currentSpeed > 0)
+        // è®¡ç®—å½’ä¸€åŒ–é€Ÿåº¦ - è·³è·ƒæœŸé—´ä¸æ›´æ–°é€Ÿåº¦å‚æ•°
+        if (!isJumping)
         {
-            if (isRunning && currentSpeed >= walkSpeed * 1.1f) // ½µµÍÅÜ²½´¥·¢ãĞÖµ
-            {
-                // ÅÜ²½×´Ì¬£ºÖ±½ÓÓ³Éäµ½0.8-1.0
-                animSpeedValue = Mathf.Clamp(currentSpeed / runSpeed, 0.8f, 1.0f);
-
-                if (showDebugInfo && Time.frameCount % 120 == 0)
-                    Debug.Log($"ÅÜ²½×´Ì¬: ËÙ¶È={currentSpeed:F2}, ¶¯»­Öµ={animSpeedValue:F2}, isRunning={isRunning}");
-            }
-            else
-            {
-                // ĞĞ×ß×´Ì¬£ºÓ³Éäµ½0.1-0.7
-                animSpeedValue = Mathf.Clamp(currentSpeed / walkSpeed, 0.1f, 0.7f);
-            }
+            float normalizedSpeed = Mathf.Clamp01(currentSpeed / runSpeed);
+            animator.SetFloat(speedParam, normalizedSpeed);
+        }
+        else
+        {
+            // è·³è·ƒæœŸé—´å°†é€Ÿåº¦å‚æ•°è®¾ä¸º0ï¼Œé¿å…é€Ÿåº¦å‚æ•°å½±å“è·³è·ƒçŠ¶æ€
+            animator.SetFloat(speedParam, 0f);
         }
 
-        animator.SetFloat(speedParam, animSpeedValue);
-
-        // ¸üĞÂµØÃæ×´Ì¬
+        // è®¾ç½®åœ°é¢å‚æ•°
         animator.SetBool(isGroundParam, isGrounded);
 
-        // µ÷ÊÔĞÅÏ¢
-        if (showDebugInfo && Time.frameCount % 120 == 0)
+        // ç¡®ä¿è·³è·ƒè§¦å‘å™¨è¢«é‡ç½®ï¼ˆåœ¨åœ°é¢æ—¶ï¼‰
+        if (isGrounded && wasJumping)
         {
-            Debug.Log($"ÃàÑò¶¯»­×´Ì¬: Speed={animSpeedValue:F2}, isGrounded={isGrounded}, " +
-                     $"isRunning={isRunning}, CoyoteTime={coyoteTimeCounter:F2}, " +
-                     $"JumpBuff={jumpBufferTimer:F2}, JumpReq={jumpRequested}");
+            animator.ResetTrigger(jumpParam);
+            wasJumping = false;
+
+            // å¼ºåˆ¶å›åˆ°IdleçŠ¶æ€ï¼Œé˜²æ­¢å¡åœ¨JumpçŠ¶æ€
+            if (isJumping)
+            {
+                animator.Play("Idle", 0, 0f);
+            }
+        }
+    }
+
+    void CheckJumpState()
+    {
+        if (isJumping && isGrounded)
+        {
+            isJumping = false;
+            if (showDebugInfo) Debug.Log("è·³è·ƒç»“æŸï¼Œå›åˆ°åœ°é¢");
         }
     }
 
     void CheckGroundStatus()
     {
-        if (controller == null)
-            return;
+        if (controller == null) return;
 
-        // ·½·¨1: Ê¹ÓÃCharacterControllerµÄisGrounded
-        bool controllerGrounded = controller.isGrounded;
+        bool wasGroundedBefore = isGrounded;
+        isGrounded = controller.isGrounded;
 
-        // ·½·¨2: Ê¹ÓÃÉäÏß¼ì²â
-        RaycastHit hit;
-        Vector3 rayStart = transform.position + controller.center;
-        float rayLength = (controller.height * 0.5f) + groundCheckDistance;
-
-        bool raycastGrounded = Physics.Raycast(
-            rayStart,
-            Vector3.down,
-            out hit,
-            rayLength,
-            groundLayer
-        );
-
-        // ·½·¨3: Ê¹ÓÃÇòÌå¼ì²â£¨¸ü¿É¿¿£©
-        bool sphereCastGrounded = Physics.SphereCast(
-            transform.position + Vector3.up * 0.2f,
-            controller.radius * 0.8f, // ÉÔÎ¢Ğ¡Ò»µã
-            Vector3.down,
-            out hit,
-            groundCheckDistance + 0.1f, // Ôö¼Ó¼ì²â¾àÀë
-            groundLayer
-        );
-
-        // ×ÛºÏÅĞ¶Ï
-        bool newGrounded = controllerGrounded || raycastGrounded || sphereCastGrounded;
-
-        // ´¦ÀíÂäµØÂß¼­
-        if (newGrounded && !isGrounded)
+        // é¢å¤–çš„å°„çº¿æ£€æµ‹
+        if (!isGrounded)
         {
-            isJumping = false;
-            coyoteTimeCounter = coyoteTime;
-            if (showDebugInfo) Debug.Log("ÃàÑòÂäµØ");
-        }
-
-        // ´¦ÀíÀëµØÂß¼­
-        if (!newGrounded && isGrounded)
-        {
-            coyoteTimeCounter = coyoteTime;
-            if (showDebugInfo) Debug.Log("ÃàÑòÀëµØ£¬¿ªÊ¼Coyote Time");
-        }
-
-        isGrounded = newGrounded;
-
-        // Èç¹û¼ì²âµ½µØÃæ£¬È·±£ÕıÈ·½Ó´¥
-        if (isGrounded && hit.collider != null)
-        {
-            float groundHeight = hit.point.y;
-            float currentBottom = transform.position.y - controller.height * 0.5f;
-
-            if (currentBottom > groundHeight + 0.05f)
+            RaycastHit hit;
+            Vector3 rayStart = transform.position + Vector3.up * 0.1f;
+            if (Physics.Raycast(rayStart, Vector3.down, out hit, groundCheckDistance + 0.1f, groundLayer))
             {
-                float adjustY = groundHeight + controller.height * 0.5f + controller.skinWidth;
-                transform.position = new Vector3(transform.position.x, adjustY, transform.position.z);
+                isGrounded = true;
             }
+        }
+
+        // çŠ¶æ€å˜åŒ–æ—¶çš„å¤„ç†
+        if (wasGroundedBefore != isGrounded)
+        {
+            if (isGrounded && isJumping)
+            {
+                isJumping = false;
+                if (showDebugInfo) Debug.Log("è·³è·ƒç»“æŸï¼Œå›åˆ°åœ°é¢");
+            }
+        }
+    }
+
+    void DebugAnimations()
+    {
+        if (!logAnimationState || animator == null) return;
+
+        if (Time.frameCount % 30 == 0 || showRealTimeState) // æ¯30å¸§è¾“å‡ºä¸€æ¬¡ï¼Œæˆ–å®æ—¶è¾“å‡º
+        {
+            float speedValue = animator.GetFloat(speedParam);
+            bool groundedValue = animator.GetBool(isGroundParam);
+            string currentState = GetCurrentStateName();
+
+            Debug.Log($"åŠ¨ç”»çŠ¶æ€: {currentState}, Speed={speedValue:F2}, Grounded={groundedValue}, Jumping={isJumping}, Triggered={jumpTriggered}");
+        }
+    }
+
+    // ===== ä»¥ä¸‹æ˜¯è¾…åŠ©æ–¹æ³• =====
+
+    string GetCurrentStateName()
+    {
+        if (animator == null) return "No Animator";
+
+        AnimatorStateInfo stateInfo = animator.GetCurrentAnimatorStateInfo(0);
+
+        if (stateInfo.IsName("Idle")) return "Idle";
+        if (stateInfo.IsName("Walk")) return "Walk";
+        if (stateInfo.IsName("Run")) return "Run";
+        if (stateInfo.IsName("Jump")) return "Jump";
+
+        // å°è¯•é€šè¿‡å“ˆå¸Œå€¼åˆ¤æ–­
+        if (stateInfo.fullPathHash == Animator.StringToHash("Base Layer.Idle")) return "Idle";
+        if (stateInfo.fullPathHash == Animator.StringToHash("Base Layer.Walk")) return "Walk";
+        if (stateInfo.fullPathHash == Animator.StringToHash("Base Layer.Run")) return "Run";
+        if (stateInfo.fullPathHash == Animator.StringToHash("Base Layer.Jump")) return "Jump";
+
+        return $"Unknown ({stateInfo.fullPathHash})";
+    }
+
+    void AutoFixParameterNames()
+    {
+        if (animator == null) return;
+
+        Debug.Log("=== è‡ªåŠ¨æ£€æŸ¥Animatorå‚æ•° ===");
+
+        // æ£€æŸ¥æ‰€æœ‰å‚æ•°
+        foreach (AnimatorControllerParameter param in animator.parameters)
+        {
+            Debug.Log($"æ‰¾åˆ°å‚æ•°: {param.name} ({param.type})");
+        }
+
+        // æ£€æŸ¥å¹¶ä¿®å¤å‚æ•°å
+        CheckAndFixParameter(speedParam, "Speed", "speed", "MoveSpeed");
+        CheckAndFixParameter(isGroundParam, "isGround", "IsGrounded", "Grounded", "IsGround");
+        CheckAndFixParameter(jumpParam, "Jump", "jump", "JumpTrigger");
+
+        Debug.Log($"æœ€ç»ˆä½¿ç”¨çš„å‚æ•°: Speed={speedParam}, Grounded={isGroundParam}, Jump={jumpParam}");
+    }
+
+    void CheckAndFixParameter(string currentParam, params string[] possibleNames)
+    {
+        if (HasParameter(currentParam)) return;
+
+        foreach (string name in possibleNames)
+        {
+            if (HasParameter(name))
+            {
+                Debug.Log($"å‚æ•° '{currentParam}' ä¸å­˜åœ¨ï¼Œè‡ªåŠ¨æ”¹ä¸º '{name}'");
+
+                // æ ¹æ®å‚æ•°ç±»å‹è®¾ç½®æ­£ç¡®çš„å­—æ®µ
+                if (possibleNames[0].Contains("Speed"))
+                    speedParam = name;
+                else if (possibleNames[0].Contains("Ground"))
+                    isGroundParam = name;
+                else if (possibleNames[0].Contains("Jump"))
+                    jumpParam = name;
+
+                return;
+            }
+        }
+
+        Debug.LogWarning($"æœªæ‰¾åˆ°å‚æ•° '{currentParam}' çš„ä»»ä½•å˜ä½“ï¼");
+    }
+
+    bool HasParameter(string paramName)
+    {
+        if (animator == null) return false;
+
+        foreach (AnimatorControllerParameter param in animator.parameters)
+        {
+            if (param.name == paramName)
+                return true;
+        }
+        return false;
+    }
+
+    void FixModelRotation()
+    {
+        if (sheepModel == null) return;
+
+        Vector3 modelEuler = sheepModel.localRotation.eulerAngles;
+        if (Mathf.Abs(modelEuler.x + 90) < 1f || Mathf.Abs(modelEuler.x - 270) < 1f)
+        {
+            if (showDebugInfo) Debug.Log($"æ£€æµ‹åˆ°æ¨¡å‹æ—‹è½¬é—®é¢˜: {modelEuler}");
+
+            Quaternion fixedRotation = Quaternion.Euler(0, modelEuler.y, modelEuler.z);
+            sheepModel.localRotation = fixedRotation;
         }
     }
 
     void OnDrawGizmosSelected()
     {
-        if (!showDebugInfo || controller == null)
-            return;
+        if (!drawDebugGizmos) return;
 
-        // µØÃæ¼ì²âÏß
+        // ç»˜åˆ¶æ§åˆ¶å™¨ä½ç½®
+        Gizmos.color = Color.green;
+        Gizmos.DrawWireSphere(transform.position, 0.5f);
+
+        // ç»˜åˆ¶åœ°é¢æ£€æµ‹çº¿
         Gizmos.color = isGrounded ? Color.green : Color.red;
-        Vector3 rayStart = transform.position + controller.center;
-        float rayLength = (controller.height * 0.5f) + groundCheckDistance;
-        Gizmos.DrawLine(rayStart, rayStart + Vector3.down * rayLength);
+        Vector3 rayStart = transform.position + Vector3.up * 0.1f;
+        Gizmos.DrawLine(rayStart, rayStart + Vector3.down * (groundCheckDistance + 0.1f));
 
-        // Coyote TimeÖ¸Ê¾Æ÷
+        // ç»˜åˆ¶ç§»åŠ¨æ–¹å‘
+        if (Application.isPlaying)
+        {
+            Gizmos.color = Color.blue;
+            Vector3 horizontalMove = new Vector3(moveDirection.x, 0, moveDirection.z);
+            if (horizontalMove.magnitude > 0.1f)
+            {
+                Gizmos.DrawLine(transform.position, transform.position + horizontalMove.normalized * 2f);
+            }
+        }
+
+        // ç»˜åˆ¶Coyote TimeæŒ‡ç¤ºå™¨
         if (coyoteTimeCounter > 0 && !isGrounded)
         {
             Gizmos.color = Color.yellow;
             Gizmos.DrawWireSphere(transform.position, 0.5f);
         }
+    }
 
-        // CharacterController·¶Î§
-        Gizmos.color = Color.cyan;
-        Gizmos.DrawWireSphere(rayStart, controller.radius);
+    // ===== è°ƒè¯•æ–¹æ³• =====
+    [ContextMenu("æµ‹è¯•ï¼šç«‹å³æ—¶é—´è€—å°½")]
+    public void TestTimeExhausted()
+    {
+        possessionTimeRemaining = 0.1f; // è®¾ç½®å¾ˆå°‘çš„æ—¶é—´
+        Debug.Log("æµ‹è¯•ï¼šç»µç¾Šçš„é™„èº«æ—¶é—´è®¾ç½®ä¸º0.1ç§’");
+    }
+
+    [ContextMenu("æ£€æŸ¥å½“å‰çŠ¶æ€")]
+    public void ShowCurrentStateDetails()
+    {
+        if (animator == null)
+        {
+            Debug.LogError("æ²¡æœ‰Animatorç»„ä»¶ï¼");
+            return;
+        }
+
+        AnimatorStateInfo stateInfo = animator.GetCurrentAnimatorStateInfo(0);
+
+        Debug.Log("=== å½“å‰çŠ¶æ€è¯¦æƒ… ===");
+        Debug.Log($"çŠ¶æ€åç§°: {GetCurrentStateName()}");
+        Debug.Log($"çŠ¶æ€å“ˆå¸Œ: {stateInfo.fullPathHash}");
+        Debug.Log($"çŠ¶æ€é•¿åº¦: {stateInfo.length:F2}ç§’");
+        Debug.Log($"æ ‡å‡†åŒ–æ—¶é—´: {stateInfo.normalizedTime:F2}");
+        Debug.Log($"æ˜¯å¦å¾ªç¯: {stateInfo.loop}");
+        Debug.Log($"é€Ÿåº¦å€æ•°: {stateInfo.speed}");
+        Debug.Log($"æ˜¯å¦åœ¨è¿‡æ¸¡: {animator.IsInTransition(0)}");
+
+        if (animator.IsInTransition(0))
+        {
+            AnimatorTransitionInfo transInfo = animator.GetAnimatorTransitionInfo(0);
+            Debug.Log($"è¿‡æ¸¡æŒç»­æ—¶é—´: {transInfo.duration:F2}");
+            Debug.Log($"è¿‡æ¸¡æ ‡å‡†åŒ–æ—¶é—´: {transInfo.normalizedTime:F2}");
+        }
+    }
+
+    // å…¶ä»–è°ƒè¯•æ–¹æ³•...
+    [ContextMenu("æµ‹è¯•åŠ¨ç”»çŠ¶æ€")]
+    public void TestAnimationStates()
+    {
+        if (animator == null)
+        {
+            Debug.LogError("æ²¡æœ‰Animatorç»„ä»¶ï¼");
+            return;
+        }
+
+        StartCoroutine(TestAnimations());
+    }
+
+    IEnumerator TestAnimations()
+    {
+        Debug.Log("=== å¼€å§‹æµ‹è¯•åŠ¨ç”»çŠ¶æ€ ===");
+
+        // æµ‹è¯•Idle
+        Debug.Log("1. æµ‹è¯•IdleçŠ¶æ€");
+        animator.SetFloat(speedParam, 0f);
+        animator.SetBool(isGroundParam, true);
+        yield return new WaitForSeconds(1f);
+
+        // æµ‹è¯•Walk
+        Debug.Log("2. æµ‹è¯•WalkçŠ¶æ€");
+        animator.SetFloat(speedParam, 0.3f);
+        yield return new WaitForSeconds(1f);
+
+        // æµ‹è¯•Run
+        Debug.Log("3. æµ‹è¯•RunçŠ¶æ€");
+        animator.SetFloat(speedParam, 0.8f);
+        yield return new WaitForSeconds(1f);
+
+        // æµ‹è¯•Jump
+        Debug.Log("4. æµ‹è¯•JumpçŠ¶æ€ - ä½¿ç”¨è§¦å‘å™¨");
+        animator.ResetTrigger(jumpParam);
+        animator.SetTrigger(jumpParam);
+        animator.SetBool(isGroundParam, false);
+
+        // ç­‰å¾…å¹¶æ£€æŸ¥çŠ¶æ€
+        yield return new WaitForSeconds(0.1f);
+        Debug.Log($"è·³è·ƒåçŠ¶æ€: {GetCurrentStateName()}");
+
+        yield return new WaitForSeconds(0.7f);
+
+        // å›åˆ°Idle
+        Debug.Log("5. å›åˆ°IdleçŠ¶æ€");
+        animator.SetFloat(speedParam, 0f);
+        animator.SetBool(isGroundParam, true);
+
+        Debug.Log("=== æµ‹è¯•å®Œæˆ ===");
     }
 }

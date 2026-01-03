@@ -262,6 +262,22 @@ public class UIManager : MonoBehaviour
             return;
         }
 
+        // 尝试获取绵羊控制器
+        SheepController sheep = animal.GetComponent<SheepController>();
+        if (sheep != null)
+        {
+            UpdateSheepUI(sheep);
+            return;
+        }
+
+        // 尝试获取鸟控制器
+        BirdController bird = animal.GetComponent<BirdController>();
+        if (bird != null)
+        {
+            UpdateBirdUI(bird);
+            return;
+        }
+
         // 如果没有找到支持的动物控制器
         if (showDebugLogs) Debug.LogWarning($"UIManager: 不支持的对象类型: {animal.name}");
     }
@@ -389,6 +405,132 @@ public class UIManager : MonoBehaviour
         if (showDebugLogs && Time.frameCount % 120 == 0)
         {
             Debug.Log($"UIManager: 狐狸状态 - 生命: {fox.currentHealth:F0}/{fox.maxHealth}, 时间: {fox.possessionTimeRemaining:F1}s");
+        }
+    }
+
+    /// <summary>
+    /// 更新绵羊UI
+    /// </summary>
+    private void UpdateSheepUI(SheepController sheep)
+    {
+        // 更新动物名称
+        if (animalNameText != null)
+        {
+            animalNameText.text = "绵羊";
+        }
+
+        // 更新生命值
+        if (animalHealthSlider != null)
+        {
+            float healthPercentage = Mathf.Clamp01(sheep.currentHealth / sheep.maxHealth);
+            animalHealthSlider.value = healthPercentage;
+
+            // 颜色渐变（可选）：生命值低于30%时变红
+            if (healthPercentage <= 0.3f)
+            {
+                animalHealthSlider.fillRect.GetComponent<Image>().color = Color.red;
+            }
+            else
+            {
+                animalHealthSlider.fillRect.GetComponent<Image>().color = Color.green;
+            }
+        }
+
+        if (animalHealthText != null)
+        {
+            animalHealthText.text = $"生命值: {Mathf.Ceil(sheep.currentHealth)}/{sheep.maxHealth}";
+        }
+
+        // 更新时间
+        if (animalTimeSlider != null)
+        {
+            float timePercentage = Mathf.Clamp01(sheep.possessionTimeRemaining / sheep.maxPossessionTime);
+            animalTimeSlider.value = timePercentage;
+
+            // 颜色渐变（可选）：时间低于20%时变黄
+            if (timePercentage <= 0.2f)
+            {
+                animalTimeSlider.fillRect.GetComponent<Image>().color = Color.yellow;
+            }
+            else
+            {
+                animalTimeSlider.fillRect.GetComponent<Image>().color = Color.blue;
+            }
+        }
+
+        if (animalTimeText != null)
+        {
+            int remainingSeconds = Mathf.CeilToInt(sheep.possessionTimeRemaining);
+            animalTimeText.text = $"附身时间: {remainingSeconds}秒";
+        }
+
+        // 调试信息
+        if (showDebugLogs && Time.frameCount % 120 == 0)
+        {
+            Debug.Log($"UIManager: 绵羊状态 - 生命: {sheep.currentHealth:F0}/{sheep.maxHealth}, 时间: {sheep.possessionTimeRemaining:F1}s");
+        }
+    }
+
+    /// <summary>
+    /// 更新鸟UI
+    /// </summary>
+    private void UpdateBirdUI(BirdController bird)
+    {
+        // 更新动物名称
+        if (animalNameText != null)
+        {
+            animalNameText.text = "鸟";
+        }
+
+        // 更新生命值
+        if (animalHealthSlider != null)
+        {
+            float healthPercentage = Mathf.Clamp01(bird.currentHealth / bird.maxHealth);
+            animalHealthSlider.value = healthPercentage;
+
+            // 颜色渐变（可选）：生命值低于30%时变红
+            if (healthPercentage <= 0.3f)
+            {
+                animalHealthSlider.fillRect.GetComponent<Image>().color = Color.red;
+            }
+            else
+            {
+                animalHealthSlider.fillRect.GetComponent<Image>().color = Color.green;
+            }
+        }
+
+        if (animalHealthText != null)
+        {
+            animalHealthText.text = $"生命值: {Mathf.Ceil(bird.currentHealth)}/{bird.maxHealth}";
+        }
+
+        // 更新时间
+        if (animalTimeSlider != null)
+        {
+            float timePercentage = Mathf.Clamp01(bird.possessionTimeRemaining / bird.maxPossessionTime);
+            animalTimeSlider.value = timePercentage;
+
+            // 颜色渐变（可选）：时间低于20%时变黄
+            if (timePercentage <= 0.2f)
+            {
+                animalTimeSlider.fillRect.GetComponent<Image>().color = Color.yellow;
+            }
+            else
+            {
+                animalTimeSlider.fillRect.GetComponent<Image>().color = Color.blue;
+            }
+        }
+
+        if (animalTimeText != null)
+        {
+            int remainingSeconds = Mathf.CeilToInt(bird.possessionTimeRemaining);
+            animalTimeText.text = $"附身时间: {remainingSeconds}秒";
+        }
+
+        // 调试信息
+        if (showDebugLogs && Time.frameCount % 120 == 0)
+        {
+            Debug.Log($"UIManager: 鸟状态 - 生命: {bird.currentHealth:F0}/{bird.maxHealth}, 时间: {bird.possessionTimeRemaining:F1}s");
         }
     }
 
@@ -524,5 +666,19 @@ public class UIManager : MonoBehaviour
     public void TestHideGameOver()
     {
         HideGameOver();
+    }
+
+    [ContextMenu("测试：检查UI状态")]
+    public void TestCheckUIState()
+    {
+        Debug.Log($"=== UI状态检查 ===");
+        Debug.Log($"灵魂UI: {(soulUI != null ? soulUI.activeSelf.ToString() : "Null")}");
+        Debug.Log($"动物UI: {(animalUI != null ? animalUI.activeSelf.ToString() : "Null")}");
+        Debug.Log($"玩家控制器: {playerSoulController != null}");
+        if (playerSoulController != null)
+        {
+            Debug.Log($"玩家是否附身: {playerSoulController.isPossessing}");
+            Debug.Log($"当前附身对象: {playerSoulController.currentPossessedObject}");
+        }
     }
 }
