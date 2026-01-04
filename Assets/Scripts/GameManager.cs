@@ -75,6 +75,6 @@ public class GameManager : MonoBehaviour
         // currentCheckpoint = "初始点";
 
         // 通知其他系统重置
-        UIManager.Instance?.RestartGame();
+        //UIManager.Instance?.RestartGame();
     }
 }

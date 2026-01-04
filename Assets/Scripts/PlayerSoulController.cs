@@ -208,7 +208,7 @@ public class PlayerSoulController : MonoBehaviour
 
     void Update()
     {
-        // 如果游戏结束，不执行任何更新逻辑
+        // 如果游戏结束，暂停所有游戏逻辑
         if (isGameOver) return;
 
         // 如果正在任何回忆场景中，不执行任何更新逻辑
@@ -431,36 +431,84 @@ public class PlayerSoulController : MonoBehaviour
     }
 
     /// <summary>
-    /// 灵魂消散（游戏结束）
+    /// 灵魂消散（游戏结束）- 仅修改此方法
     /// </summary>
     public void OnSoulDissipate()
     {
         if (isGameOver) return; // 防止重复调用
 
-        Debug.Log("灵魂消散！游戏结束");
+        Debug.Log("灵魂消散！游戏结束，3秒后返回StartScene");
 
         // 设置游戏结束状态
         isGameOver = true;
 
-        // 停止所有移动
+        // 暂停游戏时间！这样所有Update方法都会停止
+        Time.timeScale = 0f;
+
+        // 停止所有移动和输入
         isSoulTimerActive = false;
         currentMovementInput = Vector2.zero;
         playerVelocity = Vector3.zero;
 
-        // 显示游戏结束UI
-        if (uiManager != null)
-        {
-            uiManager.ShowGameOver("灵魂消散\n未能及时找到宿主");
-        }
-
         // 禁用玩家输入
         playerInputActions.Player.Disable();
 
-        // 可以在这里添加其他效果，如粒子效果、声音等
+        // 停止粒子效果
         if (soulParticles != null)
         {
             soulParticles.Stop();
         }
+
+        // 隐藏灵魂渲染
+        Renderer renderer = GetComponent<Renderer>();
+        if (renderer != null) renderer.enabled = false;
+
+        Collider collider = GetComponent<Collider>();
+        if (collider != null) collider.enabled = false;
+
+        if (characterController != null) characterController.enabled = false;
+
+        // 显示游戏结束UI
+        if (UIManager.Instance != null)
+        {
+            UIManager.Instance.ShowSimpleGameOver("失败！");
+        }
+        else
+        {
+            Debug.LogWarning("UIManager实例未找到，无法显示游戏结束UI");
+        }
+
+        // 注意：因为Time.timeScale = 0，所以需要使用StartCoroutine的特殊形式
+        // 或者使用UnscaledTime
+        StartCoroutine(LoadStartSceneAfterDelayUnscaled(3f));
+    }
+
+    /// <summary>
+    /// 新增：使用不受时间缩放影响的延迟
+    /// </summary>
+    private IEnumerator LoadStartSceneAfterDelayUnscaled(float delay)
+    {
+        float elapsedTime = 0f;
+        while (elapsedTime < delay)
+        {
+            elapsedTime += Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        // 恢复时间缩放
+        Time.timeScale = 1f;
+
+        // 加载开始场景
+        SceneManager.LoadScene("StartScene");
+    }
+
+    /// <summary>
+    /// 新增：延迟3秒加载StartScene
+    /// </summary>
+    private IEnumerator LoadStartSceneAfterDelay(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        SceneManager.LoadScene("StartScene");
     }
 
     /// <summary>
@@ -1012,14 +1060,5 @@ public class PlayerSoulController : MonoBehaviour
         {
             ReleasePossession();
         }
-    }
-
-    /// <summary>
-    /// 重启游戏（供UI按钮调用）
-    /// </summary>
-    public void RestartGame()
-    {
-        // 重新加载当前场景
-        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
 }
