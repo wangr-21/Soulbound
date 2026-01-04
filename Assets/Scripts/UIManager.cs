@@ -1,20 +1,21 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using UnityEngine.SceneManagement;
+using System.Collections;
 
 public class UIManager : MonoBehaviour
 {
     public static UIManager Instance { get; private set; }
 
-    [Header("Áé»ê×´Ì¬UI")]
+    [Header("çµé­‚çŠ¶æ€UI")]
     public GameObject soulUI;
     public Slider soulHealthSlider;
     public TextMeshProUGUI soulHealthText;
     public Slider soulTimeSlider;
     public TextMeshProUGUI soulTimeText;
 
-    [Header("¶¯Îï×´Ì¬UI")]
+    [Header("åŠ¨ç‰©çŠ¶æ€UI")]
     public GameObject animalUI;
     public Slider animalHealthSlider;
     public TextMeshProUGUI animalHealthText;
@@ -22,16 +23,24 @@ public class UIManager : MonoBehaviour
     public TextMeshProUGUI animalTimeText;
     public TextMeshProUGUI animalNameText;
 
-    [Header("ÓÎÏ·½áÊøUI")]
+    [Header("æ¸¸æˆç»“æŸUI")]
     public GameObject gameOverPanel;
     public TextMeshProUGUI gameOverText;
     public Button restartButton;
 
-    [Header("µ÷ÊÔ")]
+    [Header("æŒ‰é’®åé¦ˆæ•ˆæœ")]
+    public AudioSource buttonClickSound;
+    public float buttonClickDelay = 0.3f;
+
+    [Header("è°ƒè¯•")]
     public bool showDebugLogs = false;
 
     private PlayerSoulController playerSoulController;
     private bool isInitialized = false;
+    private bool isGameOver = false;
+
+    // æ–°å¢ï¼šé˜²æ­¢é‡å¤ç‚¹å‡»
+    private bool isRestarting = false;
 
     void Awake()
     {
@@ -39,9 +48,11 @@ public class UIManager : MonoBehaviour
         {
             Instance = this;
             DontDestroyOnLoad(gameObject);
+            Debug.Log("UIManager: å•ä¾‹å®ä¾‹åˆ›å»º");
         }
-        else
+        else if (Instance != this)
         {
+            Debug.LogWarning("UIManager: æ£€æµ‹åˆ°é‡å¤å®ä¾‹ï¼Œé”€æ¯æ–°å®ä¾‹");
             Destroy(gameObject);
             return;
         }
@@ -49,165 +60,283 @@ public class UIManager : MonoBehaviour
 
     void Start()
     {
-        // ³õÊ¼»¯UI×´Ì¬
-        ShowSoulUI();
-        HideAnimalUI();
+        // é‡æ–°æŸ¥æ‰¾æ‰€æœ‰UIå¼•ç”¨
+        FindUIReferences();
 
-        if (gameOverPanel != null)
-            gameOverPanel.SetActive(false);
+        // åˆå§‹åŒ–UIçŠ¶æ€
+        ResetUIState();
 
-        // ²éÕÒÍæ¼Ò¿ØÖÆÆ÷
-        playerSoulController = PlayerSoulController.Instance;
+        // ç»‘å®šé‡æ–°å¼€å§‹æŒ‰é’®
+        SetupRestartButton();
+
+        // ç›‘å¬åœºæ™¯åŠ è½½äº‹ä»¶
+        SceneManager.sceneLoaded += OnSceneLoaded;
+    }
+
+    /// <summary>
+    /// æŸ¥æ‰¾æ‰€æœ‰UIå¼•ç”¨
+    /// </summary>
+    private void FindUIReferences()
+    {
+        // å¦‚æœå¼•ç”¨ä¸¢å¤±ï¼Œå°è¯•é‡æ–°æŸ¥æ‰¾
+        if (soulUI == null)
+            soulUI = GameObject.Find("SoulUI");
+        if (animalUI == null)
+            animalUI = GameObject.Find("AnimalUI");
+        if (gameOverPanel == null)
+            gameOverPanel = GameObject.Find("GameOverPanel");
+
+        // æŸ¥æ‰¾ç©å®¶æ§åˆ¶å™¨
+        playerSoulController = FindObjectOfType<PlayerSoulController>();
         if (playerSoulController == null)
         {
-            Debug.LogWarning("UIManager: Î´ÕÒµ½PlayerSoulController£¬½«ÔÚUpdateÖĞÖØÊÔ");
+            Debug.LogWarning("UIManager: æœªæ‰¾åˆ°PlayerSoulControllerï¼Œå°†åœ¨Updateä¸­é‡è¯•");
         }
         else
         {
             isInitialized = true;
-            if (showDebugLogs) Debug.Log("UIManager: Íæ¼Ò¿ØÖÆÆ÷ÕÒµ½");
+            if (showDebugLogs) Debug.Log("UIManager: ç©å®¶æ§åˆ¶å™¨æ‰¾åˆ°");
+        }
+    }
+
+    /// <summary>
+    /// é‡ç½®UIçŠ¶æ€
+    /// </summary>
+    private void ResetUIState()
+    {
+        ShowSoulUI();
+        HideAnimalUI();
+
+        if (gameOverPanel != null)
+        {
+            gameOverPanel.SetActive(false);
+            isGameOver = false;
         }
 
-        // °ó¶¨ÖØĞÂ¿ªÊ¼°´Å¥
+        // é‡ç½®æŒ‰é’®çŠ¶æ€
         if (restartButton != null)
         {
-            restartButton.onClick.AddListener(OnRestartButtonClick);
+            restartButton.interactable = true;
         }
 
-        // ¼àÌı³¡¾°¼ÓÔØÊÂ¼ş
-        SceneManager.sceneLoaded += OnSceneLoaded;
+        // é‡ç½®é‡å¯çŠ¶æ€
+        isRestarting = false;
+    }
+
+    /// <summary>
+    /// è®¾ç½®é‡æ–°å¼€å§‹æŒ‰é’®
+    /// </summary>
+    private void SetupRestartButton()
+    {
+        if (restartButton != null)
+        {
+            // ç§»é™¤æ‰€æœ‰ç°æœ‰ç›‘å¬å™¨
+            restartButton.onClick.RemoveAllListeners();
+
+            // æ·»åŠ æ–°çš„ç›‘å¬å™¨
+            restartButton.onClick.AddListener(OnRestartButtonClick);
+
+            // ç¡®ä¿æŒ‰é’®å¯äº¤äº’
+            restartButton.interactable = true;
+
+            Debug.Log("UIManager: é‡æ–°å¼€å§‹æŒ‰é’®è®¾ç½®å®Œæˆ");
+        }
+        else
+        {
+            Debug.LogError("UIManager: é‡æ–°å¼€å§‹æŒ‰é’®æœªæ‰¾åˆ°ï¼");
+
+            // å°è¯•æŸ¥æ‰¾æŒ‰é’®
+            Button[] buttons = FindObjectsOfType<Button>();
+            foreach (Button btn in buttons)
+            {
+                if (btn.name.Contains("Restart") || btn.name.Contains("é‡æ–°å¼€å§‹"))
+                {
+                    restartButton = btn;
+                    SetupRestartButton();
+                    break;
+                }
+            }
+        }
     }
 
     void OnDestroy()
     {
-        // ÒÆ³ı³¡¾°ÊÂ¼ş¼àÌı
+        // ç§»é™¤åœºæ™¯äº‹ä»¶ç›‘å¬
         SceneManager.sceneLoaded -= OnSceneLoaded;
     }
 
     void Update()
     {
-        // Èç¹ûÎ´³õÊ¼»¯£¬³¢ÊÔ²éÕÒÍæ¼Ò¿ØÖÆÆ÷
+        // å¦‚æœæœªåˆå§‹åŒ–ï¼Œå°è¯•æŸ¥æ‰¾ç©å®¶æ§åˆ¶å™¨
         if (!isInitialized)
         {
             playerSoulController = PlayerSoulController.Instance;
+            if (playerSoulController == null)
+            {
+                playerSoulController = FindObjectOfType<PlayerSoulController>();
+            }
+
             if (playerSoulController != null)
             {
                 isInitialized = true;
-                if (showDebugLogs) Debug.Log("UIManager: ÑÓ³ÙÕÒµ½Íæ¼Ò¿ØÖÆÆ÷");
+                if (showDebugLogs) Debug.Log("UIManager: å»¶è¿Ÿæ‰¾åˆ°ç©å®¶æ§åˆ¶å™¨");
             }
             return;
         }
 
-        // ¸ù¾İÍæ¼Ò×´Ì¬¸üĞÂUI
+        // å¦‚æœæ¸¸æˆç»“æŸï¼Œä¸æ›´æ–°æ¸¸æˆçŠ¶æ€UI
+        if (isGameOver) return;
+
+        // æ ¹æ®ç©å®¶çŠ¶æ€æ›´æ–°UI
         if (playerSoulController != null)
         {
             if (playerSoulController.isPossessing && playerSoulController.currentPossessedObject != null)
             {
-                // Íæ¼Ò¸½ÉíÔÚ¶¯ÎïÉÏ£¬ÏÔÊ¾¶¯ÎïUI
+                // ç©å®¶é™„èº«åœ¨åŠ¨ç‰©ä¸Šï¼Œæ˜¾ç¤ºåŠ¨ç‰©UI
                 ShowAnimalUI();
 
-                // ¸üĞÂ¶¯ÎïUI
+                // æ›´æ–°åŠ¨ç‰©UI
                 UpdateAnimalUI();
             }
             else
             {
-                // Íæ¼Ò´¦ÓÚÁé»ê×´Ì¬£¬ÏÔÊ¾Áé»êUI
+                // ç©å®¶å¤„äºçµé­‚çŠ¶æ€ï¼Œæ˜¾ç¤ºçµé­‚UI
                 ShowSoulUI();
 
-                // ¸üĞÂÁé»êUI
+                // æ›´æ–°çµé­‚UI
                 UpdateSoulUI();
             }
         }
         else
         {
-            // Èç¹ûÍæ¼Ò¿ØÖÆÆ÷¶ªÊ§£¬³¢ÊÔÖØĞÂ²éÕÒ
+            // å¦‚æœç©å®¶æ§åˆ¶å™¨ä¸¢å¤±ï¼Œå°è¯•é‡æ–°æŸ¥æ‰¾
             playerSoulController = PlayerSoulController.Instance;
+            if (playerSoulController == null)
+            {
+                playerSoulController = FindObjectOfType<PlayerSoulController>();
+            }
+
             if (showDebugLogs && playerSoulController == null)
-                Debug.LogWarning("UIManager: Íæ¼Ò¿ØÖÆÆ÷¶ªÊ§");
+                Debug.LogWarning("UIManager: ç©å®¶æ§åˆ¶å™¨ä¸¢å¤±");
         }
     }
 
     /// <summary>
-    /// ³¡¾°¼ÓÔØÊÂ¼ş´¦Àí
+    /// åœºæ™¯åŠ è½½äº‹ä»¶å¤„ç†
     /// </summary>
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
-        // ÖØĞÂ²éÕÒÍæ¼Ò¿ØÖÆÆ÷
-        playerSoulController = PlayerSoulController.Instance;
-        if (playerSoulController != null)
-        {
-            isInitialized = true;
-            if (showDebugLogs) Debug.Log($"UIManager: ³¡¾°{scene.name}¼ÓÔØºóÖØĞÂÕÒµ½Íæ¼Ò¿ØÖÆÆ÷");
-        }
+        Debug.Log($"UIManager: åœºæ™¯åŠ è½½å®Œæˆ - {scene.name}");
 
-        // È·±£UI×´Ì¬ÕıÈ·
-        if (playerSoulController != null && playerSoulController.isPossessing)
-        {
-            ShowAnimalUI();
-        }
-        else
-        {
-            ShowSoulUI();
-        }
+        // é‡ç½®UIçŠ¶æ€
+        ResetUIState();
 
-        // Òş²ØÓÎÏ·½áÊøUI
-        HideGameOver();
+        // é‡ç½®æ¸¸æˆçŠ¶æ€
+        isGameOver = false;
+
+        // é‡æ–°æŸ¥æ‰¾æ‰€æœ‰UIå¼•ç”¨
+        FindUIReferences();
+
+        // é‡æ–°è®¾ç½®æŒ‰é’®
+        SetupRestartButton();
+
+        // é‡æ–°æŸ¥æ‰¾ç©å®¶æ§åˆ¶å™¨
+        StartCoroutine(DelayedFindPlayerController());
+
+        // ç¡®ä¿æ—¶é—´æ­£å¸¸
+        Time.timeScale = 1f;
     }
 
     /// <summary>
-    /// ÏÔÊ¾Áé»êUI
+    /// å»¶è¿ŸæŸ¥æ‰¾ç©å®¶æ§åˆ¶å™¨ï¼ˆé¿å…åœºæ™¯æœªå®Œå…¨åŠ è½½ï¼‰
+    /// </summary>
+    private IEnumerator DelayedFindPlayerController()
+    {
+        // ç­‰å¾…ä¸€å¸§ï¼Œè®©åœºæ™¯ä¸­çš„å¯¹è±¡å®Œå…¨åˆå§‹åŒ–
+        yield return null;
+
+        playerSoulController = FindObjectOfType<PlayerSoulController>();
+        if (playerSoulController == null)
+        {
+            yield return new WaitForSeconds(0.5f);
+            playerSoulController = FindObjectOfType<PlayerSoulController>();
+        }
+
+        if (playerSoulController != null)
+        {
+            isInitialized = true;
+            Debug.Log("UIManager: åœºæ™¯åŠ è½½åæ‰¾åˆ°ç©å®¶æ§åˆ¶å™¨");
+
+            // æ ¹æ®ç©å®¶çŠ¶æ€æ˜¾ç¤ºæ­£ç¡®çš„UI
+            if (playerSoulController.isPossessing)
+            {
+                ShowAnimalUI();
+            }
+            else
+            {
+                ShowSoulUI();
+            }
+        }
+        else
+        {
+            Debug.LogWarning("UIManager: åœºæ™¯åŠ è½½åæœªæ‰¾åˆ°ç©å®¶æ§åˆ¶å™¨");
+        }
+    }
+
+    /// <summary>
+    /// æ˜¾ç¤ºçµé­‚UI
     /// </summary>
     public void ShowSoulUI()
     {
-        if (soulUI != null && !soulUI.activeSelf)
+        if (soulUI != null)
         {
             soulUI.SetActive(true);
-            if (showDebugLogs) Debug.Log("UIManager: ÏÔÊ¾Áé»êUI");
+            if (showDebugLogs) Debug.Log("UIManager: æ˜¾ç¤ºçµé­‚UI");
         }
 
-        if (animalUI != null && animalUI.activeSelf)
+        if (animalUI != null)
         {
             animalUI.SetActive(false);
         }
     }
 
     /// <summary>
-    /// ÏÔÊ¾¶¯ÎïUI
+    /// æ˜¾ç¤ºåŠ¨ç‰©UI
     /// </summary>
     public void ShowAnimalUI()
     {
-        if (animalUI != null && !animalUI.activeSelf)
+        if (animalUI != null)
         {
             animalUI.SetActive(true);
-            if (showDebugLogs) Debug.Log("UIManager: ÏÔÊ¾¶¯ÎïUI");
+            if (showDebugLogs) Debug.Log("UIManager: æ˜¾ç¤ºåŠ¨ç‰©UI");
         }
 
-        if (soulUI != null && soulUI.activeSelf)
+        if (soulUI != null)
         {
             soulUI.SetActive(false);
         }
     }
 
     /// <summary>
-    /// Òş²Ø¶¯ÎïUI
+    /// éšè—åŠ¨ç‰©UI
     /// </summary>
     public void HideAnimalUI()
     {
         if (animalUI != null && animalUI.activeSelf)
         {
             animalUI.SetActive(false);
-            if (showDebugLogs) Debug.Log("UIManager: Òş²Ø¶¯ÎïUI");
+            if (showDebugLogs) Debug.Log("UIManager: éšè—åŠ¨ç‰©UI");
         }
     }
 
     /// <summary>
-    /// ¸üĞÂÁé»êUI
+    /// æ›´æ–°çµé­‚UI
     /// </summary>
     private void UpdateSoulUI()
     {
         if (playerSoulController == null) return;
 
-        // ¸üĞÂÉúÃüÖµ
+        // æ›´æ–°ç”Ÿå‘½å€¼
         if (soulHealthSlider != null)
         {
             float healthPercentage = Mathf.Clamp01(playerSoulController.currentHealth / playerSoulController.maxHealth);
@@ -216,10 +345,10 @@ public class UIManager : MonoBehaviour
 
         if (soulHealthText != null)
         {
-            soulHealthText.text = $"Áé»êÉúÃü: {Mathf.Ceil(playerSoulController.currentHealth)}/{playerSoulController.maxHealth}";
+            soulHealthText.text = $"çµé­‚ç”Ÿå‘½: {Mathf.Ceil(playerSoulController.currentHealth)}/{playerSoulController.maxHealth}";
         }
 
-        // ¸üĞÂÊ±¼ä
+        // æ›´æ–°æ—¶é—´
         if (soulTimeSlider != null)
         {
             float timePercentage = Mathf.Clamp01(playerSoulController.soulTimeRemaining / playerSoulController.maxSoulTime);
@@ -229,24 +358,24 @@ public class UIManager : MonoBehaviour
         if (soulTimeText != null)
         {
             int remainingSeconds = Mathf.CeilToInt(playerSoulController.soulTimeRemaining);
-            soulTimeText.text = $"Áé»êÊ±¼ä: {remainingSeconds}Ãë";
+            soulTimeText.text = $"çµé­‚æ—¶é—´: {remainingSeconds}ç§’";
         }
     }
 
     /// <summary>
-    /// ¸üĞÂ¶¯ÎïUI
+    /// æ›´æ–°åŠ¨ç‰©UI
     /// </summary>
     private void UpdateAnimalUI()
     {
         if (playerSoulController == null || playerSoulController.currentPossessedObject == null)
         {
-            if (showDebugLogs) Debug.LogWarning("UIManager: ÎŞ·¨¸üĞÂ¶¯ÎïUI - Íæ¼ÒÃ»ÓĞ¸½Éí¶ÔÏó");
+            if (showDebugLogs) Debug.LogWarning("UIManager: æ— æ³•æ›´æ–°åŠ¨ç‰©UI - ç©å®¶æ²¡æœ‰é™„èº«å¯¹è±¡");
             return;
         }
 
         GameObject animal = playerSoulController.currentPossessedObject;
 
-        // ³¢ÊÔ»ñÈ¡Â¹¿ØÖÆÆ÷
+        // å°è¯•è·å–é¹¿æ§åˆ¶å™¨
         DeerController deer = animal.GetComponent<DeerController>();
         if (deer != null)
         {
@@ -254,7 +383,7 @@ public class UIManager : MonoBehaviour
             return;
         }
 
-        // ³¢ÊÔ»ñÈ¡ºüÀê¿ØÖÆÆ÷
+        // å°è¯•è·å–ç‹ç‹¸æ§åˆ¶å™¨
         FoxController fox = animal.GetComponent<FoxController>();
         if (fox != null)
         {
@@ -262,7 +391,7 @@ public class UIManager : MonoBehaviour
             return;
         }
 
-        // ³¢ÊÔ»ñÈ¡ÃàÑò¿ØÖÆÆ÷
+        // å°è¯•è·å–ç»µç¾Šæ§åˆ¶å™¨
         SheepController sheep = animal.GetComponent<SheepController>();
         if (sheep != null)
         {
@@ -270,7 +399,7 @@ public class UIManager : MonoBehaviour
             return;
         }
 
-        // ³¢ÊÔ»ñÈ¡Äñ¿ØÖÆÆ÷
+        // å°è¯•è·å–é¸Ÿæ§åˆ¶å™¨
         BirdController bird = animal.GetComponent<BirdController>();
         if (bird != null)
         {
@@ -278,28 +407,28 @@ public class UIManager : MonoBehaviour
             return;
         }
 
-        // Èç¹ûÃ»ÓĞÕÒµ½Ö§³ÖµÄ¶¯Îï¿ØÖÆÆ÷
-        if (showDebugLogs) Debug.LogWarning($"UIManager: ²»Ö§³ÖµÄ¶ÔÏóÀàĞÍ: {animal.name}");
+        // å¦‚æœæ²¡æœ‰æ‰¾åˆ°æ”¯æŒçš„åŠ¨ç‰©æ§åˆ¶å™¨
+        if (showDebugLogs) Debug.LogWarning($"UIManager: ä¸æ”¯æŒçš„å¯¹è±¡ç±»å‹: {animal.name}");
     }
 
     /// <summary>
-    /// ¸üĞÂÂ¹UI
+    /// æ›´æ–°é¹¿UI
     /// </summary>
     private void UpdateDeerUI(DeerController deer)
     {
-        // ¸üĞÂ¶¯ÎïÃû³Æ
+        // æ›´æ–°åŠ¨ç‰©åç§°
         if (animalNameText != null)
         {
-            animalNameText.text = "Â¹";
+            animalNameText.text = "é¹¿";
         }
 
-        // ¸üĞÂÉúÃüÖµ
+        // æ›´æ–°ç”Ÿå‘½å€¼
         if (animalHealthSlider != null)
         {
             float healthPercentage = Mathf.Clamp01(deer.currentHealth / deer.maxHealth);
             animalHealthSlider.value = healthPercentage;
 
-            // ÑÕÉ«½¥±ä£¨¿ÉÑ¡£©£ºÉúÃüÖµµÍÓÚ30%Ê±±äºì
+            // é¢œè‰²æ¸å˜ï¼ˆå¯é€‰ï¼‰ï¼šç”Ÿå‘½å€¼ä½äº30%æ—¶å˜çº¢
             if (healthPercentage <= 0.3f)
             {
                 animalHealthSlider.fillRect.GetComponent<Image>().color = Color.red;
@@ -312,16 +441,16 @@ public class UIManager : MonoBehaviour
 
         if (animalHealthText != null)
         {
-            animalHealthText.text = $"ÉúÃüÖµ: {Mathf.Ceil(deer.currentHealth)}/{deer.maxHealth}";
+            animalHealthText.text = $"ç”Ÿå‘½å€¼: {Mathf.Ceil(deer.currentHealth)}/{deer.maxHealth}";
         }
 
-        // ¸üĞÂÊ±¼ä
+        // æ›´æ–°æ—¶é—´
         if (animalTimeSlider != null)
         {
             float timePercentage = Mathf.Clamp01(deer.possessionTimeRemaining / deer.maxPossessionTime);
             animalTimeSlider.value = timePercentage;
 
-            // ÑÕÉ«½¥±ä£¨¿ÉÑ¡£©£ºÊ±¼äµÍÓÚ20%Ê±±ä»Æ
+            // é¢œè‰²æ¸å˜ï¼ˆå¯é€‰ï¼‰ï¼šæ—¶é—´ä½äº20%æ—¶å˜é»„
             if (timePercentage <= 0.2f)
             {
                 animalTimeSlider.fillRect.GetComponent<Image>().color = Color.yellow;
@@ -335,34 +464,34 @@ public class UIManager : MonoBehaviour
         if (animalTimeText != null)
         {
             int remainingSeconds = Mathf.CeilToInt(deer.possessionTimeRemaining);
-            animalTimeText.text = $"¸½ÉíÊ±¼ä: {remainingSeconds}Ãë";
+            animalTimeText.text = $"é™„èº«æ—¶é—´: {remainingSeconds}ç§’";
         }
 
-        // µ÷ÊÔĞÅÏ¢
+        // è°ƒè¯•ä¿¡æ¯
         if (showDebugLogs && Time.frameCount % 120 == 0)
         {
-            Debug.Log($"UIManager: Â¹×´Ì¬ - ÉúÃü: {deer.currentHealth:F0}/{deer.maxHealth}, Ê±¼ä: {deer.possessionTimeRemaining:F1}s");
+            Debug.Log($"UIManager: é¹¿çŠ¶æ€ - ç”Ÿå‘½: {deer.currentHealth:F0}/{deer.maxHealth}, æ—¶é—´: {deer.possessionTimeRemaining:F1}s");
         }
     }
 
     /// <summary>
-    /// ¸üĞÂºüÀêUI
+    /// æ›´æ–°ç‹ç‹¸UI
     /// </summary>
     private void UpdateFoxUI(FoxController fox)
     {
-        // ¸üĞÂ¶¯ÎïÃû³Æ
+        // æ›´æ–°åŠ¨ç‰©åç§°
         if (animalNameText != null)
         {
-            animalNameText.text = "ºüÀê";
+            animalNameText.text = "ç‹ç‹¸";
         }
 
-        // ¸üĞÂÉúÃüÖµ
+        // æ›´æ–°ç”Ÿå‘½å€¼
         if (animalHealthSlider != null)
         {
             float healthPercentage = Mathf.Clamp01(fox.currentHealth / fox.maxHealth);
             animalHealthSlider.value = healthPercentage;
 
-            // ÑÕÉ«½¥±ä£¨¿ÉÑ¡£©£ºÉúÃüÖµµÍÓÚ30%Ê±±äºì
+            // é¢œè‰²æ¸å˜ï¼ˆå¯é€‰ï¼‰ï¼šç”Ÿå‘½å€¼ä½äº30%æ—¶å˜çº¢
             if (healthPercentage <= 0.3f)
             {
                 animalHealthSlider.fillRect.GetComponent<Image>().color = Color.red;
@@ -375,16 +504,16 @@ public class UIManager : MonoBehaviour
 
         if (animalHealthText != null)
         {
-            animalHealthText.text = $"ÉúÃüÖµ: {Mathf.Ceil(fox.currentHealth)}/{fox.maxHealth}";
+            animalHealthText.text = $"ç”Ÿå‘½å€¼: {Mathf.Ceil(fox.currentHealth)}/{fox.maxHealth}";
         }
 
-        // ¸üĞÂÊ±¼ä
+        // æ›´æ–°æ—¶é—´
         if (animalTimeSlider != null)
         {
             float timePercentage = Mathf.Clamp01(fox.possessionTimeRemaining / fox.maxPossessionTime);
             animalTimeSlider.value = timePercentage;
 
-            // ÑÕÉ«½¥±ä£¨¿ÉÑ¡£©£ºÊ±¼äµÍÓÚ20%Ê±±ä»Æ
+            // é¢œè‰²æ¸å˜ï¼ˆå¯é€‰ï¼‰ï¼šæ—¶é—´ä½äº20%æ—¶å˜é»„
             if (timePercentage <= 0.2f)
             {
                 animalTimeSlider.fillRect.GetComponent<Image>().color = Color.yellow;
@@ -398,34 +527,34 @@ public class UIManager : MonoBehaviour
         if (animalTimeText != null)
         {
             int remainingSeconds = Mathf.CeilToInt(fox.possessionTimeRemaining);
-            animalTimeText.text = $"¸½ÉíÊ±¼ä: {remainingSeconds}Ãë";
+            animalTimeText.text = $"é™„èº«æ—¶é—´: {remainingSeconds}ç§’";
         }
 
-        // µ÷ÊÔĞÅÏ¢
+        // è°ƒè¯•ä¿¡æ¯
         if (showDebugLogs && Time.frameCount % 120 == 0)
         {
-            Debug.Log($"UIManager: ºüÀê×´Ì¬ - ÉúÃü: {fox.currentHealth:F0}/{fox.maxHealth}, Ê±¼ä: {fox.possessionTimeRemaining:F1}s");
+            Debug.Log($"UIManager: ç‹ç‹¸çŠ¶æ€ - ç”Ÿå‘½: {fox.currentHealth:F0}/{fox.maxHealth}, æ—¶é—´: {fox.possessionTimeRemaining:F1}s");
         }
     }
 
     /// <summary>
-    /// ¸üĞÂÃàÑòUI
+    /// æ›´æ–°ç»µç¾ŠUI
     /// </summary>
     private void UpdateSheepUI(SheepController sheep)
     {
-        // ¸üĞÂ¶¯ÎïÃû³Æ
+        // æ›´æ–°åŠ¨ç‰©åç§°
         if (animalNameText != null)
         {
-            animalNameText.text = "ÃàÑò";
+            animalNameText.text = "ç»µç¾Š";
         }
 
-        // ¸üĞÂÉúÃüÖµ
+        // æ›´æ–°ç”Ÿå‘½å€¼
         if (animalHealthSlider != null)
         {
             float healthPercentage = Mathf.Clamp01(sheep.currentHealth / sheep.maxHealth);
             animalHealthSlider.value = healthPercentage;
 
-            // ÑÕÉ«½¥±ä£¨¿ÉÑ¡£©£ºÉúÃüÖµµÍÓÚ30%Ê±±äºì
+            // é¢œè‰²æ¸å˜ï¼ˆå¯é€‰ï¼‰ï¼šç”Ÿå‘½å€¼ä½äº30%æ—¶å˜çº¢
             if (healthPercentage <= 0.3f)
             {
                 animalHealthSlider.fillRect.GetComponent<Image>().color = Color.red;
@@ -438,16 +567,16 @@ public class UIManager : MonoBehaviour
 
         if (animalHealthText != null)
         {
-            animalHealthText.text = $"ÉúÃüÖµ: {Mathf.Ceil(sheep.currentHealth)}/{sheep.maxHealth}";
+            animalHealthText.text = $"ç”Ÿå‘½å€¼: {Mathf.Ceil(sheep.currentHealth)}/{sheep.maxHealth}";
         }
 
-        // ¸üĞÂÊ±¼ä
+        // æ›´æ–°æ—¶é—´
         if (animalTimeSlider != null)
         {
             float timePercentage = Mathf.Clamp01(sheep.possessionTimeRemaining / sheep.maxPossessionTime);
             animalTimeSlider.value = timePercentage;
 
-            // ÑÕÉ«½¥±ä£¨¿ÉÑ¡£©£ºÊ±¼äµÍÓÚ20%Ê±±ä»Æ
+            // é¢œè‰²æ¸å˜ï¼ˆå¯é€‰ï¼‰ï¼šæ—¶é—´ä½äº20%æ—¶å˜é»„
             if (timePercentage <= 0.2f)
             {
                 animalTimeSlider.fillRect.GetComponent<Image>().color = Color.yellow;
@@ -461,34 +590,34 @@ public class UIManager : MonoBehaviour
         if (animalTimeText != null)
         {
             int remainingSeconds = Mathf.CeilToInt(sheep.possessionTimeRemaining);
-            animalTimeText.text = $"¸½ÉíÊ±¼ä: {remainingSeconds}Ãë";
+            animalTimeText.text = $"é™„èº«æ—¶é—´: {remainingSeconds}ç§’";
         }
 
-        // µ÷ÊÔĞÅÏ¢
+        // è°ƒè¯•ä¿¡æ¯
         if (showDebugLogs && Time.frameCount % 120 == 0)
         {
-            Debug.Log($"UIManager: ÃàÑò×´Ì¬ - ÉúÃü: {sheep.currentHealth:F0}/{sheep.maxHealth}, Ê±¼ä: {sheep.possessionTimeRemaining:F1}s");
+            Debug.Log($"UIManager: ç»µç¾ŠçŠ¶æ€ - ç”Ÿå‘½: {sheep.currentHealth:F0}/{sheep.maxHealth}, æ—¶é—´: {sheep.possessionTimeRemaining:F1}s");
         }
     }
 
     /// <summary>
-    /// ¸üĞÂÄñUI
+    /// æ›´æ–°é¸ŸUI
     /// </summary>
     private void UpdateBirdUI(BirdController bird)
     {
-        // ¸üĞÂ¶¯ÎïÃû³Æ
+        // æ›´æ–°åŠ¨ç‰©åç§°
         if (animalNameText != null)
         {
-            animalNameText.text = "Äñ";
+            animalNameText.text = "é¸Ÿ";
         }
 
-        // ¸üĞÂÉúÃüÖµ
+        // æ›´æ–°ç”Ÿå‘½å€¼
         if (animalHealthSlider != null)
         {
             float healthPercentage = Mathf.Clamp01(bird.currentHealth / bird.maxHealth);
             animalHealthSlider.value = healthPercentage;
 
-            // ÑÕÉ«½¥±ä£¨¿ÉÑ¡£©£ºÉúÃüÖµµÍÓÚ30%Ê±±äºì
+            // é¢œè‰²æ¸å˜ï¼ˆå¯é€‰ï¼‰ï¼šç”Ÿå‘½å€¼ä½äº30%æ—¶å˜çº¢
             if (healthPercentage <= 0.3f)
             {
                 animalHealthSlider.fillRect.GetComponent<Image>().color = Color.red;
@@ -501,16 +630,16 @@ public class UIManager : MonoBehaviour
 
         if (animalHealthText != null)
         {
-            animalHealthText.text = $"ÉúÃüÖµ: {Mathf.Ceil(bird.currentHealth)}/{bird.maxHealth}";
+            animalHealthText.text = $"ç”Ÿå‘½å€¼: {Mathf.Ceil(bird.currentHealth)}/{bird.maxHealth}";
         }
 
-        // ¸üĞÂÊ±¼ä
+        // æ›´æ–°æ—¶é—´
         if (animalTimeSlider != null)
         {
             float timePercentage = Mathf.Clamp01(bird.possessionTimeRemaining / bird.maxPossessionTime);
             animalTimeSlider.value = timePercentage;
 
-            // ÑÕÉ«½¥±ä£¨¿ÉÑ¡£©£ºÊ±¼äµÍÓÚ20%Ê±±ä»Æ
+            // é¢œè‰²æ¸å˜ï¼ˆå¯é€‰ï¼‰ï¼šæ—¶é—´ä½äº20%æ—¶å˜é»„
             if (timePercentage <= 0.2f)
             {
                 animalTimeSlider.fillRect.GetComponent<Image>().color = Color.yellow;
@@ -524,21 +653,23 @@ public class UIManager : MonoBehaviour
         if (animalTimeText != null)
         {
             int remainingSeconds = Mathf.CeilToInt(bird.possessionTimeRemaining);
-            animalTimeText.text = $"¸½ÉíÊ±¼ä: {remainingSeconds}Ãë";
+            animalTimeText.text = $"é™„èº«æ—¶é—´: {remainingSeconds}ç§’";
         }
 
-        // µ÷ÊÔĞÅÏ¢
+        // è°ƒè¯•ä¿¡æ¯
         if (showDebugLogs && Time.frameCount % 120 == 0)
         {
-            Debug.Log($"UIManager: Äñ×´Ì¬ - ÉúÃü: {bird.currentHealth:F0}/{bird.maxHealth}, Ê±¼ä: {bird.possessionTimeRemaining:F1}s");
+            Debug.Log($"UIManager: é¸ŸçŠ¶æ€ - ç”Ÿå‘½: {bird.currentHealth:F0}/{bird.maxHealth}, æ—¶é—´: {bird.possessionTimeRemaining:F1}s");
         }
     }
 
     /// <summary>
-    /// ÏÔÊ¾ÓÎÏ·½áÊøUI
+    /// æ˜¾ç¤ºæ¸¸æˆç»“æŸUI
     /// </summary>
     public void ShowGameOver(string message)
     {
+        isGameOver = true;
+
         if (gameOverPanel != null)
         {
             gameOverPanel.SetActive(true);
@@ -548,10 +679,24 @@ public class UIManager : MonoBehaviour
                 gameOverText.text = message;
             }
 
-            if (showDebugLogs) Debug.Log($"UIManager: ÏÔÊ¾ÓÎÏ·½áÊøUI - {message}");
+            if (showDebugLogs) Debug.Log($"UIManager: æ˜¾ç¤ºæ¸¸æˆç»“æŸUI - {message}");
+        }
+        else
+        {
+            Debug.LogError("UIManager: æ¸¸æˆç»“æŸé¢æ¿å¼•ç”¨ä¸¢å¤±ï¼");
+            FindUIReferences();
+
+            if (gameOverPanel != null)
+            {
+                gameOverPanel.SetActive(true);
+                if (gameOverText != null)
+                {
+                    gameOverText.text = message;
+                }
+            }
         }
 
-        // Òş²ØÆäËûUI
+        // éšè—å…¶ä»–UI
         if (soulUI != null && soulUI.activeSelf)
         {
             soulUI.SetActive(false);
@@ -561,47 +706,151 @@ public class UIManager : MonoBehaviour
             animalUI.SetActive(false);
         }
 
-        // ÔİÍ£ÓÎÏ·Ê±¼ä£¨¿ÉÑ¡£©
+        // ç¡®ä¿é‡æ–°å¼€å§‹æŒ‰é’®å¯äº¤äº’
+        if (restartButton != null)
+        {
+            restartButton.interactable = true;
+        }
+        else
+        {
+            SetupRestartButton();
+        }
+
+        // æš‚åœæ¸¸æˆæ—¶é—´ï¼ˆå¯é€‰ï¼‰
         // Time.timeScale = 0f;
     }
 
     /// <summary>
-    /// Òş²ØÓÎÏ·½áÊøUI
+    /// éšè—æ¸¸æˆç»“æŸUI
     /// </summary>
     public void HideGameOver()
     {
+        isGameOver = false;
+
         if (gameOverPanel != null && gameOverPanel.activeSelf)
         {
             gameOverPanel.SetActive(false);
-            if (showDebugLogs) Debug.Log("UIManager: Òş²ØÓÎÏ·½áÊøUI");
+            if (showDebugLogs) Debug.Log("UIManager: éšè—æ¸¸æˆç»“æŸUI");
         }
 
-        // »Ö¸´ÓÎÏ·Ê±¼ä£¨Èç¹ûÖ®Ç°ÔİÍ£ÁË£©
+        // æ¢å¤æ¸¸æˆæ—¶é—´ï¼ˆå¦‚æœä¹‹å‰æš‚åœäº†ï¼‰
         // Time.timeScale = 1f;
     }
 
     /// <summary>
-    /// ÖØĞÂ¿ªÊ¼°´Å¥µã»÷ÊÂ¼ş
+    /// é‡æ–°å¼€å§‹æŒ‰é’®ç‚¹å‡»äº‹ä»¶
     /// </summary>
     private void OnRestartButtonClick()
     {
-        // »Ö¸´ÓÎÏ·Ê±¼ä£¨Èç¹ûÖ®Ç°ÔİÍ£ÁË£©
-        Time.timeScale = 1f;
+        Debug.Log("UIManager: é‡æ–°å¼€å§‹æŒ‰é’®è¢«ç‚¹å‡»");
 
-        // ÖØĞÂ¼ÓÔØµ±Ç°³¡¾°
-        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+        // é˜²æ­¢é‡å¤ç‚¹å‡»
+        if (isRestarting)
+        {
+            Debug.LogWarning("UIManager: å·²ç»åœ¨é‡æ–°å¼€å§‹è¿‡ç¨‹ä¸­ï¼Œå¿½ç•¥ç‚¹å‡»");
+            return;
+        }
 
-        if (showDebugLogs) Debug.Log("UIManager: ÖØĞÂ¿ªÊ¼ÓÎÏ·");
+        isRestarting = true;
+
+        // æ’­æ”¾ç‚¹å‡»éŸ³æ•ˆ
+        if (buttonClickSound != null)
+        {
+            buttonClickSound.Play();
+        }
+
+        // æ·»åŠ æŒ‰é’®ç‚¹å‡»åŠ¨ç”»æ•ˆæœ
+        StartCoroutine(ButtonClickEffect());
+
+        // ç«‹å³å¼€å§‹é‡æ–°å¼€å§‹æµç¨‹
+        RestartGame();
     }
 
     /// <summary>
-    /// ÏÔÊ¾ÉËº¦Êı×Ö£¨¿ÉÑ¡£©
+    /// æŒ‰é’®ç‚¹å‡»æ•ˆæœ
+    /// </summary>
+    private IEnumerator ButtonClickEffect()
+    {
+        if (restartButton != null)
+        {
+            // ä¿å­˜åŸå§‹é¢œè‰²
+            Color originalColor = restartButton.image.color;
+
+            // æŒ‰é’®å˜æš—
+            restartButton.image.color = new Color(0.8f, 0.8f, 0.8f);
+
+            // çŸ­æš‚ç­‰å¾…
+            yield return new WaitForSeconds(0.1f);
+
+            // æ¢å¤é¢œè‰²
+            restartButton.image.color = originalColor;
+        }
+    }
+
+    /// <summary>
+    /// é‡æ–°å¼€å§‹æ¸¸æˆ - ç¡®ä¿å¯é æ‰§è¡Œçš„ç‰ˆæœ¬
+    /// </summary>
+    public void RestartGame()
+    {
+        Debug.Log("UIManager: é‡æ–°å¼€å§‹æ¸¸æˆè¢«è°ƒç”¨");
+
+        // æ˜¾ç¤ºåŠ è½½æç¤º
+        ShowLoadingMessage();
+
+        // ç¡®ä¿æ—¶é—´æ­£å¸¸
+        Time.timeScale = 1f;
+
+        // è·å–å½“å‰åœºæ™¯ä¿¡æ¯
+        int currentSceneIndex = SceneManager.GetActiveScene().buildIndex;
+        string currentSceneName = SceneManager.GetActiveScene().name;
+
+        Debug.Log($"UIManager: å‡†å¤‡é‡æ–°åŠ è½½åœºæ™¯ - {currentSceneName} (ç´¢å¼•: {currentSceneIndex})");
+
+        // æ£€æŸ¥åœºæ™¯ç´¢å¼•æ˜¯å¦æœ‰æ•ˆ
+        if (currentSceneIndex < 0 || currentSceneIndex >= SceneManager.sceneCountInBuildSettings)
+        {
+            Debug.LogError($"UIManager: æ— æ•ˆçš„åœºæ™¯ç´¢å¼• {currentSceneIndex}ï¼Œæ€»åœºæ™¯æ•°: {SceneManager.sceneCountInBuildSettings}");
+            Debug.LogError("è¯·ç¡®ä¿åœºæ™¯å·²ç»æ·»åŠ åˆ°æ„å»ºè®¾ç½®ä¸­ (File -> Build Settings -> Add Open Scenes)");
+
+            // å°è¯•ä½¿ç”¨åœºæ™¯åç§°åŠ è½½
+            Debug.Log($"UIManager: å°è¯•ä½¿ç”¨åœºæ™¯åç§°åŠ è½½: {currentSceneName}");
+            SceneManager.LoadScene(currentSceneName);
+            return;
+        }
+
+        // ä½¿ç”¨åŒæ­¥åŠ è½½ç¡®ä¿åœºæ™¯ç«‹å³åŠ è½½
+        Debug.Log("UIManager: ä½¿ç”¨åŒæ­¥åŠ è½½é‡æ–°åŠ è½½åœºæ™¯");
+        SceneManager.LoadScene(currentSceneIndex);
+    }
+
+    /// <summary>
+    /// æ˜¾ç¤ºåŠ è½½æ¶ˆæ¯
+    /// </summary>
+    private void ShowLoadingMessage()
+    {
+        if (gameOverText != null)
+        {
+            gameOverText.text = "é‡æ–°å¼€å§‹æ¸¸æˆ...";
+        }
+    }
+
+    /// <summary>
+    /// å…¬å¼€æ–¹æ³•ï¼Œå¯ä»¥åœ¨Inspectorä¸­ç›´æ¥ç»‘å®š
+    /// </summary>
+    public void OnRestartButtonClicked()
+    {
+        Debug.Log("UIManager: é€šè¿‡Inspectorç»‘å®šæŒ‰é’®è¢«ç‚¹å‡»");
+        RestartGame();
+    }
+
+    /// <summary>
+    /// æ˜¾ç¤ºä¼¤å®³æ•°å­—ï¼ˆå¯é€‰ï¼‰
     /// </summary>
     public void ShowDamageText(Vector3 worldPosition, float damage)
     {
-        // ÕâÀï¿ÉÒÔÌí¼ÓÉËº¦Êı×ÖÏÔÊ¾Âß¼­
-        // ±ÈÈçÊµÀı»¯Ò»¸öÉËº¦Êı×ÖÔ¤ÖÆÌå
-        // Ê¾Àı£º
+        // è¿™é‡Œå¯ä»¥æ·»åŠ ä¼¤å®³æ•°å­—æ˜¾ç¤ºé€»è¾‘
+        // æ¯”å¦‚å®ä¾‹åŒ–ä¸€ä¸ªä¼¤å®³æ•°å­—é¢„åˆ¶ä½“
+        // ç¤ºä¾‹ï¼š
         // GameObject damageTextPrefab = Resources.Load<GameObject>("DamageText");
         // if (damageTextPrefab != null)
         // {
@@ -611,7 +860,7 @@ public class UIManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Ç¿ÖÆË¢ĞÂUI£¨¹©Íâ²¿µ÷ÓÃ£©
+    /// å¼ºåˆ¶åˆ·æ–°UIï¼ˆä¾›å¤–éƒ¨è°ƒç”¨ï¼‰
     /// </summary>
     public void ForceRefreshUI()
     {
@@ -628,57 +877,145 @@ public class UIManager : MonoBehaviour
             UpdateSoulUI();
         }
 
-        if (showDebugLogs) Debug.Log("UIManager: Ç¿ÖÆË¢ĞÂUI");
+        if (showDebugLogs) Debug.Log("UIManager: å¼ºåˆ¶åˆ·æ–°UI");
     }
 
     /// <summary>
-    /// ÉèÖÃµ÷ÊÔÄ£Ê½
+    /// è®¾ç½®è°ƒè¯•æ¨¡å¼
     /// </summary>
     public void SetDebugMode(bool enabled)
     {
         showDebugLogs = enabled;
-        Debug.Log($"UIManager: µ÷ÊÔÄ£Ê½ {(enabled ? "ÆôÓÃ" : "½ûÓÃ")}");
+        Debug.Log($"UIManager: è°ƒè¯•æ¨¡å¼ {(enabled ? "å¯ç”¨" : "ç¦ç”¨")}");
     }
 
-    // ===== µ÷ÊÔ·½·¨ =====
-    [ContextMenu("²âÊÔ£ºÇĞ»»UI")]
+    // ===== è°ƒè¯•æ–¹æ³• =====
+    [ContextMenu("æµ‹è¯•ï¼šåˆ‡æ¢UI")]
     public void TestToggleUI()
     {
         if (soulUI != null && soulUI.activeSelf)
         {
             ShowAnimalUI();
-            Debug.Log("²âÊÔ£ºÇĞ»»µ½¶¯ÎïUI");
+            Debug.Log("æµ‹è¯•ï¼šåˆ‡æ¢åˆ°åŠ¨ç‰©UI");
         }
         else
         {
             ShowSoulUI();
-            Debug.Log("²âÊÔ£ºÇĞ»»µ½Áé»êUI");
+            Debug.Log("æµ‹è¯•ï¼šåˆ‡æ¢åˆ°çµé­‚UI");
         }
     }
 
-    [ContextMenu("²âÊÔ£ºÏÔÊ¾ÓÎÏ·½áÊø")]
+    [ContextMenu("æµ‹è¯•ï¼šæ˜¾ç¤ºæ¸¸æˆç»“æŸ")]
     public void TestShowGameOver()
     {
-        ShowGameOver("²âÊÔ£ºÓÎÏ·½áÊø");
+        ShowGameOver("æµ‹è¯•ï¼šæ¸¸æˆç»“æŸ");
     }
 
-    [ContextMenu("²âÊÔ£ºÒş²ØÓÎÏ·½áÊø")]
+    [ContextMenu("æµ‹è¯•ï¼šéšè—æ¸¸æˆç»“æŸ")]
     public void TestHideGameOver()
     {
         HideGameOver();
     }
 
-    [ContextMenu("²âÊÔ£º¼ì²éUI×´Ì¬")]
+    [ContextMenu("æµ‹è¯•ï¼šæ£€æŸ¥UIçŠ¶æ€")]
     public void TestCheckUIState()
     {
-        Debug.Log($"=== UI×´Ì¬¼ì²é ===");
-        Debug.Log($"Áé»êUI: {(soulUI != null ? soulUI.activeSelf.ToString() : "Null")}");
-        Debug.Log($"¶¯ÎïUI: {(animalUI != null ? animalUI.activeSelf.ToString() : "Null")}");
-        Debug.Log($"Íæ¼Ò¿ØÖÆÆ÷: {playerSoulController != null}");
+        Debug.Log($"=== UIçŠ¶æ€æ£€æŸ¥ ===");
+        Debug.Log($"çµé­‚UI: {(soulUI != null ? soulUI.activeSelf.ToString() : "Null")}");
+        Debug.Log($"åŠ¨ç‰©UI: {(animalUI != null ? animalUI.activeSelf.ToString() : "Null")}");
+        Debug.Log($"æ¸¸æˆç»“æŸé¢æ¿: {(gameOverPanel != null ? gameOverPanel.activeSelf.ToString() : "Null")}");
+        Debug.Log($"é‡æ–°å¼€å§‹æŒ‰é’®: {(restartButton != null ? "å­˜åœ¨" : "Null")}");
+        Debug.Log($"ç©å®¶æ§åˆ¶å™¨: {playerSoulController != null}");
+        Debug.Log($"æ¸¸æˆæ˜¯å¦ç»“æŸ: {isGameOver}");
+        Debug.Log($"æ˜¯å¦æ­£åœ¨é‡æ–°å¼€å§‹: {isRestarting}");
         if (playerSoulController != null)
         {
-            Debug.Log($"Íæ¼ÒÊÇ·ñ¸½Éí: {playerSoulController.isPossessing}");
-            Debug.Log($"µ±Ç°¸½Éí¶ÔÏó: {playerSoulController.currentPossessedObject}");
+            Debug.Log($"ç©å®¶æ˜¯å¦é™„èº«: {playerSoulController.isPossessing}");
+            Debug.Log($"å½“å‰é™„èº«å¯¹è±¡: {playerSoulController.currentPossessedObject}");
+        }
+    }
+
+    [ContextMenu("æµ‹è¯•ï¼šé‡æ–°å¼€å§‹æ¸¸æˆ")]
+    public void TestRestartGame()
+    {
+        Debug.Log("æµ‹è¯•ï¼šæ‰‹åŠ¨è°ƒç”¨é‡æ–°å¼€å§‹");
+        RestartGame();
+    }
+
+    [ContextMenu("æµ‹è¯•ï¼šæ£€æŸ¥æŒ‰é’®çŠ¶æ€")]
+    public void TestCheckButton()
+    {
+        if (restartButton == null)
+        {
+            Debug.LogError("é‡æ–°å¼€å§‹æŒ‰é’®å¼•ç”¨ä¸ºç©ºï¼");
+            return;
+        }
+
+        Debug.Log("=== æŒ‰é’®çŠ¶æ€æ£€æŸ¥ ===");
+        Debug.Log($"æŒ‰é’®åç§°: {restartButton.name}");
+        Debug.Log($"æŒ‰é’®æ˜¯å¦å¯äº¤äº’: {restartButton.interactable}");
+        Debug.Log($"æŒ‰é’®æ˜¯å¦æ¿€æ´»: {restartButton.gameObject.activeInHierarchy}");
+
+        // æ£€æŸ¥æŒ‰é’®çš„çˆ¶å¯¹è±¡
+        if (restartButton.transform.parent != null)
+        {
+            Debug.Log($"æŒ‰é’®çˆ¶å¯¹è±¡: {restartButton.transform.parent.name}");
+            Debug.Log($"çˆ¶å¯¹è±¡æ˜¯å¦æ¿€æ´»: {restartButton.transform.parent.gameObject.activeInHierarchy}");
+        }
+
+        // æ£€æŸ¥æŒ‰é’®æ˜¯å¦æœ‰ç¢°æ’å™¨é®æŒ¡
+        GraphicRaycaster raycaster = restartButton.GetComponentInParent<GraphicRaycaster>();
+        if (raycaster == null)
+        {
+            Debug.LogWarning("æœªæ‰¾åˆ°GraphicRaycasterç»„ä»¶ï¼ŒUIç‚¹å‡»å¯èƒ½æ— æ•ˆ");
+        }
+    }
+
+    [ContextMenu("è°ƒè¯•ï¼šæ£€æŸ¥åœºæ™¯æ„å»ºè®¾ç½®")]
+    public void DebugCheckBuildSettings()
+    {
+        Debug.Log("=== åœºæ™¯æ„å»ºè®¾ç½®æ£€æŸ¥ ===");
+        int sceneCount = SceneManager.sceneCountInBuildSettings;
+        Debug.Log($"æ„å»ºè®¾ç½®ä¸­çš„åœºæ™¯æ€»æ•°: {sceneCount}");
+
+        Scene currentScene = SceneManager.GetActiveScene();
+        Debug.Log($"å½“å‰åœºæ™¯: {currentScene.name} (ç´¢å¼•: {currentScene.buildIndex})");
+
+        bool foundInBuild = false;
+        for (int i = 0; i < sceneCount; i++)
+        {
+            string scenePath = SceneUtility.GetScenePathByBuildIndex(i);
+            string sceneName = System.IO.Path.GetFileNameWithoutExtension(scenePath);
+            Debug.Log($"åœºæ™¯[{i}]: {sceneName}");
+
+            if (sceneName == currentScene.name)
+            {
+                foundInBuild = true;
+                Debug.Log($"âœ“ å½“å‰åœºæ™¯åœ¨æ„å»ºè®¾ç½®ä¸­ï¼Œç´¢å¼•: {i}");
+            }
+        }
+
+        if (!foundInBuild)
+        {
+            Debug.LogError($"âœ— å½“å‰åœºæ™¯ '{currentScene.name}' ä¸åœ¨æ„å»ºè®¾ç½®ä¸­ï¼");
+            Debug.LogError("è¯·æ‰“å¼€ File -> Build Settings -> Add Open Scenes æ·»åŠ å½“å‰åœºæ™¯");
+        }
+    }
+
+    [ContextMenu("è°ƒè¯•ï¼šå¼ºåˆ¶åŒæ­¥åŠ è½½å½“å‰åœºæ™¯")]
+    public void DebugForceLoadCurrentScene()
+    {
+        int sceneIndex = SceneManager.GetActiveScene().buildIndex;
+        if (sceneIndex >= 0 && sceneIndex < SceneManager.sceneCountInBuildSettings)
+        {
+            Debug.Log($"å¼ºåˆ¶åŒæ­¥åŠ è½½åœºæ™¯ç´¢å¼•: {sceneIndex}");
+            SceneManager.LoadScene(sceneIndex);
+        }
+        else
+        {
+            string sceneName = SceneManager.GetActiveScene().name;
+            Debug.Log($"ä½¿ç”¨åœºæ™¯åç§°åŠ è½½: {sceneName}");
+            SceneManager.LoadScene(sceneName);
         }
     }
 }

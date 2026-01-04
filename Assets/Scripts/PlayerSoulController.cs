@@ -76,14 +76,23 @@ public class PlayerSoulController : MonoBehaviour
     // UI管理器引用
     private UIManager uiManager;
 
+    // 新增：游戏状态
+    private bool isGameOver = false;
+
+    // 新增：用于重置的初始值
+    private Vector3 initialPosition;
+    private Quaternion initialRotation;
+
     private void Awake()
     {
-        // 设置单例
+        // 设置单例 - 修改：不设置为DontDestroyOnLoad
         if (Instance == null)
         {
             Instance = this;
+            // 不设置DontDestroyOnLoad，让场景重新加载时自动重置
+            // DontDestroyOnLoad(gameObject);
         }
-        else
+        else if (Instance != this)
         {
             Destroy(gameObject);
             return;
@@ -128,11 +137,12 @@ public class PlayerSoulController : MonoBehaviour
             if (debugMode) Debug.Log($"使用默认LayerMask: {possessableLayerMask.value}");
         }
 
-        // 初始化灵魂时间
-        soulTimeRemaining = maxSoulTime;
+        // 保存初始位置和旋转
+        initialPosition = transform.position;
+        initialRotation = transform.rotation;
 
-        // 初始化生命值
-        currentHealth = maxHealth;
+        // 初始化灵魂状态
+        ResetPlayerState();
 
         // 获取UI管理器
         uiManager = UIManager.Instance;
@@ -182,11 +192,14 @@ public class PlayerSoulController : MonoBehaviour
 
     private void OnMove(InputAction.CallbackContext context)
     {
+        if (isGameOver) return; // 游戏结束时不处理输入
         currentMovementInput = context.ReadValue<Vector2>();
     }
 
     private void OnJump(InputAction.CallbackContext context)
     {
+        if (isGameOver) return; // 游戏结束时不处理输入
+
         if (context.performed)
         {
             jumpTriggered = true;
@@ -195,6 +208,9 @@ public class PlayerSoulController : MonoBehaviour
 
     void Update()
     {
+        // 如果游戏结束，不执行任何更新逻辑
+        if (isGameOver) return;
+
         // 如果正在任何回忆场景中，不执行任何更新逻辑
         if (IsInAnyMemoryScene) return;
 
@@ -229,6 +245,69 @@ public class PlayerSoulController : MonoBehaviour
     }
 
     /// <summary>
+    /// 重置玩家状态（用于重新开始游戏）
+    /// </summary>
+    public void ResetPlayerState()
+    {
+        if (debugMode) Debug.Log("重置玩家状态");
+
+        // 重置生命值
+        currentHealth = maxHealth;
+
+        // 重置灵魂时间
+        soulTimeRemaining = maxSoulTime;
+        isSoulTimerActive = true;
+
+        // 重置游戏结束状态
+        isGameOver = false;
+
+        // 重置附身状态
+        if (isPossessing)
+        {
+            ForceReleasePossession();
+        }
+
+        // 重置位置和旋转
+        transform.position = initialPosition;
+        transform.rotation = initialRotation;
+
+        // 重置移动状态
+        currentMovementInput = Vector2.zero;
+        playerVelocity = Vector3.zero;
+        jumpTriggered = false;
+
+        // 重置攻击冷却
+        lastPurifierAttackTime = 0f;
+
+        // 确保角色控制器启用
+        if (characterController != null)
+        {
+            characterController.enabled = true;
+        }
+
+        // 确保渲染器和碰撞器启用
+        Renderer renderer = GetComponent<Renderer>();
+        if (renderer != null) renderer.enabled = true;
+
+        Collider collider = GetComponent<Collider>();
+        if (collider != null) collider.enabled = true;
+
+        // 显示灵魂粒子效果
+        ShowSoulParticles();
+
+        // 切换相机目标回灵魂
+        if (cameraController != null)
+        {
+            cameraController.SetTarget(transform);
+        }
+
+        // 启用输入
+        playerInputActions.Player.Enable();
+
+        if (debugMode) Debug.Log($"玩家状态已重置 - 生命值: {currentHealth}/{maxHealth}, 灵魂时间: {soulTimeRemaining}/{maxSoulTime}");
+    }
+
+    /// <summary>
     /// 检查当前是否在回忆场景中
     /// </summary>
     private void CheckCurrentScene()
@@ -259,6 +338,8 @@ public class PlayerSoulController : MonoBehaviour
     /// </summary>
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
+        if (debugMode) Debug.Log($"PlayerSoulController: 场景加载完成 - {scene.name}");
+
         if (scene.name == "DowlScene")
         {
             isInDowlScene = true;
@@ -270,6 +351,11 @@ public class PlayerSoulController : MonoBehaviour
             isInSoldierScene = true;
             PauseSoulTimer();
             if (debugMode) Debug.Log("进入 SoldierScene，暂停灵魂计时器");
+        }
+        else
+        {
+            // 如果加载的是主场景（不是回忆场景），重置玩家状态
+            ResetPlayerState();
         }
     }
 
@@ -320,6 +406,9 @@ public class PlayerSoulController : MonoBehaviour
     /// </summary>
     private void UpdateSoulTimer()
     {
+        // 如果游戏结束，不更新计时器
+        if (isGameOver) return;
+
         // 如果正在任何回忆场景中，不更新计时器
         if (IsInAnyMemoryScene) return;
 
@@ -346,11 +435,17 @@ public class PlayerSoulController : MonoBehaviour
     /// </summary>
     public void OnSoulDissipate()
     {
+        if (isGameOver) return; // 防止重复调用
+
         Debug.Log("灵魂消散！游戏结束");
+
+        // 设置游戏结束状态
+        isGameOver = true;
 
         // 停止所有移动
         isSoulTimerActive = false;
         currentMovementInput = Vector2.zero;
+        playerVelocity = Vector3.zero;
 
         // 显示游戏结束UI
         if (uiManager != null)
@@ -366,16 +461,6 @@ public class PlayerSoulController : MonoBehaviour
         {
             soulParticles.Stop();
         }
-
-        // 延迟2秒后重启游戏
-        StartCoroutine(RestartAfterDelay(2f));
-    }
-
-    // 添加重启协程：
-    private IEnumerator RestartAfterDelay(float delay)
-    {
-        yield return new WaitForSeconds(delay);
-        RestartGame();
     }
 
     /// <summary>
@@ -465,7 +550,7 @@ public class PlayerSoulController : MonoBehaviour
     /// <param name="damage">伤害值</param>
     public void TakeDamage(float damage)
     {
-        if (currentHealth <= 0) return; // 如果已经死亡，不再扣血
+        if (currentHealth <= 0 || isGameOver) return; // 如果已经死亡或游戏结束，不再扣血
 
         currentHealth -= damage;
 
@@ -888,6 +973,10 @@ public class PlayerSoulController : MonoBehaviour
         {
             soulParticles.transform.position = transform.position;
             soulParticles.gameObject.SetActive(true);
+            if (!soulParticles.isPlaying)
+            {
+                soulParticles.Play();
+            }
         }
         else if (soulAppearance != null)
         {
@@ -900,6 +989,10 @@ public class PlayerSoulController : MonoBehaviour
             {
                 ps.gameObject.SetActive(true);
                 ps.transform.position = transform.position;
+                if (!ps.isPlaying)
+                {
+                    ps.Play();
+                }
             }
         }
     }
