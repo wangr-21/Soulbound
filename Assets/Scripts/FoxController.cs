@@ -389,6 +389,22 @@ public class FoxController : MonoBehaviour, IPossessable
         if (showDebugInfo) Debug.Log($"狐狸({gameObject.name})准备接受控制");
     }
 
+    // 在DeerController中添加以下方法
+    public void ResetState()
+    {
+        // 重置血量
+        currentHealth = maxHealth;
+
+        // 重置附身时间
+        possessionTimeRemaining = maxPossessionTime;
+
+        // 重置其他状态
+        // isDead = false;
+        // 其他需要重置的变量...
+
+        Debug.Log("DeerController: 状态已重置");
+    }
+
     public void OnRelease()
     {
         isPossessed = false;

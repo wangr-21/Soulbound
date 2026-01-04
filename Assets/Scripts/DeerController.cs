@@ -295,6 +295,22 @@ public class DeerController : MonoBehaviour, IPossessable
         verticalVelocity = -0.5f;
     }
 
+    // 在DeerController中添加以下方法
+    public void ResetState()
+    {
+        // 重置血量
+        currentHealth = maxHealth;
+
+        // 重置附身时间
+        possessionTimeRemaining = maxPossessionTime;
+
+        // 重置其他状态
+        // isDead = false;
+        // 其他需要重置的变量...
+
+        Debug.Log("DeerController: 状态已重置");
+    }
+
     // ===== 实现 IPossessable 接口 =====
 
     public void OnPossess()

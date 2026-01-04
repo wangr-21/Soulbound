@@ -58,4 +58,23 @@ public class GameManager : MonoBehaviour
         playerScore += points;
         Debug.Log($"获得 {points} 分，当前总分: {playerScore}");
     }
+
+    // 在GameManager中添加重新开始方法
+    public void RestartGame()
+    {
+        Debug.Log("GameManager: 重新开始游戏");
+
+        // 重置游戏状态
+        isGamePaused = false;
+        Time.timeScale = 1f;
+
+        // 重置玩家分数（如果需要）
+        // playerScore = 0;
+
+        // 重置检查点
+        // currentCheckpoint = "初始点";
+
+        // 通知其他系统重置
+        UIManager.Instance?.RestartGame();
+    }
 }

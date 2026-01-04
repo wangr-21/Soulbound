@@ -221,23 +221,21 @@ public class UIManager : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// 场景加载事件处理
-    /// </summary>
+    // 在UIManager的OnSceneLoaded方法中添加
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
         Debug.Log($"UIManager: 场景加载完成 - {scene.name}");
 
-        // 重置UI状态
-        ResetUIState();
-
-        // 重置游戏状态
-        isGameOver = false;
+        // 立即强制隐藏所有游戏结束相关的UI
+        ForceHideAllGameOverUI();
 
         // 重新查找所有UI引用
         FindUIReferences();
 
-        // 重新设置按钮
+        // 初始化UI状态
+        ResetUIState();
+
+        // 绑定重新开始按钮
         SetupRestartButton();
 
         // 重新查找玩家控制器
@@ -245,6 +243,42 @@ public class UIManager : MonoBehaviour
 
         // 确保时间正常
         Time.timeScale = 1f;
+    }
+
+    /// <summary>
+    /// 强制隐藏所有游戏结束UI
+    /// </summary>
+    private void ForceHideAllGameOverUI()
+    {
+        // 查找所有Canvas
+        Canvas[] allCanvases = FindObjectsOfType<Canvas>(true);
+        int hiddenCount = 0;
+
+        foreach (Canvas canvas in allCanvases)
+        {
+            // 查找所有子对象
+            foreach (Transform child in canvas.transform)
+            {
+                // 隐藏名称包含"GameOver"、"游戏结束"或"Restart"的对象
+                string childName = child.name.ToLower();
+                if (childName.Contains("gameover") ||
+                    childName.Contains("游戏结束") ||
+                    childName.Contains("restart"))
+                {
+                    if (child.gameObject.activeSelf)
+                    {
+                        child.gameObject.SetActive(false);
+                        hiddenCount++;
+                        Debug.Log($"强制隐藏: {child.name}");
+                    }
+                }
+            }
+        }
+
+        if (hiddenCount > 0)
+        {
+            Debug.Log($"强制隐藏了 {hiddenCount} 个游戏结束相关UI");
+        }
     }
 
     /// <summary>
@@ -762,7 +796,26 @@ public class UIManager : MonoBehaviour
         // 添加按钮点击动画效果
         StartCoroutine(ButtonClickEffect());
 
-        // 立即开始重新开始流程
+        // 使用完整的重置流程
+        StartCoroutine(CompleteRestartRoutine());
+    }
+
+    private IEnumerator CompleteRestartRoutine()
+    {
+        // 立即隐藏游戏结束面板
+        HideGameOver();
+
+        // 显示重置提示
+        if (gameOverText != null)
+        {
+            gameOverText.text = "重置中...";
+            gameOverPanel.SetActive(true);
+        }
+
+        // 短暂延迟，让玩家看到提示
+        yield return new WaitForSeconds(0.5f);
+
+        // 执行重新开始
         RestartGame();
     }
 
@@ -800,6 +853,18 @@ public class UIManager : MonoBehaviour
         // 确保时间正常
         Time.timeScale = 1f;
 
+        // 重置游戏状态
+        isGameOver = false;
+
+        // 重置所有控制器的状态
+        ResetAllControllers();
+
+        // 隐藏游戏结束UI
+        if (gameOverPanel != null && gameOverPanel.activeSelf)
+        {
+            gameOverPanel.SetActive(false);
+        }
+
         // 获取当前场景信息
         int currentSceneIndex = SceneManager.GetActiveScene().buildIndex;
         string currentSceneName = SceneManager.GetActiveScene().name;
@@ -809,18 +874,58 @@ public class UIManager : MonoBehaviour
         // 检查场景索引是否有效
         if (currentSceneIndex < 0 || currentSceneIndex >= SceneManager.sceneCountInBuildSettings)
         {
-            Debug.LogError($"UIManager: 无效的场景索引 {currentSceneIndex}，总场景数: {SceneManager.sceneCountInBuildSettings}");
-            Debug.LogError("请确保场景已经添加到构建设置中 (File -> Build Settings -> Add Open Scenes)");
-
-            // 尝试使用场景名称加载
-            Debug.Log($"UIManager: 尝试使用场景名称加载: {currentSceneName}");
+            Debug.LogError($"UIManager: 无效的场景索引 {currentSceneIndex}");
             SceneManager.LoadScene(currentSceneName);
             return;
         }
 
         // 使用同步加载确保场景立即加载
-        Debug.Log("UIManager: 使用同步加载重新加载场景");
         SceneManager.LoadScene(currentSceneIndex);
+    }
+
+    /// <summary>
+    /// 重置所有控制器的状态
+    /// </summary>
+    private void ResetAllControllers()
+    {
+        // 重置玩家灵魂控制器
+        if (playerSoulController != null)
+        {
+            playerSoulController.ResetPlayerState();
+        }
+
+        // 重置所有动物控制器
+        ResetAnimalControllers();
+    }
+
+    /// <summary>
+    /// 重置动物控制器
+    /// </summary>
+    private void ResetAnimalControllers()
+    {
+        DeerController[] deerControllers = FindObjectsOfType<DeerController>();
+        foreach (DeerController deer in deerControllers)
+        {
+            deer.ResetState();
+        }
+
+        FoxController[] foxControllers = FindObjectsOfType<FoxController>();
+        foreach (FoxController fox in foxControllers)
+        {
+            fox.ResetState();
+        }
+
+        SheepController[] sheepControllers = FindObjectsOfType<SheepController>();
+        foreach (SheepController sheep in sheepControllers)
+        {
+            sheep.ResetState();
+        }
+
+        BirdController[] birdControllers = FindObjectsOfType<BirdController>();
+        foreach (BirdController bird in birdControllers)
+        {
+            bird.ResetState();
+        }
     }
 
     /// <summary>
