@@ -61,6 +61,9 @@ public class DeerController : MonoBehaviour, IPossessable
     // UI管理器引用
     private UIManager uiManager;
 
+    // DeerUIManager引用
+    private DeerUIManager deerUIManager;
+
     void Start()
     {
         // 获取组件引用
@@ -128,6 +131,13 @@ public class DeerController : MonoBehaviour, IPossessable
         if (uiManager == null)
         {
             Debug.LogWarning("未找到UIManager实例，UI可能无法正常工作");
+        }
+
+        // 获取DeerUIManager
+        deerUIManager = GetComponent<DeerUIManager>();
+        if (deerUIManager == null)
+        {
+            Debug.LogWarning("未找到DeerUIManager组件，UI提示可能无法正常工作");
         }
 
         // 强制调整到地面位置
@@ -358,6 +368,12 @@ public class DeerController : MonoBehaviour, IPossessable
         transform.position = positionBefore;
         transform.rotation = rotationBefore;
 
+        // 通知UI管理器显示控制提示
+        if (deerUIManager != null)
+        {
+            deerUIManager.ShowControlInstructions();
+        }
+
         if (showDebugInfo)
             Debug.Log($"OnPossess完成，确保位置保持在Y={transform.position.y:F2}");
     }
@@ -385,6 +401,12 @@ public class DeerController : MonoBehaviour, IPossessable
         if (deerAI != null)
         {
             deerAI.enabled = true;
+        }
+
+        // 通知UI管理器隐藏所有UI
+        if (deerUIManager != null)
+        {
+            deerUIManager.HideAllUI();
         }
 
         if (showDebugInfo) Debug.Log("鹿脱离附身！");

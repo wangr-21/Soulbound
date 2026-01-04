@@ -37,6 +37,9 @@ public class PlayerSoulController : MonoBehaviour
     public float purifierAttackCooldown = 2f; // 净化者攻击冷却时间
     private float lastPurifierAttackTime = 0f; // 上次被净化者攻击的时间
 
+    [Header("UI管理")]
+    public PlayerUIManager playerUIManager;
+
     // 移动和跳跃相关变量
     private Vector3 playerVelocity;
     private bool isGrounded;
@@ -159,6 +162,14 @@ public class PlayerSoulController : MonoBehaviour
         CheckCurrentScene();
 
         if (debugMode) Debug.Log($"灵魂控制器初始化完成 - 位置: {transform.position}");
+
+
+        playerUIManager = GetComponent<PlayerUIManager>();
+        if (playerUIManager == null)
+        {
+            Debug.LogWarning("未找到PlayerUIManager组件，玩家UI提示可能无法正常工作");
+        }
+
     }
 
     private void OnEnable()
@@ -305,6 +316,12 @@ public class PlayerSoulController : MonoBehaviour
         playerInputActions.Player.Enable();
 
         if (debugMode) Debug.Log($"玩家状态已重置 - 生命值: {currentHealth}/{maxHealth}, 灵魂时间: {soulTimeRemaining}/{maxSoulTime}");
+
+        if (playerUIManager != null)
+        {
+            playerUIManager.ShowInstructions();
+        }
+
     }
 
     /// <summary>
@@ -933,6 +950,11 @@ public class PlayerSoulController : MonoBehaviour
         }
 
         if (debugMode) Debug.Log("位置监控完成");
+
+        if (playerUIManager != null)
+        {
+            playerUIManager.HideInstructions();
+        }
     }
 
     void ReleasePossession()
