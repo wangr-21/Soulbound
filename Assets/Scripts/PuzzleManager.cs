@@ -15,8 +15,6 @@ public class PuzzleManager : MonoBehaviour
     private CountdownTimer timer;
     private string correctAnswer = "2056"; // 比如根据箭头推理出的数字
     private Coroutine hideErrorCoroutine;   //存储当前运行的隐藏协程
-    public TextMeshProUGUI successHintText; // 成功提示文本
-    private Coroutine hideSuccessCoroutine; // 控制成功提示隐藏的协程
 
     void Awake()
     {
@@ -72,41 +70,23 @@ public class PuzzleManager : MonoBehaviour
         if (userAns.Length < 4)
         {
             errorText.text = "请输入4位数字！";
-            ShowErrorThenHide(1f); // 显示1秒后隐藏
+            ShowErrorThenHide(1f);
             return;
         }
 
         if (userAns == correctAnswer)
         {
-            Debug.Log("答案正确，获得1个碎片！");
-            // 关键：数字谜题解决后，碎片数量+1
+            Debug.Log("答案正确，获得1块碎片！");
             FragmentManager.Instance.AddFragment();
-            ShowSuccessThenHide(2f); // 显示2秒后隐藏
+            // 替换为调用全局提示管理器
+            UIMessageManager.Instance.ShowMessage("恭喜你获得1块碎片！", 1f);
             ClosePuzzle();
         }
         else
         {
-            errorText.text = "错误！请重新输入！";
-            ShowErrorThenHide(1f); // 显示1秒后隐藏
+            errorText.text = "答案错误，请重新尝试！";
+            ShowErrorThenHide(1f);
         }
-    }
-
-    // 添加显示成功提示的方法
-    private void ShowSuccessThenHide(float delay)
-    {
-        successHintText.gameObject.SetActive(true);
-        successHintText.text = "恭喜你获得1块碎片！";
-        if (hideSuccessCoroutine != null)
-            StopCoroutine(hideSuccessCoroutine);
-        hideSuccessCoroutine = StartCoroutine(HideSuccessCoroutine(delay));
-    }
-
-    // 添加隐藏成功提示的协程
-    private IEnumerator HideSuccessCoroutine(float delay)
-    {
-        yield return new WaitForSecondsRealtime(delay);
-        successHintText.gameObject.SetActive(false);
-        hideSuccessCoroutine = null;
     }
 
     // 显示错误提示并延迟隐藏

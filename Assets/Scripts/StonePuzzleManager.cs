@@ -14,8 +14,6 @@ public class StonePuzzleManager : MonoBehaviour
     private int currentStoneIndex = 0;
     private float currentCountdown;
     private bool isCountingDown = false;
-    public TextMeshProUGUI successHintText;
-    private Coroutine hideSuccessCoroutine;
 
     void Start()
     {
@@ -43,59 +41,30 @@ public class StonePuzzleManager : MonoBehaviour
     // 玩家踩中石头时调用
     public void OnStoneStepped(GameObject steppedStone)
     {
-        // 新增：若索引已超出石头列表范围，直接返回（避免越界）
-        if (currentStoneIndex >= stoneOrder.Count)
-        {
-            return;
-        }
-
-        // 仅响应“当前激活的石头”
+        if (currentStoneIndex >= stoneOrder.Count) return;
         if (steppedStone != stoneOrder[currentStoneIndex]) return;
 
-        // 1. 关闭当前石头的发光
         ToggleStoneLight(steppedStone, false);
         isCountingDown = false;
 
-        // 2. 切换到下一个石头
         currentStoneIndex++;
         if (currentStoneIndex < stoneOrder.Count)
         {
-            // 激活下一个石头 + 开启发光 + 启动倒计时
             GameObject nextStone = stoneOrder[currentStoneIndex];
             nextStone.SetActive(true);
             ToggleStoneLight(nextStone, true);
-
             currentCountdown = countdownDuration;
             isCountingDown = true;
         }
         else
         {
-            // 3. 所有石头完成：获得碎片 + 保留石头作为方向提示
-            Debug.Log("石头谜题完成，获得1个碎片！");
+            Debug.Log("石头谜题完成，获得1块碎片！");
             FragmentManager.Instance.AddFragment();
-            ShowSuccessThenHide(2f); // 显示成功提示
-            isCountingDown = false; // 确保Update不再更新倒计时
-            UpdateCountdownUI(false); // 隐藏倒计时UI（关键新增代码）
-            // 这里写“获得碎片”的逻辑（比如调用物品系统）
-            // 例：InventorySystem.Instance.AddItem("谜题碎片");
+            // 替换为调用全局提示管理器
+            UIMessageManager.Instance.ShowMessage("恭喜你获得1块碎片！", 1f);
+            isCountingDown = false;
+            UpdateCountdownUI(false);
         }
-    }
-
-    // 添加显示和隐藏成功提示的方法
-    private void ShowSuccessThenHide(float delay)
-    {
-        successHintText.gameObject.SetActive(true);
-        successHintText.text = "恭喜你获得1块碎片！";
-        if (hideSuccessCoroutine != null)
-            StopCoroutine(hideSuccessCoroutine);
-        hideSuccessCoroutine = StartCoroutine(HideSuccessCoroutine(delay));
-    }
-
-    private IEnumerator HideSuccessCoroutine(float delay)
-    {
-        yield return new WaitForSecondsRealtime(delay);
-        successHintText.gameObject.SetActive(false);
-        hideSuccessCoroutine = null;
     }
 
     // 切换石头的发光状态

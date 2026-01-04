@@ -19,8 +19,6 @@ public class DiaryController : MonoBehaviour
     [SerializeField] private float errorHintDuration = 2f; // 错误提示显示时长（默认2秒，可调整）
     [SerializeField] private Color errorColor = Color.red; // 错误提示颜色（默认红色）
 
-    public TextMeshProUGUI successHintText;
-    private Coroutine hideSuccessCoroutine;
     private bool isPlayerNear = false;
     private bool isUnlocked = false; // 日记是否已解锁
     private int currentPageIndex = 0; // 当前页面索引
@@ -121,36 +119,19 @@ public class DiaryController : MonoBehaviour
         if (inputPassword == correctPassword)
         {
             isUnlocked = true;
-            Debug.Log("密码正确，日记解锁，获得1个碎片！");
-            // 关键：日记谜题解决后，碎片数量+1
+            Debug.Log("密码正确，日记解锁，获得1块碎片！");
             FragmentManager.Instance.AddFragment();
-            ShowSuccessThenHide(2f); // 显示成功提示
+            // 替换为调用全局提示管理器
+            UIMessageManager.Instance.ShowMessage("恭喜你获得1块碎片！", 1f);
             ClosePasswordPanel();
             OpenContentPanel();
         }
         else
         {
             Debug.Log("密码错误！");
-            StartCoroutine(ShakeInputField()); // 原有抖动效果保留
-            StartCoroutine(ShowErrorHint()); // 新增：显示错误提示
+            StartCoroutine(ShakeInputField());
+            StartCoroutine(ShowErrorHint());
         }
-    }
-
-    // 添加显示和隐藏成功提示的方法
-    private void ShowSuccessThenHide(float delay)
-    {
-        successHintText.gameObject.SetActive(true);
-        successHintText.text = "恭喜你获得1块碎片！";
-        if (hideSuccessCoroutine != null)
-            StopCoroutine(hideSuccessCoroutine);
-        hideSuccessCoroutine = StartCoroutine(HideSuccessCoroutine(delay));
-    }
-
-    private IEnumerator HideSuccessCoroutine(float delay)
-    {
-        yield return new WaitForSecondsRealtime(delay);
-        successHintText.gameObject.SetActive(false);
-        hideSuccessCoroutine = null;
     }
 
     //错误提示显示协程（显示2秒后自动隐藏，不影响原有提示）
