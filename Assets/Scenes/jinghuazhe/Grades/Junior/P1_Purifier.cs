@@ -1,6 +1,5 @@
 using UnityEngine;
 using UnityEngine.AI;
-using System.Collections;
 
 public class P1_Purifier : MonoBehaviour
 {
@@ -11,7 +10,7 @@ public class P1_Purifier : MonoBehaviour
 
     [Header("=== AI Components ===")]
     private NavMeshAgent agent;
-    private PlayerSoulController playerSoul; // 改为直接引用玩家组件
+    private Transform player;
 
     [Header("=== Movement Settings ===")]
     [SerializeField] private float normalWalkSpeed = 2f;
@@ -25,12 +24,6 @@ public class P1_Purifier : MonoBehaviour
     [SerializeField] private AudioClip attackSound; // 攻击音效
     [SerializeField] private GameObject attackEffect; // 攻击特效
     [SerializeField] private float attackKnockbackForce = 5f; // 攻击击退力
-
-    [Header("=== 碰撞伤害设置 ===")]
-    [SerializeField] private bool enableCollisionDamage = true; // 是否启用碰撞伤害
-    [SerializeField] private float collisionDamage = 20f; // 碰撞伤害值
-    [SerializeField] private float collisionDamageCooldown = 1f; // 碰撞伤害冷却时间
-    private float lastCollisionDamageTime = 0f; // 上次碰撞伤害时间
 
     [Header("=== Animation Settings ===")]
     [SerializeField] private Animator animator;
@@ -63,10 +56,6 @@ public class P1_Purifier : MonoBehaviour
     private enum PatrolState { Moving, Waiting }
     private PatrolState currentPatrolState = PatrolState.Moving;
 
-    // 添加刚体和碰撞器组件引用
-    private Rigidbody rb;
-    private Collider purifierCollider;
-
     void Start()
     {
         InitializePurifier();
@@ -79,28 +68,11 @@ public class P1_Purifier : MonoBehaviour
         // 获取组件
         agent = GetComponent<NavMeshAgent>();
         animator = GetComponent<Animator>();
-        rb = GetComponent<Rigidbody>();
-        purifierCollider = GetComponent<Collider>();
 
         if (agent == null)
         {
             Debug.LogError("P1: 找不到NavMeshAgent组件！");
             return;
-        }
-
-        // 设置刚体属性
-        if (rb != null)
-        {
-            rb.isKinematic = false;
-            rb.useGravity = true;
-            rb.constraints = RigidbodyConstraints.FreezeRotation;
-            rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
-        }
-
-        // 设置碰撞器属性
-        if (purifierCollider != null)
-        {
-            purifierCollider.isTrigger = false; // 确保不是触发器，以检测碰撞
         }
 
         // 初始化NavMeshAgent
@@ -111,8 +83,8 @@ public class P1_Purifier : MonoBehaviour
         agent.autoBraking = true;
         agent.obstacleAvoidanceType = ObstacleAvoidanceType.HighQualityObstacleAvoidance;
 
-        // 查找玩家 - 使用组件而不是标签
-        FindPlayerByComponent();
+        // 查找玩家
+        FindPlayer();
 
         // 初始化粒子系统
         InitializeParticleSystem();
@@ -126,39 +98,17 @@ public class P1_Purifier : MonoBehaviour
         isInitialized = true;
     }
 
-    private void FindPlayerByComponent()
+    private void FindPlayer()
     {
-        // 方法1: 通过单例获取
-        playerSoul = PlayerSoulController.Instance;
-
-        if (playerSoul != null)
-        {
-            Debug.Log($"P1: 通过单例找到玩家灵魂: {playerSoul.gameObject.name}");
-            return;
-        }
-
-        // 方法2: 查找场景中所有PlayerSoulController组件
-        PlayerSoulController[] allPlayers = FindObjectsOfType<PlayerSoulController>();
-        if (allPlayers.Length > 0)
-        {
-            playerSoul = allPlayers[0];
-            Debug.Log($"P1: 通过FindObjectsOfType找到玩家灵魂: {playerSoul.gameObject.name}");
-            return;
-        }
-
-        // 方法3: 通过名称查找
-        GameObject playerObj = GameObject.Find("Player");
+        GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
         if (playerObj != null)
         {
-            playerSoul = playerObj.GetComponent<PlayerSoulController>();
-            if (playerSoul != null)
-            {
-                Debug.Log($"P1: 通过名称找到玩家灵魂: {playerObj.name}");
-                return;
-            }
+            player = playerObj.transform;
         }
-
-        Debug.LogError("P1: 未找到玩家灵魂组件！");
+        else
+        {
+            Debug.LogError("P1: 未找到玩家对象（需添加Player标签）！");
+        }
     }
 
     private void InitializeParticleSystem()
@@ -297,21 +247,17 @@ public class P1_Purifier : MonoBehaviour
     /// </summary>
     private void UpdateCurrentTarget()
     {
-        // 重置当前目标
-        currentTarget = null;
+        // 优先攻击玩家灵魂
+        if (player != null)
+        {
+            currentTarget = player.gameObject;
+        }
 
-        // 检查玩家是否附身在动物上
+        // 如果玩家附身在动物上，则攻击动物
+        PlayerSoulController playerSoul = PlayerSoulController.Instance;
         if (playerSoul != null && playerSoul.isPossessing && playerSoul.currentPossessedObject != null)
         {
-            // 如果玩家附身在动物上，则攻击动物
             currentTarget = playerSoul.currentPossessedObject;
-            Debug.Log($"净化者: 目标更新为玩家附身的动物: {currentTarget.name}");
-        }
-        else if (playerSoul != null && playerSoul.gameObject != null)
-        {
-            // 否则攻击玩家灵魂
-            currentTarget = playerSoul.gameObject;
-            Debug.Log($"净化者: 目标更新为玩家灵魂: {currentTarget.name}");
         }
     }
 
@@ -384,62 +330,43 @@ public class P1_Purifier : MonoBehaviour
     {
         if (currentTarget == null) return;
 
-        Debug.Log($"净化者: 尝试对 {currentTarget.name} 造成攻击伤害");
-
-        // 检查目标是否是玩家灵魂
-        PlayerSoulController targetPlayer = currentTarget.GetComponent<PlayerSoulController>();
-        if (targetPlayer != null)
+        // 检查目标类型并应用相应伤害
+        if (currentTarget.CompareTag("Player"))
         {
-            targetPlayer.TakePurifierDamage();
-            Debug.Log($"净化者攻击玩家灵魂，造成{attackDamage}点伤害");
-            return;
+            // 攻击玩家灵魂
+            PlayerSoulController playerSoul = currentTarget.GetComponent<PlayerSoulController>();
+            if (playerSoul != null)
+            {
+                playerSoul.TakePurifierDamage();
+                Debug.Log($"净化者攻击玩家灵魂，造成{attackDamage}点伤害");
+            }
         }
-
-        // 攻击动物或其他对象
-        // 检查是否有IPossessable接口
-        IPossessable possessable = currentTarget.GetComponent<IPossessable>();
-        if (possessable != null && possessable is MonoBehaviour)
+        else
         {
-            MonoBehaviour mb = possessable as MonoBehaviour;
-
-            // 检查是否是DeerController（或其他动物控制器）
-            DeerController deer = mb.GetComponent<DeerController>();
-            if (deer != null)
+            // 攻击动物或其他对象
+            // 检查是否有IPossessable接口
+            IPossessable possessable = currentTarget.GetComponent<IPossessable>();
+            if (possessable != null && possessable is MonoBehaviour)
             {
-                deer.TakePurifierDamage(attackDamage);
-                Debug.Log($"净化者攻击鹿，造成{attackDamage}点伤害");
-                return;
-            }
+                MonoBehaviour mb = possessable as MonoBehaviour;
 
-            // 检查其他动物控制器
-            FoxController fox = mb.GetComponent<FoxController>();
-            if (fox != null)
-            {
-                fox.TakePurifierDamage(attackDamage);
-                Debug.Log($"净化者攻击狐狸，造成{attackDamage}点伤害");
-                return;
-            }
+                // 检查是否是DeerController（或其他动物控制器）
+                DeerController deer = mb.GetComponent<DeerController>();
+                if (deer != null)
+                {
+                    deer.TakePurifierDamage(attackDamage);
+                    Debug.Log($"净化者攻击鹿，造成{attackDamage}点伤害");
+                    return;
+                }
 
-            SheepController sheep = mb.GetComponent<SheepController>();
-            if (sheep != null)
-            {
-                sheep.TakePurifierDamage(attackDamage);
-                Debug.Log($"净化者攻击绵羊，造成{attackDamage}点伤害");
-                return;
-            }
+                // 可以添加其他动物类型的检查
+                // SheepController, FoxController, BirdController等
 
-            BirdController bird = mb.GetComponent<BirdController>();
-            if (bird != null)
-            {
-                bird.TakePurifierDamage(attackDamage);
-                Debug.Log($"净化者攻击鸟，造成{attackDamage}点伤害");
-                return;
-            }
-
-            // 通用伤害接口
-            if (mb.gameObject.TryGetComponent<HealthSystem>(out HealthSystem healthSystem))
-            {
-                healthSystem.TakeDamage(attackDamage);
+                // 通用伤害接口
+                if (mb.gameObject.TryGetComponent<HealthSystem>(out HealthSystem healthSystem))
+                {
+                    healthSystem.TakeDamage(attackDamage);
+                }
             }
         }
     }
@@ -464,184 +391,6 @@ public class P1_Purifier : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// 碰撞检测 - 当净化者与玩家碰撞时造成伤害（不使用标签）
-    /// </summary>
-    private void OnCollisionEnter(Collision collision)
-    {
-        if (!enableCollisionDamage) return;
-
-        GameObject collidedObject = collision.gameObject;
-        Debug.Log($"净化者碰撞到: {collidedObject.name}");
-
-        // 检查是否是玩家灵魂
-        PlayerSoulController player = collidedObject.GetComponent<PlayerSoulController>();
-        if (player != null)
-        {
-            Debug.Log($"净化者: 检测到玩家灵魂碰撞，应用碰撞伤害");
-            ApplyCollisionDamageToPlayer(player.gameObject);
-            return;
-        }
-
-        // 检查是否是玩家附身的动物
-        if (playerSoul != null && playerSoul.isPossessing && playerSoul.currentPossessedObject != null)
-        {
-            if (collidedObject == playerSoul.currentPossessedObject)
-            {
-                Debug.Log($"净化者: 检测到玩家附身动物碰撞，应用碰撞伤害");
-                ApplyCollisionDamageToAnimal(collidedObject);
-                return;
-            }
-        }
-
-        // 检查是否是动物（即使玩家没有附身）
-        IPossessable possessable = collidedObject.GetComponent<IPossessable>();
-        if (possessable != null)
-        {
-            Debug.Log($"净化者: 检测到动物碰撞，应用碰撞伤害");
-            ApplyCollisionDamageToAnimal(collidedObject);
-            return;
-        }
-    }
-
-    /// <summary>
-    /// 触发器检测
-    /// </summary>
-    private void OnTriggerEnter(Collider other)
-    {
-        if (!enableCollisionDamage) return;
-
-        GameObject collidedObject = other.gameObject;
-        Debug.Log($"净化者触发器进入: {collidedObject.name}");
-
-        // 检查是否是玩家灵魂
-        PlayerSoulController player = collidedObject.GetComponent<PlayerSoulController>();
-        if (player != null)
-        {
-            Debug.Log($"净化者: 触发器检测到玩家灵魂，应用碰撞伤害");
-            ApplyCollisionDamageToPlayer(player.gameObject);
-            return;
-        }
-
-        // 检查是否是玩家附身的动物
-        if (playerSoul != null && playerSoul.isPossessing && playerSoul.currentPossessedObject != null)
-        {
-            if (collidedObject == playerSoul.currentPossessedObject)
-            {
-                Debug.Log($"净化者: 触发器检测到玩家附身动物，应用碰撞伤害");
-                ApplyCollisionDamageToAnimal(collidedObject);
-                return;
-            }
-        }
-
-        // 检查是否是动物
-        IPossessable possessable = collidedObject.GetComponent<IPossessable>();
-        if (possessable != null)
-        {
-            Debug.Log($"净化者: 触发器检测到动物，应用碰撞伤害");
-            ApplyCollisionDamageToAnimal(collidedObject);
-            return;
-        }
-    }
-
-    /// <summary>
-    /// 对玩家应用碰撞伤害
-    /// </summary>
-    private void ApplyCollisionDamageToPlayer(GameObject playerObject)
-    {
-        // 检查冷却时间
-        if (Time.time - lastCollisionDamageTime < collisionDamageCooldown)
-        {
-            Debug.Log($"碰撞伤害冷却中: {collisionDamageCooldown - (Time.time - lastCollisionDamageTime):F2}秒");
-            return;
-        }
-
-        // 更新上次碰撞伤害时间
-        lastCollisionDamageTime = Time.time;
-
-        // 获取玩家组件
-        PlayerSoulController player = playerObject.GetComponent<PlayerSoulController>();
-        if (player != null)
-        {
-            // 播放碰撞特效
-            if (attackEffect != null)
-            {
-                Instantiate(attackEffect, transform.position, Quaternion.identity);
-            }
-
-            // 重要修改：调用玩家的碰撞伤害处理方法
-            player.ApplyCollisionDamageFromPurifier(this.gameObject);
-            Debug.Log($"净化者碰撞玩家灵魂，调用玩家的碰撞伤害处理方法");
-        }
-    }
-
-    /// <summary>
-    /// 对动物应用碰撞伤害
-    /// </summary>
-    private void ApplyCollisionDamageToAnimal(GameObject animalObject)
-    {
-        // 检查冷却时间
-        if (Time.time - lastCollisionDamageTime < collisionDamageCooldown)
-        {
-            return;
-        }
-
-        // 更新上次碰撞伤害时间
-        lastCollisionDamageTime = Time.time;
-
-        // 播放碰撞特效
-        if (attackEffect != null)
-        {
-            Instantiate(attackEffect, transform.position, Quaternion.identity);
-        }
-
-        // 检查动物类型并应用伤害
-        IPossessable possessable = animalObject.GetComponent<IPossessable>();
-        if (possessable != null && possessable is MonoBehaviour)
-        {
-            MonoBehaviour mb = possessable as MonoBehaviour;
-
-            // 检查动物类型并应用伤害
-            DeerController deer = mb.GetComponent<DeerController>();
-            if (deer != null)
-            {
-                deer.TakePurifierDamage(collisionDamage);
-                Debug.Log($"净化者碰撞鹿，造成{collisionDamage}点伤害");
-                return;
-            }
-
-            FoxController fox = mb.GetComponent<FoxController>();
-            if (fox != null)
-            {
-                fox.TakePurifierDamage(collisionDamage);
-                Debug.Log($"净化者碰撞狐狸，造成{collisionDamage}点伤害");
-                return;
-            }
-
-            SheepController sheep = mb.GetComponent<SheepController>();
-            if (sheep != null)
-            {
-                sheep.TakePurifierDamage(collisionDamage);
-                Debug.Log($"净化者碰撞绵羊，造成{collisionDamage}点伤害");
-                return;
-            }
-
-            BirdController bird = mb.GetComponent<BirdController>();
-            if (bird != null)
-            {
-                bird.TakePurifierDamage(collisionDamage);
-                Debug.Log($"净化者碰撞鸟，造成{collisionDamage}点伤害");
-                return;
-            }
-
-            // 通用伤害接口
-            if (mb.gameObject.TryGetComponent<HealthSystem>(out HealthSystem healthSystem))
-            {
-                healthSystem.TakeDamage(collisionDamage);
-            }
-        }
-    }
-
     // 同步粒子系统实际状态和标记
     private void SyncParticleState()
     {
@@ -657,43 +406,32 @@ public class P1_Purifier : MonoBehaviour
     {
         isPlayerInSight = false;
 
-        if (playerSoul == null || playerSoul.gameObject == null)
-        {
-            // 尝试重新查找玩家
-            FindPlayerByComponent();
-            return;
-        }
-
-        // 获取当前目标位置
-        Vector3 targetPosition = GetCurrentTargetPosition();
-        if (targetPosition == Vector3.zero) return;
+        if (player == null) return;
 
         // 距离检查
-        Vector3 directionToTarget = targetPosition - transform.position;
-        directionToTarget.y = 0;
-        float distanceToTarget = directionToTarget.magnitude;
+        Vector3 directionToPlayer = player.position - transform.position;
+        directionToPlayer.y = 0;
+        float distanceToPlayer = directionToPlayer.magnitude;
 
-        if (distanceToTarget > sightRange) return;
+        if (distanceToPlayer > sightRange) return;
 
         // 角度检查
-        float angleToTarget = Vector3.Angle(transform.forward, directionToTarget);
-        if (angleToTarget > sightAngle) return;
+        float angleToPlayer = Vector3.Angle(transform.forward, directionToPlayer);
+        if (angleToPlayer > sightAngle) return;
 
         // 障碍物检查
         Vector3 rayStart = transform.position + Vector3.up * 1.5f;
-        Vector3 rayTarget = targetPosition + Vector3.up * 1f;
+        Vector3 rayTarget = player.position + Vector3.up * 1f;
         Vector3 rayDirection = (rayTarget - rayStart).normalized;
 
         if (Physics.Raycast(rayStart, rayDirection, out RaycastHit hit, sightRange))
         {
             if (drawRaycastGizmos)
             {
-                // 检查是否看到了目标
-                bool isTarget = IsHitTarget(hit.collider.gameObject);
-                Debug.DrawLine(rayStart, hit.point, isTarget ? Color.green : Color.red);
+                Debug.DrawLine(rayStart, hit.point, hit.collider.CompareTag("Player") ? Color.green : Color.red);
             }
 
-            if (IsHitTarget(hit.collider.gameObject))
+            if (hit.collider.CompareTag("Player"))
             {
                 isPlayerInSight = true;
             }
@@ -702,44 +440,6 @@ public class P1_Purifier : MonoBehaviour
         {
             Debug.DrawLine(rayStart, rayStart + rayDirection * sightRange, Color.yellow);
         }
-    }
-
-    /// <summary>
-    /// 获取当前目标的坐标
-    /// </summary>
-    private Vector3 GetCurrentTargetPosition()
-    {
-        if (playerSoul == null) return Vector3.zero;
-
-        if (playerSoul.isPossessing && playerSoul.currentPossessedObject != null)
-        {
-            return playerSoul.currentPossessedObject.transform.position;
-        }
-        else if (playerSoul.gameObject != null)
-        {
-            return playerSoul.transform.position;
-        }
-
-        return Vector3.zero;
-    }
-
-    /// <summary>
-    /// 检查击中的对象是否是当前目标
-    /// </summary>
-    private bool IsHitTarget(GameObject hitObject)
-    {
-        if (playerSoul == null) return false;
-
-        // 检查是否是玩家灵魂
-        if (hitObject == playerSoul.gameObject) return true;
-
-        // 检查是否是玩家附身的动物
-        if (playerSoul.isPossessing && playerSoul.currentPossessedObject != null)
-        {
-            if (hitObject == playerSoul.currentPossessedObject) return true;
-        }
-
-        return false;
     }
 
     // 发现玩家时触发
@@ -775,13 +475,13 @@ public class P1_Purifier : MonoBehaviour
 
     private void ChasePlayer()
     {
-        if (currentTarget != null)
+        if (player != null && currentTarget == player.gameObject)
         {
-            agent.SetDestination(currentTarget.transform.position);
+            agent.SetDestination(player.position);
         }
 
         // 超出逃脱距离则丢失视野
-        if (currentTarget != null && Vector3.Distance(transform.position, currentTarget.transform.position) > sightRange * 1.5f)
+        if (Vector3.Distance(transform.position, player.position) > sightRange * 1.5f)
         {
             isPlayerInSight = false;
         }
@@ -952,16 +652,6 @@ public class P1_Purifier : MonoBehaviour
         Gizmos.color = Color.magenta;
         Gizmos.DrawWireSphere(transform.position, attackRange);
 
-        // 绘制碰撞范围
-        if (enableCollisionDamage)
-        {
-            Gizmos.color = Color.red;
-            if (purifierCollider != null)
-            {
-                Gizmos.DrawWireSphere(transform.position, purifierCollider.bounds.extents.magnitude);
-            }
-        }
-
         // 绘制导航路径
         if (isInitialized && agent != null && agent.hasPath)
         {
@@ -1062,23 +752,5 @@ public class P1_Purifier : MonoBehaviour
     {
         // 这个方法可以在攻击动画的关键帧中调用，确保伤害在正确的时间应用
         ApplyDamageToTarget();
-    }
-
-    /// <summary>
-    /// 启用或禁用碰撞伤害
-    /// </summary>
-    public void SetCollisionDamageEnabled(bool enabled)
-    {
-        enableCollisionDamage = enabled;
-        Debug.Log($"净化者碰撞伤害已{(enabled ? "启用" : "禁用")}");
-    }
-
-    /// <summary>
-    /// 设置碰撞伤害值
-    /// </summary>
-    public void SetCollisionDamage(float damage)
-    {
-        collisionDamage = damage;
-        Debug.Log($"净化者碰撞伤害已设置为{damage}点");
     }
 }
