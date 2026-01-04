@@ -79,6 +79,9 @@ public class BirdController : MonoBehaviour, IPossessable
     // UI管理器引用
     private UIManager uiManager;
 
+    // BirdUIManager引用
+    private BirdUIManager birdUIManager;
+
     // ===============================================================
     // Start
     // ===============================================================
@@ -96,6 +99,13 @@ public class BirdController : MonoBehaviour, IPossessable
         if (uiManager == null)
         {
             Debug.LogWarning("未找到UIManager实例，UI可能无法正常工作");
+        }
+
+        // 获取BirdUIManager
+        birdUIManager = GetComponent<BirdUIManager>();
+        if (birdUIManager == null)
+        {
+            Debug.LogWarning("未找到BirdUIManager组件，UI提示可能无法正常工作");
         }
 
         FindGroundPosition(); // ★ 初始化贴地
@@ -302,6 +312,12 @@ public class BirdController : MonoBehaviour, IPossessable
             }
         }
 
+        // 死亡时隐藏UI
+        if (birdUIManager != null)
+        {
+            birdUIManager.HideAllUI();
+        }
+
         // 销毁动物
         Destroy(gameObject);
     }
@@ -380,6 +396,12 @@ public class BirdController : MonoBehaviour, IPossessable
         SnapToGround();
         isGrounded = true;
 
+        // 通知UI管理器显示控制提示
+        if (birdUIManager != null)
+        {
+            birdUIManager.ShowControlInstructions();
+        }
+
         if (showDebugInfo)
         {
             Debug.Log($"=== 鸟({gameObject.name})被附身 ===");
@@ -424,6 +446,12 @@ public class BirdController : MonoBehaviour, IPossessable
         {
             animator.SetBool(flyParam, false);
             animator.SetBool(glideParam, false);
+        }
+
+        // 通知UI管理器隐藏所有UI
+        if (birdUIManager != null)
+        {
+            birdUIManager.HideAllUI();
         }
 
         if (showDebugInfo) Debug.Log("鸟脱离附身！");
