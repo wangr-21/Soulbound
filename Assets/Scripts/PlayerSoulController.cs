@@ -165,11 +165,38 @@ public class PlayerSoulController : MonoBehaviour
 
 
         playerUIManager = GetComponent<PlayerUIManager>();
-        if (playerUIManager == null)
+        if (playerUIManager != null)
+        {
+            playerUIManager.ShowInstructions();
+        }
+        else
         {
             Debug.LogWarning("未找到PlayerUIManager组件，玩家UI提示可能无法正常工作");
         }
 
+        // 初始鼠标状态设置
+        SetInitialMouseState();
+    }
+
+    private void SetInitialMouseState()
+    {
+        Scene currentScene = SceneManager.GetActiveScene();
+        if (currentScene.name == "StartScene" ||
+            currentScene.name == "DowlScene" ||
+            currentScene.name == "SoldierScene")
+        {
+            // UI场景：显示鼠标
+            Cursor.visible = true;
+            Cursor.lockState = CursorLockMode.None;
+            if (debugMode) Debug.Log($"初始鼠标状态：{currentScene.name} 场景中鼠标已显示和解锁");
+        }
+        else
+        {
+            // 游戏场景：隐藏鼠标
+            Cursor.visible = false;
+            Cursor.lockState = CursorLockMode.Locked;
+            if (debugMode) Debug.Log($"初始鼠标状态：{currentScene.name} 场景中鼠标已隐藏和锁定");
+        }
     }
 
     private void OnEnable()
@@ -321,7 +348,6 @@ public class PlayerSoulController : MonoBehaviour
         {
             playerUIManager.ShowInstructions();
         }
-
     }
 
     /// <summary>
@@ -357,6 +383,33 @@ public class PlayerSoulController : MonoBehaviour
     {
         if (debugMode) Debug.Log($"PlayerSoulController: 场景加载完成 - {scene.name}");
 
+        // 重要：每次场景加载时都重置时间缩放
+        Time.timeScale = 1f;
+        Debug.Log($"场景加载后重置Time.timeScale为: {Time.timeScale}");
+
+        // 根据场景类型设置鼠标状态
+        if (scene.name == "StartScene")
+        {
+            // 在StartScene中：显示并解锁鼠标
+            Cursor.visible = true;
+            Cursor.lockState = CursorLockMode.None;
+            if (debugMode) Debug.Log($"已切换到StartScene，鼠标已显示和解锁");
+        }
+        else if (scene.name == "DowlScene" || scene.name == "SoldierScene")
+        {
+            // 回忆场景中：也显示鼠标
+            Cursor.visible = true;
+            Cursor.lockState = CursorLockMode.None;
+            if (debugMode) Debug.Log($"进入回忆场景 {scene.name}，鼠标已显示和解锁");
+        }
+        else
+        {
+            // 游戏主场景中：隐藏并锁定鼠标（第一人称视角）
+            Cursor.visible = false;
+            Cursor.lockState = CursorLockMode.Locked;
+            if (debugMode) Debug.Log($"进入游戏主场景，鼠标已隐藏和锁定");
+        }
+
         if (scene.name == "DowlScene")
         {
             isInDowlScene = true;
@@ -369,9 +422,9 @@ public class PlayerSoulController : MonoBehaviour
             PauseSoulTimer();
             if (debugMode) Debug.Log("进入 SoldierScene，暂停灵魂计时器");
         }
-        else
+        else if (scene.name != "StartScene")  // 排除StartScene
         {
-            // 如果加载的是主场景（不是回忆场景），重置玩家状态
+            // 如果加载的是游戏主场景（不是回忆场景或开始场景），重置玩家状态
             ResetPlayerState();
         }
     }
@@ -448,7 +501,7 @@ public class PlayerSoulController : MonoBehaviour
     }
 
     /// <summary>
-    /// 灵魂消散（游戏结束）- 仅修改此方法
+    /// 灵魂消散（游戏结束）- 修复版本
     /// </summary>
     public void OnSoulDissipate()
     {
@@ -459,7 +512,7 @@ public class PlayerSoulController : MonoBehaviour
         // 设置游戏结束状态
         isGameOver = true;
 
-        // 暂停游戏时间！这样所有Update方法都会停止
+        // 暂停游戏时间！这样所有Update方法都会停止 - 场景完全静止
         Time.timeScale = 0f;
 
         // 停止所有移动和输入
@@ -485,29 +538,40 @@ public class PlayerSoulController : MonoBehaviour
 
         if (characterController != null) characterController.enabled = false;
 
+        // 立即解锁鼠标
+        UnlockMouse();
+
         // 显示游戏结束UI
         if (UIManager.Instance != null)
         {
-            UIManager.Instance.ShowSimpleGameOver("失败！");
+            UIManager.Instance.ShowSimpleGameOver("over！");
         }
         else
         {
             Debug.LogWarning("UIManager实例未找到，无法显示游戏结束UI");
         }
 
-        // 注意：因为Time.timeScale = 0，所以需要使用StartCoroutine的特殊形式
-        // 或者使用UnscaledTime
+        // 使用不受时间缩放影响的延迟
         StartCoroutine(LoadStartSceneAfterDelayUnscaled(3f));
     }
 
+    private void UnlockMouse()
+    {
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+
+        if (debugMode) Debug.Log("游戏结束，鼠标已解锁");
+    }
+
     /// <summary>
-    /// 新增：使用不受时间缩放影响的延迟
+    /// 使用不受时间缩放影响的延迟
     /// </summary>
     private IEnumerator LoadStartSceneAfterDelayUnscaled(float delay)
     {
         float elapsedTime = 0f;
         while (elapsedTime < delay)
         {
+            // 使用 Time.unscaledDeltaTime，不受 Time.timeScale 影响
             elapsedTime += Time.unscaledDeltaTime;
             yield return null;
         }
@@ -515,16 +579,10 @@ public class PlayerSoulController : MonoBehaviour
         // 恢复时间缩放
         Time.timeScale = 1f;
 
-        // 加载开始场景
-        SceneManager.LoadScene("StartScene");
-    }
+        // 确保鼠标在加载前解锁
+        UnlockMouse();
 
-    /// <summary>
-    /// 新增：延迟3秒加载StartScene
-    /// </summary>
-    private IEnumerator LoadStartSceneAfterDelay(float delay)
-    {
-        yield return new WaitForSeconds(delay);
+        // 加载开始场景
         SceneManager.LoadScene("StartScene");
     }
 

@@ -58,6 +58,30 @@ public class UIManager : MonoBehaviour
 
         // 初始化简化游戏结束UI状态
         InitSimpleGameOverUI();
+
+        // 初始鼠标状态设置
+        SetInitialMouseState();
+    }
+
+    private void SetInitialMouseState()
+    {
+        Scene currentScene = SceneManager.GetActiveScene();
+        if (currentScene.name == "StartScene" ||
+            currentScene.name == "DowlScene" ||
+            currentScene.name == "SoldierScene")
+        {
+            // UI场景：显示鼠标
+            Cursor.visible = true;
+            Cursor.lockState = CursorLockMode.None;
+            if (showDebugLogs) Debug.Log($"UIManager初始鼠标状态：{currentScene.name} 场景中鼠标已显示和解锁");
+        }
+        else
+        {
+            // 游戏场景：隐藏鼠标
+            Cursor.visible = false;
+            Cursor.lockState = CursorLockMode.Locked;
+            if (showDebugLogs) Debug.Log($"UIManager初始鼠标状态：{currentScene.name} 场景中鼠标已隐藏和锁定");
+        }
     }
 
     // 初始化简化游戏结束UI
@@ -148,6 +172,18 @@ public class UIManager : MonoBehaviour
         }
 
         Debug.Log($"游戏结束UI显示: {message}");
+
+        // 在显示游戏结束UI时解锁鼠标
+        UnlockMouseForUI();
+    }
+
+    // 专门为UI解锁鼠标的方法
+    private void UnlockMouseForUI()
+    {
+        Cursor.visible = true;
+        Cursor.lockState = CursorLockMode.None;
+
+        if (showDebugLogs) Debug.Log("UIManager: 游戏结束时UI鼠标已解锁");
     }
 
     void OnDestroy()
@@ -157,11 +193,12 @@ public class UIManager : MonoBehaviour
 
     void Update()
     {
-        // 如果游戏结束，只处理必要的UI逻辑，不更新游戏状态UI
+        // 如果游戏结束，使用特殊更新逻辑
         if (isGameOver)
         {
-            // 注意：这里不返回，因为游戏结束UI需要保持在最上层
-            // 但不更新灵魂/动物的状态UI
+            // 游戏结束时的特殊UI更新逻辑
+            // 使用Time.unscaledDeltaTime确保即使Time.timeScale=0也能工作
+            UpdateGameOverUI();
             return;
         }
 
@@ -207,18 +244,47 @@ public class UIManager : MonoBehaviour
         }
     }
 
+    // 新增：专门处理游戏结束时的UI更新
+    private void UpdateGameOverUI()
+    {
+        // 确保鼠标状态正确（即使Time.timeScale=0也要保持）
+        if (!Cursor.visible || Cursor.lockState != CursorLockMode.None)
+        {
+            Cursor.visible = true;
+            Cursor.lockState = CursorLockMode.None;
+        }
+    }
+
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
         Debug.Log($"UIManager: 场景加载完成 - {scene.name}");
 
         ForceHideAllGameOverUI();
-        // 隐藏简化游戏结束UI
         HideSimpleGameOverUI();
+
+        // 关键：确保时间缩放被重置为1
+        Time.timeScale = 1f;
+        Debug.Log($"UIManager: 场景加载后重置Time.timeScale为1");
+
+        // 根据场景设置鼠标状态
+        if (scene.name == "StartScene" ||
+            scene.name == "DowlScene" ||
+            scene.name == "SoldierScene")
+        {
+            Cursor.visible = true;
+            Cursor.lockState = CursorLockMode.None;
+            Debug.Log($"UIManager: {scene.name} 中鼠标已显示和解锁");
+        }
+        else
+        {
+            Cursor.visible = false;
+            Cursor.lockState = CursorLockMode.Locked;
+            Debug.Log($"UIManager: {scene.name} 中鼠标已隐藏和锁定");
+        }
 
         FindUIReferences();
         ResetUIState();
         StartCoroutine(DelayedFindPlayerController());
-        Time.timeScale = 1f;
     }
 
     private void ForceHideAllGameOverUI()
