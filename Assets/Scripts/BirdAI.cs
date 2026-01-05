@@ -3,25 +3,25 @@ using UnityEngine;
 public class BirdAI : MonoBehaviour
 {
     [Header("AI 设置")]
-    public float maxHeight = 15f;           // 最大飞行高度
-    public float minHeight = 2f;            // 最小飞行高度
-    public float preferredHeight = 8f;      // 首选飞行高度
-    public float flyRadius = 25f;           // 飞行范围半径
+    public float maxHeight = 3.5f;           // 最大飞行高度（从7f降低到3.5f）
+    public float minHeight = 1.2f;           // 最小飞行高度（从2f降低到1.2f）
+    public float preferredHeight = 2.5f;     // 首选飞行高度（从5f降低到2.5f）
+    public float flyRadius = 25f;            // 飞行范围半径
 
     [Header("状态时间设置")]
-    public float minFlyTime = 5f;           // 最短飞行时间
-    public float maxFlyTime = 15f;          // 最长飞行时间
-    public float minGlideTime = 2f;         // 最短滑翔时间
-    public float maxGlideTime = 6f;         // 最长滑翔时间
-    public float minIdleTime = 3f;          // 最短地面停留时间
-    public float maxIdleTime = 10f;         // 最长地面停留时间
-    public float landChance = 0.2f;         // 每次考虑着陆的概率
-    public float glideChance = 0.3f;        // 开始滑翔的概率
+    public float minFlyTime = 5f;            // 最短飞行时间
+    public float maxFlyTime = 15f;           // 最长飞行时间
+    public float minGlideTime = 2f;          // 最短滑翔时间
+    public float maxGlideTime = 6f;          // 最长滑翔时间
+    public float minIdleTime = 3f;           // 最短地面停留时间
+    public float maxIdleTime = 10f;          // 最长地面停留时间
+    public float landChance = 0.2f;          // 每次考虑着陆的概率
+    public float glideChance = 0.3f;         // 开始滑翔的概率
 
     [Header("盘旋设置")]
-    public float orbitRadius = 5f;          // 盘旋半径
-    public float orbitSpeed = 0.5f;         // 盘旋速度
-    public float heightVariation = 2f;      // 高度变化范围
+    public float orbitRadius = 5f;           // 盘旋半径
+    public float orbitSpeed = 0.5f;          // 盘旋速度
+    public float heightVariation = 1f;       // 高度变化范围（从2f降低到1f，避免飞行过高）
 
     [Header("组件引用")]
     private BirdController birdController;
@@ -31,13 +31,13 @@ public class BirdAI : MonoBehaviour
     public BirdAIState currentState = BirdAIState.Flying;
     private float stateTimer = 0f;
     private float currentStateDuration = 0f;
-    private Vector3 homePosition;           // "巢穴"位置（初始位置）
-    private Vector3 currentTarget;          // 当前目标位置
-    private Vector3 orbitCenter;            // 盘旋中心点
-    private float orbitAngle = 0f;          // 盘旋角度
-    private float targetHeight;             // 目标高度
-    private bool isCircling = false;        // 是否在盘旋
-    private Vector3 randomDirection;        // 随机飞行方向
+    private Vector3 homePosition;            // "巢穴"位置（初始位置）
+    private Vector3 currentTarget;           // 当前目标位置
+    private Vector3 orbitCenter;             // 盘旋中心点
+    private float orbitAngle = 0f;           // 盘旋角度
+    private float targetHeight;              // 目标高度
+    private bool isCircling = false;         // 是否在盘旋
+    private Vector3 randomDirection;         // 随机飞行方向
 
     [Header("调试")]
     public bool showDebugInfo = true;
@@ -155,8 +155,8 @@ public class BirdAI : MonoBehaviour
         stateTimer = 0f;
         currentStateDuration = Random.Range(minFlyTime, maxFlyTime);
 
-        // 设置目标高度
-        targetHeight = Random.Range(preferredHeight - 2f, preferredHeight + 2f);
+        // 设置目标高度 - 降低飞行高度范围
+        targetHeight = Random.Range(preferredHeight - 1f, preferredHeight + 1f); // 从±2f降低到±1f
         targetHeight = Mathf.Clamp(targetHeight, minHeight, maxHeight);
 
         // 决定是否盘旋
@@ -184,14 +184,14 @@ public class BirdAI : MonoBehaviour
     void UpdateFlyingState()
     {
         // 检查是否应该滑翔
-        if (Random.value < glideChance * Time.deltaTime && !isCircling && transform.position.y > minHeight + 2f)
+        if (Random.value < glideChance * Time.deltaTime && !isCircling && transform.position.y > minHeight + 1f) // 从+2f降低到+1f
         {
             EnterGlidingState();
             return;
         }
 
         // 检查是否应该考虑着陆
-        if (Random.value < landChance * Time.deltaTime && stateTimer > 2f && transform.position.y < preferredHeight)
+        if (Random.value < landChance * Time.deltaTime && stateTimer > 2f && transform.position.y < preferredHeight + 0.5f) // 更容易考虑着陆
         {
             // 检查当前位置是否适合着陆
             if (CheckLandingSpot())
@@ -238,7 +238,7 @@ public class BirdAI : MonoBehaviour
         float radian = orbitAngle * Mathf.Deg2Rad;
         Vector3 offset = new Vector3(Mathf.Cos(radian) * orbitRadius, 0, Mathf.Sin(radian) * orbitRadius);
 
-        // 添加高度变化
+        // 添加高度变化（减少高度变化范围）
         float heightOffset = Mathf.Sin(Time.time * 0.5f) * heightVariation;
         Vector3 targetPosition = orbitCenter + offset;
         targetPosition.y = targetHeight + heightOffset;
@@ -249,8 +249,8 @@ public class BirdAI : MonoBehaviour
 
         // 调整高度
         float heightDifference = targetPosition.y - transform.position.y;
-        bool ascending = heightDifference > 0.5f;
-        bool descending = heightDifference < -0.5f;
+        bool ascending = heightDifference > 0.3f; // 从0.5f降低到0.3f，更敏感
+        bool descending = heightDifference < -0.3f;
 
         // 设置AI输入
         if (birdController != null)
@@ -294,10 +294,10 @@ public class BirdAI : MonoBehaviour
         Vector3 direction = (currentTarget - transform.position);
         direction.y = 0;
 
-        // 调整高度到目标高度
+        // 调整高度到目标高度（减少调整阈值）
         float heightDifference = targetHeight - transform.position.y;
-        bool ascending = heightDifference > 1f;
-        bool descending = heightDifference < -1f;
+        bool ascending = heightDifference > 0.5f; // 从1f降低到0.5f
+        bool descending = heightDifference < -0.5f;
 
         // 设置AI输入
         if (birdController != null)
@@ -340,10 +340,10 @@ public class BirdAI : MonoBehaviour
             birdController.SetAIInput(moveInput, false, false, true); // 滑翔状态
         }
 
-        // 检查是否应该结束滑翔
-        if (stateTimer >= currentStateDuration || transform.position.y < minHeight + 1f)
+        // 检查是否应该结束滑翔（降低结束滑翔的高度阈值）
+        if (stateTimer >= currentStateDuration || transform.position.y < minHeight + 0.5f) // 从+1f降低到+0.5f
         {
-            if (transform.position.y < minHeight + 2f && CheckLandingSpot())
+            if (transform.position.y < minHeight + 1f && CheckLandingSpot()) // 从+2f降低到+1f
             {
                 EnterLandingState();
             }
@@ -390,7 +390,7 @@ public class BirdAI : MonoBehaviour
         float verticalDistance = transform.position.y - currentTarget.y;
 
         // 控制下降
-        bool shouldDescend = verticalDistance > 0.5f;
+        bool shouldDescend = verticalDistance > 0.3f; // 从0.5f降低到0.3f
 
         // 设置AI输入
         if (birdController != null)
@@ -400,7 +400,7 @@ public class BirdAI : MonoBehaviour
         }
 
         // 检查是否着陆成功
-        if (verticalDistance < 0.5f && distanceToTarget < 1f)
+        if (verticalDistance < 0.3f && distanceToTarget < 1f) // 从0.5f降低到0.3f
         {
             // 成功着陆
             EnterIdleState();
@@ -418,8 +418,8 @@ public class BirdAI : MonoBehaviour
         stateTimer = 0f;
         currentStateDuration = 3f; // 起飞时间限制
 
-        // 设置起飞目标高度
-        targetHeight = Random.Range(minHeight + 2f, preferredHeight);
+        // 设置起飞目标高度（降低起飞高度）
+        targetHeight = Random.Range(minHeight + 1f, preferredHeight); // 从+2f降低到+1f
 
         // 选择起飞方向
         randomDirection = new Vector3(Random.Range(-1f, 1f), 0, Random.Range(-1f, 1f)).normalized;
@@ -445,7 +445,7 @@ public class BirdAI : MonoBehaviour
         }
 
         // 检查是否达到目标高度
-        if (transform.position.y >= targetHeight - 1f || stateTimer >= currentStateDuration)
+        if (transform.position.y >= targetHeight - 0.5f || stateTimer >= currentStateDuration) // 从-1f改为-0.5f
         {
             EnterFlyingState();
         }
@@ -460,7 +460,7 @@ public class BirdAI : MonoBehaviour
     {
         // 检查下方是否有地面
         RaycastHit hit;
-        if (Physics.Raycast(transform.position, Vector3.down, out hit, 20f, birdController.groundLayer))
+        if (Physics.Raycast(transform.position, Vector3.down, out hit, 15f, birdController.groundLayer)) // 从20f降低到15f
         {
             // 检查地面是否相对平坦
             float groundAngle = Vector3.Angle(Vector3.up, hit.normal);

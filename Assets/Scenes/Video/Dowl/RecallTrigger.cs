@@ -83,7 +83,13 @@ public class RecallTrigger : MonoBehaviour
         MainBGMController.Instance?.FadeOut(0.5f);
 
         // 添加式加载回忆场景
+        if (PlayerSoulController.Instance != null)
+        {
+            PlayerSoulController.Instance.EnterMemoryScene("DowlScene");
+        }
+
         SceneManager.LoadScene("DowlScene", LoadSceneMode.Additive);
+
     }
 
     // 重置回忆状态

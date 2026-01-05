@@ -68,6 +68,12 @@ public class SoldierRecallTrigger : MonoBehaviour
         // 淡出背景音乐（和DowlScene逻辑一致）
         MainBGMController.Instance?.FadeOut(0.5f);
 
+        // 通知 PlayerSoulController 进入回忆场景
+        if (PlayerSoulController.Instance != null)
+        {
+            PlayerSoulController.Instance.EnterMemoryScene("SoldierScene");
+        }
+
         // Additive模式加载SoldierScene（不销毁主场景）
         SceneManager.LoadScene("SoldierScene", LoadSceneMode.Additive);
     }

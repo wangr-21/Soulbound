@@ -84,7 +84,7 @@ public class PuzzleManager : MonoBehaviour
         }
         else
         {
-            errorText.text = "答案错误，请重新尝试！";
+            errorText.text = "错误!请重新输入!";
             ShowErrorThenHide(1f);
         }
     }

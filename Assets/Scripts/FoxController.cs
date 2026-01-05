@@ -11,6 +11,11 @@ public class FoxController : MonoBehaviour, IPossessable
     public float groundCheckDistance = 0.2f;
     public LayerMask groundLayer = -1;
 
+    [Header("重力设置")]
+    public float gravityMultiplier = 1.0f; // 重力倍数
+    public bool useCustomGravity = true; // 是否使用自定义重力
+    public float customGravityValue = -9.81f; // 自定义重力值
+
     [Header("模型引用")]
     public Transform foxModel;
     public bool fixModelRotation = true;
@@ -79,6 +84,9 @@ public class FoxController : MonoBehaviour, IPossessable
     // UI管理器引用
     private UIManager uiManager;
 
+    // 重力变量
+    private float currentGravity = 0f;
+
     void Start()
     {
         InitializeComponents();
@@ -87,6 +95,9 @@ public class FoxController : MonoBehaviour, IPossessable
         currentHealth = maxHealth;
         possessionTimeRemaining = maxPossessionTime;
         isTimeExhausted = false;
+
+        // 初始化重力
+        UpdateGravityValue();
 
         // 获取UI管理器
         uiManager = UIManager.Instance;
@@ -105,6 +116,7 @@ public class FoxController : MonoBehaviour, IPossessable
             Debug.Log($"- 组件: Animator={animator != null}, Controller={controller != null}");
             Debug.Log($"- 生命值: {currentHealth}/{maxHealth}");
             Debug.Log($"- 附身时间: {possessionTimeRemaining}/{maxPossessionTime}");
+            Debug.Log($"- 重力设置: 倍数={gravityMultiplier}, 自定义={useCustomGravity}, 值={currentGravity:F2}");
         }
     }
 
@@ -190,8 +202,31 @@ public class FoxController : MonoBehaviour, IPossessable
         }
     }
 
+    /// <summary>
+    /// 更新重力值
+    /// </summary>
+    private void UpdateGravityValue()
+    {
+        if (useCustomGravity)
+        {
+            currentGravity = customGravityValue * gravityMultiplier;
+        }
+        else
+        {
+            currentGravity = Physics.gravity.y * gravityMultiplier;
+        }
+
+        if (showDebugInfo && Time.frameCount % 120 == 0)
+        {
+            Debug.Log($"狐狸重力更新: {currentGravity:F2} (自定义={useCustomGravity}, 倍数={gravityMultiplier})");
+        }
+    }
+
     void Update()
     {
+        // 更新重力值（如果有变化）
+        UpdateGravityValue();
+
         // 更新附身计时器
         if (isPossessionTimerActive && isPossessed)
         {
@@ -350,6 +385,7 @@ public class FoxController : MonoBehaviour, IPossessable
             Debug.Log($"- 控制器启用状态: {controllerWasEnabled}");
             Debug.Log($"- 当前动画参数: Speed={speedParam}, Grounded={isGroundedParam}, Jump={jumpParam}");
             Debug.Log($"- 附身时间重置为: {possessionTimeRemaining}s");
+            Debug.Log($"- 重力设置: 当前重力={currentGravity:F2}");
         }
 
         // 如果存在AI组件，禁用AI
@@ -480,7 +516,7 @@ public class FoxController : MonoBehaviour, IPossessable
                 // 应用重力
                 if (!isGrounded)
                 {
-                    moveDirection.y += Physics.gravity.y * Time.deltaTime;
+                    moveDirection.y += currentGravity * Time.deltaTime;
                 }
 
                 // 应用垂直移动
@@ -572,7 +608,7 @@ public class FoxController : MonoBehaviour, IPossessable
         // 应用重力
         if (!isGrounded)
         {
-            moveDirection.y += Physics.gravity.y * Time.deltaTime;
+            moveDirection.y += currentGravity * Time.deltaTime;
         }
 
         // 应用所有移动 - 这是关键！
@@ -658,7 +694,8 @@ public class FoxController : MonoBehaviour, IPossessable
         // 跳跃处理 - 修复：确保在地面且未跳跃时触发
         if (isGrounded && jumpTriggered && !isJumping)
         {
-            moveDirection.y = Mathf.Sqrt(jumpForce * -2f * Physics.gravity.y);
+            // 使用当前重力值计算跳跃速度
+            moveDirection.y = Mathf.Sqrt(jumpForce * -2f * currentGravity);
             isJumping = true;
             wasJumping = true;
             lastJumpTime = Time.time;
@@ -679,7 +716,7 @@ public class FoxController : MonoBehaviour, IPossessable
                 if (showDebugInfo)
                 {
                     Debug.Log($"触发跳跃动画，触发器: {jumpParam}");
-                    Debug.Log($"跳跃速度: {moveDirection.y:F2}");
+                    Debug.Log($"跳跃速度: {moveDirection.y:F2}, 当前重力: {currentGravity:F2}");
                     Debug.Log($"当前状态: {GetCurrentStateName()}");
                 }
             }
@@ -689,7 +726,7 @@ public class FoxController : MonoBehaviour, IPossessable
         // 应用重力
         if (!isGrounded)
         {
-            moveDirection.y += Physics.gravity.y * Time.deltaTime;
+            moveDirection.y += currentGravity * Time.deltaTime;
         }
 
         // 应用移动
@@ -1033,5 +1070,38 @@ public class FoxController : MonoBehaviour, IPossessable
         animator.SetBool(isGroundedParam, true);
 
         Debug.Log("=== 测试完成 ===");
+    }
+
+    [ContextMenu("调整重力：设置为默认")]
+    public void SetDefaultGravity()
+    {
+        gravityMultiplier = 1.0f;
+        useCustomGravity = false;
+        Debug.Log("重力设置为默认 (Unity全局重力)");
+    }
+
+    [ContextMenu("调整重力：设置为低重力 (0.5倍)")]
+    public void SetLowGravity()
+    {
+        gravityMultiplier = 0.5f;
+        useCustomGravity = false;
+        Debug.Log("重力设置为0.5倍");
+    }
+
+    [ContextMenu("调整重力：设置为高重力 (1.5倍)")]
+    public void SetHighGravity()
+    {
+        gravityMultiplier = 1.5f;
+        useCustomGravity = false;
+        Debug.Log("重力设置为1.5倍");
+    }
+
+    [ContextMenu("调整重力：设置为自定义值 (-5)")]
+    public void SetCustomGravityValue()
+    {
+        gravityMultiplier = 1.0f;
+        useCustomGravity = true;
+        customGravityValue = -5f;
+        Debug.Log("重力设置为自定义值 -5");
     }
 }

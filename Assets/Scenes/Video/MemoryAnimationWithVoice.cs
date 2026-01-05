@@ -34,15 +34,27 @@ public class MemoryAnimationWithVoice : MonoBehaviour
     public AudioClip wind;
     public AudioClip drawSword;
 
-    [Header("===== 音量配置（统一放大特效声） =====")]
-    public float bgmBaseVolume = 1f;
-    public float typewriterVolume = 1.0f; // 打字机音量（原0.5）
-    public float soldierShoutVolume = 30f; // 士兵呐喊（原20）
-    public float spiritRoarVolume = 20f; // 灵体咆哮（原10）
-    public float breathVolume = 100f; // 呼吸声（原20）
-    public float windVolume = 100f; // 风声（原50）
-    public float drawSwordVolume = 100f; // 拔剑声（原50）
-    public float voice07Volume = 2.0f; // 最后人声（原1）
+    [Header("===== 音量配置 - 特效声音单独加大 =====")]
+    [Range(0f, 1f)]
+    public float bgmBaseVolume = 0.7f; // BGM音量，避免盖过人声
+    [Range(0f, 1f)]
+    public float typewriterVolume = 0.4f; // 打字机音量适中
+    [Range(0f, 1f)]
+    public float voice07Volume = 0.9f; // 最后人声，稍高但不最大
+
+    [Header("===== 特效声音（单独加大） =====")]
+    [Range(1f, 3f)]
+    public float effectVolumeMultiplier = 2.0f; // 特效声音乘数（可调1-3倍）
+    [Range(0f, 1f)]
+    public float soldierShoutVolume = 0.9f; // 基础音量
+    [Range(0f, 1f)]
+    public float spiritRoarVolume = 0.9f; // 基础音量
+    [Range(0f, 1f)]
+    public float breathVolume = 1f; // 基础音量
+    [Range(0f, 1f)]
+    public float windVolume = 1f; // 基础音量
+    [Range(0f, 1f)]
+    public float drawSwordVolume = 1f; // 基础音量
 
     [Header("===== 动画配置 =====")]
     [Tooltip("第7张图BGM淡出时长（秒）")]
@@ -53,6 +65,10 @@ public class MemoryAnimationWithVoice : MonoBehaviour
     public float spiritLightMaxAlpha = 1.0f; // 原0.8，增大为1.0
     [Tooltip("第一张→第二张闪白特效时长（秒）")]
     public float flashWhiteDuration = 0.08f; // 闪白持续时间
+
+    [Header("===== 调试选项 =====")]
+    public bool enableDebugLog = true; // 是否启用调试日志
+    public bool testAllSoundsOnStart = false; // 开始时测试所有声音
 
     public string[] subtitleContents = new string[]
     {
@@ -81,13 +97,53 @@ public class MemoryAnimationWithVoice : MonoBehaviour
             bgmSource.volume = bgmBaseVolume;
             bgmSource.loop = true;
             bgmSource.Play();
-            Debug.Log("BGM开始播放：" + bgmClip.name);
+            if (enableDebugLog) Debug.Log($"BGM开始播放：{bgmClip.name}，音量：{bgmBaseVolume}");
         }
         else
         {
             Debug.LogError("BGM未赋值！请在Inspector面板拖入bgmSource和bgmClip");
         }
 
+        // 测试所有声音
+        if (testAllSoundsOnStart)
+        {
+            StartCoroutine(TestAllSounds());
+        }
+        else
+        {
+            StartCoroutine(PlayFullAnimation());
+        }
+    }
+
+    IEnumerator TestAllSounds()
+    {
+        Debug.Log("=== 开始测试所有声音 ===");
+
+        // 测试打字机
+        TestSound("打字机", typewriterKey, typewriterVolume, false);
+        yield return new WaitForSeconds(0.5f);
+
+        // 测试特效声音
+        TestSound("士兵呐喊", soldierShout, soldierShoutVolume, true);
+        yield return new WaitForSeconds(1f);
+
+        TestSound("灵体咆哮", spiritRoar, spiritRoarVolume, true);
+        yield return new WaitForSeconds(1f);
+
+        TestSound("呼吸声", breath, breathVolume, true);
+        yield return new WaitForSeconds(1f);
+
+        TestSound("风声", wind, windVolume, true);
+        yield return new WaitForSeconds(1f);
+
+        TestSound("拔剑声", drawSword, drawSwordVolume, true);
+        yield return new WaitForSeconds(1f);
+
+        // 测试人声
+        TestSound("最后人声", voice_07, voice07Volume, false);
+        yield return new WaitForSeconds(2f);
+
+        Debug.Log("=== 声音测试完成，开始动画 ===");
         StartCoroutine(PlayFullAnimation());
     }
 
@@ -115,6 +171,51 @@ public class MemoryAnimationWithVoice : MonoBehaviour
     }
 
     /// <summary>
+    /// 播放音效 - 特效声音可单独加大
+    /// </summary>
+    void PlaySoundWithMultiplier(AudioClip clip, float baseVolume, string soundName, bool isEffectSound = false)
+    {
+        if (clip != null)
+        {
+            float finalVolume = baseVolume;
+
+            // 如果是特效声音，应用乘数
+            if (isEffectSound)
+            {
+                finalVolume = baseVolume * effectVolumeMultiplier;
+                // 确保不超过1.0
+                finalVolume = Mathf.Clamp01(finalVolume);
+            }
+
+            AudioSource.PlayClipAtPoint(clip, Vector3.zero, finalVolume);
+
+            if (enableDebugLog)
+            {
+                if (isEffectSound)
+                {
+                    Debug.Log($"播放特效音效【{soundName}】：音量={finalVolume:F2} (基础={baseVolume} × {effectVolumeMultiplier:F1}倍)");
+                }
+                else
+                {
+                    Debug.Log($"播放音效【{soundName}】：音量={finalVolume:F2}");
+                }
+            }
+        }
+        else if (enableDebugLog)
+        {
+            Debug.LogWarning($"音效【{soundName}】未赋值！");
+        }
+    }
+
+    /// <summary>
+    /// 测试声音
+    /// </summary>
+    void TestSound(string name, AudioClip clip, float volume, bool isEffectSound)
+    {
+        PlaySoundWithMultiplier(clip, volume, name, isEffectSound);
+    }
+
+    /// <summary>
     /// 打字机字幕：逐字+精准匹配音效
     /// </summary>
     IEnumerator PlayTypewriterSubtitle(string content)
@@ -127,10 +228,10 @@ public class MemoryAnimationWithVoice : MonoBehaviour
 
         for (int i = 0; i < content.Length; i++)
         {
-            // 播放打字机音效（放大音量）
+            // 播放打字机音效（非特效声音，不应用乘数）
             if (typewriterKey != null)
             {
-                typewriterSource.PlayOneShot(typewriterKey, typewriterVolume);
+                PlaySoundWithMultiplier(typewriterKey, typewriterVolume, "打字机", false);
             }
 
             sb.Append(content[i]);
@@ -158,6 +259,7 @@ public class MemoryAnimationWithVoice : MonoBehaviour
 
         bgmSource.volume = 0;
         bgmSource.Stop();
+        if (enableDebugLog) Debug.Log("BGM淡出完成");
     }
 
     /// <summary>
@@ -214,6 +316,15 @@ public class MemoryAnimationWithVoice : MonoBehaviour
 
     IEnumerator PlayFullAnimation()
     {
+        // 显示调试信息
+        if (enableDebugLog)
+        {
+            Debug.Log("=== 动画开始播放 ===");
+            Debug.Log($"音量设置：打字机={typewriterVolume}, 人声={voice07Volume}");
+            Debug.Log($"特效声音乘数：{effectVolumeMultiplier:F1}倍");
+            Debug.Log($"特效基础音量：士兵={soldierShoutVolume}, 咆哮={spiritRoarVolume}, 呼吸={breathVolume}, 风={windVolume}, 拔剑={drawSwordVolume}");
+        }
+
         // 0秒：初始黑屏（BGM已播放）
         yield return new WaitForSeconds(1f);
 
@@ -249,10 +360,10 @@ public class MemoryAnimationWithVoice : MonoBehaviour
                 {
                     memoryImgs[1].texture = memory02Frames[i];
                     memoryImgs[1].enabled = true;
-                    // 放大士兵呐喊音量
-                    if (i == 0 && soldierShout != null)
+                    // 播放士兵呐喊（应用特效声音乘数）
+                    if (i == 0)
                     {
-                        AudioSource.PlayClipAtPoint(soldierShout, Vector3.zero, soldierShoutVolume);
+                        PlaySoundWithMultiplier(soldierShout, soldierShoutVolume, "士兵呐喊", true);
                     }
                     yield return new WaitForSeconds(0.5f);
                     memoryImgs[1].enabled = false;
@@ -296,8 +407,8 @@ public class MemoryAnimationWithVoice : MonoBehaviour
             }
             yield return null;
         }
-        // 放大灵体咆哮音量
-        if (spiritRoar != null) AudioSource.PlayClipAtPoint(spiritRoar, Vector3.zero, spiritRoarVolume);
+        // 播放灵体咆哮（应用特效声音乘数）
+        PlaySoundWithMultiplier(spiritRoar, spiritRoarVolume, "灵体咆哮", true);
         // 字幕播放
         if (subtitleContents.Length > 2)
         {
@@ -324,8 +435,8 @@ public class MemoryAnimationWithVoice : MonoBehaviour
             }
             yield return null;
         }
-        // 放大呼吸声音量
-        if (breath != null) AudioSource.PlayClipAtPoint(breath, Vector3.zero, breathVolume);
+        // 播放呼吸声（应用特效声音乘数）
+        PlaySoundWithMultiplier(breath, breathVolume, "呼吸声", true);
         // 字幕播放
         if (subtitleContents.Length > 3)
         {
@@ -351,8 +462,8 @@ public class MemoryAnimationWithVoice : MonoBehaviour
             }
             yield return null;
         }
-        // 放大风声音量
-        if (wind != null) AudioSource.PlayClipAtPoint(wind, Vector3.zero, windVolume);
+        // 播放风声（应用特效声音乘数）
+        PlaySoundWithMultiplier(wind, windVolume, "风声", true);
         // 字幕播放
         if (subtitleContents.Length > 4)
         {
@@ -377,8 +488,8 @@ public class MemoryAnimationWithVoice : MonoBehaviour
             }
             yield return null;
         }
-        // 放大拔剑声音量
-        if (drawSword != null) AudioSource.PlayClipAtPoint(drawSword, Vector3.zero, drawSwordVolume);
+        // 播放拔剑声（应用特效声音乘数）
+        PlaySoundWithMultiplier(drawSword, drawSwordVolume, "拔剑声", true);
         // 字幕播放
         if (subtitleContents.Length > 5)
         {
@@ -393,8 +504,8 @@ public class MemoryAnimationWithVoice : MonoBehaviour
         if (memoryImgs[6] != null) memoryImgs[6].enabled = true;
         // BGM淡出
         StartCoroutine(FadeOutBGM(bgmFadeOutDuration));
-        // 放大最后人声音量
-        if (voice_07 != null) AudioSource.PlayClipAtPoint(voice_07, Vector3.zero, voice07Volume);
+        // 播放最后人声（不应用特效乘数）
+        PlaySoundWithMultiplier(voice_07, voice07Volume, "最后人声", false);
         if (subtitleText != null)
         {
             subtitleText.enabled = true;
@@ -405,6 +516,46 @@ public class MemoryAnimationWithVoice : MonoBehaviour
         if (memoryImgs[6] != null) memoryImgs[6].enabled = false;
         if (subtitleText != null) subtitleText.enabled = false;
 
-        Debug.Log("动画播放完成！");
+        if (enableDebugLog) Debug.Log("动画播放完成！");
+    }
+
+    /// <summary>
+    /// 动态调整特效声音乘数
+    /// </summary>
+    public void SetEffectVolumeMultiplier(float multiplier)
+    {
+        effectVolumeMultiplier = Mathf.Clamp(multiplier, 0.5f, 5f);
+        if (enableDebugLog) Debug.Log($"特效声音乘数调整为: {effectVolumeMultiplier:F1}倍");
+    }
+
+    /// <summary>
+    /// 动态调整BGM音量
+    /// </summary>
+    public void SetBGMVolume(float volume)
+    {
+        bgmBaseVolume = Mathf.Clamp01(volume);
+        if (bgmSource != null)
+        {
+            bgmSource.volume = bgmBaseVolume;
+            if (enableDebugLog) Debug.Log($"BGM音量调整为: {bgmBaseVolume}");
+        }
+    }
+
+    /// <summary>
+    /// 重新播放动画
+    /// </summary>
+    public void RestartAnimation()
+    {
+        StopAllCoroutines();
+        HideAllUI();
+
+        // 重置BGM
+        if (bgmSource != null)
+        {
+            bgmSource.volume = bgmBaseVolume;
+            bgmSource.Play();
+        }
+
+        StartCoroutine(PlayFullAnimation());
     }
 }

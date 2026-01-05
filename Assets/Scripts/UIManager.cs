@@ -39,7 +39,7 @@ public class UIManager : MonoBehaviour
         if (Instance == null)
         {
             Instance = this;
-            DontDestroyOnLoad(gameObject);
+            // DontDestroyOnLoad(gameObject);
             Debug.Log("UIManager: 单例实例创建");
         }
         else if (Instance != this)
@@ -255,36 +255,69 @@ public class UIManager : MonoBehaviour
         }
     }
 
+    public void ResetGameUI()
+    {
+        Debug.Log("UIManager: 重置游戏UI");
+
+        // 重置所有状态
+        isGameOver = false;
+        isInitialized = false;
+
+        // 重置UI引用
+        FindUIReferences();
+        ResetUIState();
+
+        // 确保隐藏所有游戏结束UI
+        HideSimpleGameOverUI();
+        ForceHideAllGameOverUI();
+
+        // 重置时间
+        Time.timeScale = 1f;
+    }
+
+    /*    private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            Debug.Log($"UIManager: 场景加载完成 - {scene.name}");
+
+            ForceHideAllGameOverUI();
+            HideSimpleGameOverUI();
+
+            // 关键：确保时间缩放被重置为1
+            Time.timeScale = 1f;
+            Debug.Log($"UIManager: 场景加载后重置Time.timeScale为1");
+
+            // 根据场景设置鼠标状态
+            if (scene.name == "StartScene" ||
+                scene.name == "DowlScene" ||
+                scene.name == "SoldierScene")
+            {
+                Cursor.visible = true;
+                Cursor.lockState = CursorLockMode.None;
+                Debug.Log($"UIManager: {scene.name} 中鼠标已显示和解锁");
+            }
+            else
+            {
+                Cursor.visible = false;
+                Cursor.lockState = CursorLockMode.Locked;
+                Debug.Log($"UIManager: {scene.name} 中鼠标已隐藏和锁定");
+            }
+
+            FindUIReferences();
+            ResetUIState();
+            StartCoroutine(DelayedFindPlayerController());
+        }*/
+
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
         Debug.Log($"UIManager: 场景加载完成 - {scene.name}");
 
-        ForceHideAllGameOverUI();
-        HideSimpleGameOverUI();
-
-        // 关键：确保时间缩放被重置为1
-        Time.timeScale = 1f;
-        Debug.Log($"UIManager: 场景加载后重置Time.timeScale为1");
-
-        // 根据场景设置鼠标状态
-        if (scene.name == "StartScene" ||
-            scene.name == "DowlScene" ||
-            scene.name == "SoldierScene")
+        // 如果加载的是游戏场景，重置UI
+        if (scene.name != "StartScene" &&
+            scene.name != "DowlScene" &&
+            scene.name != "SoldierScene")
         {
-            Cursor.visible = true;
-            Cursor.lockState = CursorLockMode.None;
-            Debug.Log($"UIManager: {scene.name} 中鼠标已显示和解锁");
+            ResetGameUI();
         }
-        else
-        {
-            Cursor.visible = false;
-            Cursor.lockState = CursorLockMode.Locked;
-            Debug.Log($"UIManager: {scene.name} 中鼠标已隐藏和锁定");
-        }
-
-        FindUIReferences();
-        ResetUIState();
-        StartCoroutine(DelayedFindPlayerController());
     }
 
     private void ForceHideAllGameOverUI()

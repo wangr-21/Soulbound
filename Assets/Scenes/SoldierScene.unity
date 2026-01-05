@@ -849,10 +849,10 @@ MonoBehaviour:
   breath: {fileID: 8300000, guid: 731dddbd431e4ce4ab44d29c75f7bf83, type: 3}
   wind: {fileID: 8300000, guid: c9f95123c725941478b21c9adddf6940, type: 3}
   drawSword: {fileID: 8300000, guid: 8b3b3c899be561c4ca40eb0483dbcd40, type: 3}
-  bgmBaseVolume: 0.2
-  typewriterVolume: 0.05
-  soldierShoutVolume: 0.5
-  spiritRoarVolume: 0.5
+  bgmBaseVolume: 1
+  typewriterVolume: 0.5
+  soldierShoutVolume: 1
+  spiritRoarVolume: 1
   breathVolume: 1
   windVolume: 1
   drawSwordVolume: 1
@@ -1832,7 +1832,7 @@ AudioSource:
   OutputAudioMixerGroup: {fileID: 0}
   m_audioClip: {fileID: 8300000, guid: 8955e646b4fc2c5439c9b04dd34463e9, type: 3}
   m_PlayOnAwake: 1
-  m_Volume: 0.2
+  m_Volume: 1
   m_Pitch: 1
   Loop: 1
   Mute: 0

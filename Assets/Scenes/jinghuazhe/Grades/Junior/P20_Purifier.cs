@@ -24,7 +24,6 @@ public class P20_Purifier : MonoBehaviour
     private float lastAttackTime = 0f; // 上次攻击时间
     [SerializeField] private AudioClip attackSound; // 攻击音效
     [SerializeField] private GameObject attackEffect; // 攻击特效
-    [SerializeField] private float attackKnockbackForce = 5f; // 攻击击退力
 
     [Header("=== 碰撞伤害设置 ===")]
     [SerializeField] private float collisionDamage = 20f; // 碰撞造成的伤害
@@ -191,7 +190,18 @@ public class P20_Purifier : MonoBehaviour
             rb = gameObject.AddComponent<Rigidbody>();
             rb.isKinematic = true; // 设置为运动学，避免物理影响移动
             rb.useGravity = false; // 不使用重力
-            Debug.Log("P20: 已添加Rigidbody组件（运动学）");
+
+            // 冻结所有旋转，防止旋转
+            rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationY | RigidbodyConstraints.FreezeRotationZ;
+
+            Debug.Log("P20: 已添加Rigidbody组件（运动学，冻结旋转）");
+        }
+        else
+        {
+            // 确保现有的Rigidbody设置正确
+            rb.isKinematic = true;
+            rb.useGravity = false;
+            rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationY | RigidbodyConstraints.FreezeRotationZ;
         }
     }
 
@@ -415,9 +425,6 @@ public class P20_Purifier : MonoBehaviour
 
         // 对目标造成伤害
         ApplyDamageToTarget();
-
-        // 击退效果
-        ApplyKnockback();
     }
 
     /// <summary>
@@ -493,38 +500,6 @@ public class P20_Purifier : MonoBehaviour
                     healthSystem.TakeDamage(attackDamage);
                 }
             }
-        }
-    }
-
-    /// <summary>
-    /// 应用击退效果
-    /// </summary>
-    private void ApplyKnockback()
-    {
-        if (currentTarget == null || attackKnockbackForce <= 0) return;
-
-        // 计算击退方向
-        Vector3 knockbackDirection = currentTarget.transform.position - transform.position;
-        knockbackDirection.y = 0; // 保持水平方向
-        knockbackDirection.Normalize();
-
-        // 根据目标类型调整击退力
-        float knockbackMultiplier = 1.0f;
-
-        if (currentTarget.GetComponent<BirdController>() != null)
-        {
-            knockbackMultiplier = 1.5f; // 鸟更轻，更容易被击退
-        }
-        else if (currentTarget.GetComponent<SheepController>() != null)
-        {
-            knockbackMultiplier = 0.8f; // 绵羊较重，击退效果较弱
-        }
-
-        // 应用击退力
-        Rigidbody targetRigidbody = currentTarget.GetComponent<Rigidbody>();
-        if (targetRigidbody != null)
-        {
-            targetRigidbody.AddForce(knockbackDirection * attackKnockbackForce * knockbackMultiplier, ForceMode.Impulse);
         }
     }
 
